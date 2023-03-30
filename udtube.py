@@ -101,8 +101,12 @@ class UDTube(pl.LightningModule):
 
         return res
 
+def eval(model, metric, data):
+    pass
+
 
 if __name__ == '__main__':
+    # Lightning supports ANY iterable (DataLoader, numpy, etc…) for the train/val/test/predict splits.
     parser = set_up_parser()
     model = UDTube(parser.model, 2, 2, 2)
 
