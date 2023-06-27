@@ -35,6 +35,7 @@ class UDTube(pl.LightningModule):
         self.accuracy = Accuracy(task="multiclass", num_classes=pos_out_label_size)
 
     def pool_embeddings(self, x_embs, id_to_word_mappings):
+        """Pool token embeddings together by averaging at the word level"""
         # TODO what tensor operations can help here?
         final_embs = []
         for i, batch in enumerate(x_embs):
@@ -66,6 +67,8 @@ class UDTube(pl.LightningModule):
         return final_embs_tensor
 
     def preprocess_target(self, y, pad):
+        """Pad the target rows to have all the same length and return a y tensor,
+        and a y list containing lists of indices """
         new_targ = []
         padding_indices = []
         for y_i in y:
@@ -81,6 +84,7 @@ class UDTube(pl.LightningModule):
         return torch.stack(new_targ), padding_indices
 
     def remove_target_padding(self, y_pred, y_true, padding_indices):
+        """CURRENTLY NOT USED Remove the padding from the target tensor and return a lis tof unpadded targets. """
         padless_y_pred = []
         padless_y_true = []
         for y_pred_row, y_true_row, padding_indices_row in zip(y_pred, y_true, padding_indices):
