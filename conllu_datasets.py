@@ -1,5 +1,3 @@
-import logging
-
 from torch.utils.data import IterableDataset, Dataset
 from sklearn.preprocessing import LabelEncoder
 import conllu
