@@ -13,11 +13,12 @@ BERT_MAX_LEN = 512
 
 
 class UDTube(pl.LightningModule):
-    def __init__(self, model_name: str, pos_out_label_size: int = 2, lemma_out_label_size: int = 2):
+    def __init__(self, model_name: str, pos_out_label_size: int = 2, lemma_out_label_size: int = 2, ufeats_out_label_size: int = 2):
         super().__init__()
         self.bert = transformers.AutoModel.from_pretrained(model_name)
         self.pos_pad = pos_out_label_size - 1  # last item in the list is a pad from the label encoder
         self.lemma_pad = lemma_out_label_size
+        self.ufeats_pad = ufeats_out_label_size
         self.pos_head = nn.Sequential(
             nn.Linear(768, pos_out_label_size),
             nn.Tanh()
@@ -26,13 +27,11 @@ class UDTube(pl.LightningModule):
             nn.Linear(768, lemma_out_label_size + 1),  # + 1 for padding labels (for now)
             nn.Tanh()
         )
+        self.ufeats_head = nn.Sequential(
+            nn.Linear(768, ufeats_out_label_size + 1),  # + 1 for padding labels (for now)
+            nn.Tanh()
+        )
         self.loss = nn.CrossEntropyLoss()
-
-        # is it multilabel?
-        self.precision = Precision(task="multiclass", num_classes=pos_out_label_size)
-        self.recall = Recall(task="multiclass", num_classes=pos_out_label_size)
-        self.f1 = F1Score(task="multiclass", num_classes=pos_out_label_size)
-        self.accuracy = Accuracy(task="multiclass", num_classes=pos_out_label_size)
 
     def pool_embeddings(self, x_embs, id_to_word_mappings):
         """Pool token embeddings together by averaging at the word level"""
@@ -105,28 +104,22 @@ class UDTube(pl.LightningModule):
         return optimizer
 
     def log_metrics(self, y_pred, y_true, padding_idxs, task_name: str, subset: str = "train"):
-        # First, we filter out padding using the attention_masks
-        # y_pred, y_true = self.remove_target_padding(y_pred, y_true, padding_idxs)
-        # precisions = []
-        # recalls = []
-        # f1s = []
-        # accs = []
-        # for y_pred_i, y_true_i in zip(y_pred, y_true):
-        #     # have to do it one by one without padding
-        #     y_pred_i = y_pred_i[:, 0]
-        #     precisions.append(self.precision(y_pred_i, y_true_i))
-        #     recalls.append(self.recall(y_pred_i, y_true_i))
-        #     f1s.append(self.f1(y_pred_i, y_true_i))
-        #     accs.append(self.accuracy(y_pred_i, y_true_i))
-        # avg_precision = sum(precisions) / len(precisions)
-        # avg_recall = sum(recalls) / len(recalls)
-        # avg_f1s = sum(f1s) / len(f1s)
-        # avg_accs = sum(accs) / len(accs)
+        task_to_out_label_size = {
+            # todo something better than the pad
+            "pos": self.pos_pad + 1,
+            "lemma": self.lemma_pad + 1,
+            "ufeats": self.ufeats_pad + 1
+        }
+        # is it multilabel?
+        precision = Precision(task="multiclass", num_classes=task_to_out_label_size[task_name])
+        recall = Recall(task="multiclass", num_classes=task_to_out_label_size[task_name])
+        f1 = F1Score(task="multiclass", num_classes=task_to_out_label_size[task_name])
+        accuracy = Accuracy(task="multiclass", num_classes=task_to_out_label_size[task_name])
 
-        avg_precision = self.precision(y_pred, y_true)
-        avg_recall = self.recall(y_pred, y_true)
-        avg_f1s = self.f1(y_pred, y_true)
-        avg_accs = self.acc(y_pred, y_true)
+        avg_precision = precision(y_pred, y_true)
+        avg_recall = recall(y_pred, y_true)
+        avg_f1s = f1(y_pred, y_true)
+        avg_accs = accuracy(y_pred, y_true)
 
         self.log(f"{subset}:{task_name}_precision", avg_precision, on_step=False, on_epoch=True, prog_bar=True,
                  logger=True)
@@ -145,13 +138,15 @@ class UDTube(pl.LightningModule):
 
         y_pos_logits = self.pos_head(x_word_embs)
         y_lemma_logits = self.lemma_head(x_word_embs)
+        y_ufeats_logits = self.ufeats_head(x_word_embs)
 
         y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
         y_lemma_hat = torch.argmax(y_lemma_logits, dim=-1)
-        return y_pos_hat, y_lemma_hat
+        y_ufeats_hat = torch.argmax(y_ufeats_logits, dim=-1)
+        return y_pos_hat, y_lemma_hat, y_ufeats_hat
 
     def training_step(self, batch, batch_idx, subset: str = "train"):
-        x_ids, x_word_mappings, X_attention_masks, y_pos, y_lemma = batch  # X is a batch of sentences
+        x_ids, x_word_mappings, X_attention_masks, y_pos, y_lemma, y_ufeats = batch  # X is a batch of sentences
 
         x_encoded = self.bert(x_ids, X_attention_masks)
         x_embs = x_encoded.last_hidden_state
@@ -160,6 +155,7 @@ class UDTube(pl.LightningModule):
         # # need to do some preprocessing on Y
         y_pos_tensor, y_pos_padding_idxs = self.preprocess_target(y_pos, self.pos_pad)  # TODO passing self. is weird
         y_lemma_tensor, y_lemma_padding_idxs = self.preprocess_target(y_lemma, self.lemma_pad)
+        y_ufeats_tensor, y_ufeats_padding_idxs = self.preprocess_target(y_ufeats, self.ufeats_pad)
 
         # getting logits from each head, and then premuting them for metrics calculation
         y_pos_logits = self.pos_head(x_word_embs)
@@ -168,15 +164,21 @@ class UDTube(pl.LightningModule):
         y_lemma_logits = self.lemma_head(x_word_embs)
         y_lemma_logits = y_lemma_logits.permute(0, 2, 1)
 
+        y_ufeats_logits = self.ufeats_head(x_word_embs)
+        y_ufeats_logits = y_ufeats_logits.permute(0, 2, 1)
+
         # getting loss and logging for each head
         pos_loss = self.loss(y_pos_logits, y_pos_tensor)
         self.log_metrics(y_pos_logits, y_pos_tensor, y_pos_padding_idxs, 'pos', subset=subset)
 
         lemma_loss = self.loss(y_lemma_logits, y_lemma_tensor)
-        self.log_metrics(y_pos_logits, y_pos_tensor, y_lemma_padding_idxs, 'lemma', subset=subset)
+        self.log_metrics(y_lemma_logits, y_lemma_tensor, y_lemma_padding_idxs, 'lemma', subset=subset)
+
+        ufeats_loss = self.loss(y_ufeats_logits, y_ufeats_tensor)
+        self.log_metrics(y_ufeats_logits, y_ufeats_tensor, y_ufeats_padding_idxs, 'ufeats', subset=subset)
 
         # combining the loss of the heads
-        loss = (pos_loss + lemma_loss) / 2
+        loss = (pos_loss + lemma_loss + ufeats_loss) / 3
 
         res = {
             "loss": loss
@@ -194,7 +196,7 @@ if __name__ == '__main__':
     bert_model = 'bert-base-multilingual-cased'
     dataset_path = 'el_gdt-ud-dev.conllu'
     num_epochs = 3
-    batch_size = 12
+    batch_size = 8 # keeping it small for testing
     random_seed = 42
 
     # Loading in the data
@@ -210,7 +212,7 @@ if __name__ == '__main__':
     # Loading the data into a dataloader with a preprocessing function to make X a tensor
     def preprocessing_func(batch):
         """Data pipeline -> tokenizing input and grouping token IDs to words. The output has varied dimensions"""
-        X, uposes, lemmas = zip(*batch)  # make batches a class?
+        X, uposes, lemmas, ufeats = zip(*batch)  # make batches a class?
         X_ids = []
         X_word_mappings = []
         X_attention_masks = []
@@ -223,18 +225,19 @@ if __name__ == '__main__':
             X_attention_masks.append(torch.IntTensor(tokens.attention_mask))
         X_ids_tensor = torch.stack(X_ids)
         X_att_tensor = torch.stack(X_attention_masks)
-        return X_ids_tensor, X_word_mappings, X_att_tensor, uposes, lemmas
+        return X_ids_tensor, X_word_mappings, X_att_tensor, uposes, lemmas, ufeats
 
 
-    train_dataloader = DataLoader(train_data, batch_size=batch_size, collate_fn=preprocessing_func)  # 2 for testing
+    train_dataloader = DataLoader(train_data, batch_size=batch_size, collate_fn=preprocessing_func)
     val_dataloader = DataLoader(val_data, batch_size=batch_size, collate_fn=preprocessing_func)
 
     # initializing the model
     pos_out_label_size = len(UPOS_CLASSES)
-    # ufeats_out_label_size = len(data.feats_classes) this doesn't work yet
+    ufeats_out_label_size = len(data.feats_classes)
     lemma_out_label_size = len(data.lemma_classes)
     LOGGER.info("Loading in Bert model, this may take a while")
-    model = UDTube(bert_model, pos_out_label_size=pos_out_label_size, lemma_out_label_size=lemma_out_label_size)
+    model = UDTube(bert_model, pos_out_label_size=pos_out_label_size,
+                   lemma_out_label_size=lemma_out_label_size, ufeats_out_label_size=ufeats_out_label_size)
 
     # Training the model
     trainer = pl.Trainer(max_epochs=num_epochs)

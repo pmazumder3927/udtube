@@ -1,5 +1,6 @@
 from torch.utils.data import IterableDataset, Dataset
 from sklearn.preprocessing import LabelEncoder
+from typing import Dict
 import conllu
 import logging
 
@@ -27,6 +28,14 @@ UPOS_CLASSES = [
     "_",
     PAD_TAG
 ]
+OVERRIDDEN_FIELD_PARSERS = {
+    "id": lambda line, i: conllu.parser.parse_id_value(line[i]),
+    "xpos": lambda line, i: conllu.parser.parse_nullable_value(line[i]),
+    "feats": lambda line, i: conllu.parser.parse_nullable_value(line[i]), # overriding this, in conllu it's a dict
+    "head": lambda line, i: conllu.parser.parse_int_value(line[i]),
+    "deps": lambda line, i: conllu.parser.parse_paired_list_value(line[i]),
+    "misc": lambda line, i: conllu.parser.parse_dict_value(line[i]),
+}
 
 
 class ConlluMapDataset(Dataset):
@@ -37,7 +46,7 @@ class ConlluMapDataset(Dataset):
         self.conllu_file = conllu_file
         # setting up label encoders
         self.upos_class_encoder = LabelEncoder()
-        self.feats_class_encoder = LabelEncoder()
+        self.ufeats_class_encoder = LabelEncoder()
         self.lemma_class_encoder = LabelEncoder()
         self.feats_classes = self._get_all_classes('feats')
         self.lemma_classes = self._get_all_classes('lemma')
@@ -46,15 +55,14 @@ class ConlluMapDataset(Dataset):
 
     def _fit_label_encoders(self):
         self.upos_class_encoder.fit(UPOS_CLASSES)
-        # TODO how should I encode feats?
-        # self.feats_class_encoder.fit(self.feats_classes)
+        self.ufeats_class_encoder.fit(self.feats_classes)
         self.lemma_class_encoder.fit(self.lemma_classes)
 
     def _get_all_classes(self, label_name: str):
         """helper function to get all the classes observed in the training set"""
         possible_labels = []
         with open(self.conllu_file) as src:
-            d = conllu.parse_incr(src)
+            d = conllu.parse_incr(src, field_parsers=OVERRIDDEN_FIELD_PARSERS)
             for token_list in d:
                 for tok in token_list:
                     if tok[label_name] not in possible_labels:
@@ -67,16 +75,17 @@ class ConlluMapDataset(Dataset):
         data_set = []
         LOGGER.info("Building dataset")
         with open(self.conllu_file) as src:
-            sent_generator = conllu.parse_incr(src)
+            sent_generator = conllu.parse_incr(src, field_parsers=OVERRIDDEN_FIELD_PARSERS)
             for token_list in sent_generator:
                 tokens = []
                 uposes = []
                 lemmas = []
+                ufeats = []
                 for token in token_list:
-                    # feats = token["feats"]
                     tokens.append(token["form"])
                     uposes.append(token["upos"])
                     lemmas.append(token["lemma"])
+                    ufeats.append(token["feats"])
                 try:
                     uposes = list(self.upos_class_encoder.transform(uposes))
                 except ValueError:
@@ -88,11 +97,13 @@ class ConlluMapDataset(Dataset):
                                          f"'X' (other) upos")
                             uposes.append("X")
                 lemmas = list(self.lemma_class_encoder.transform(lemmas))
+                ufeats = list(self.ufeats_class_encoder.transform(ufeats))
                 data_set.append(
                     (
                         tokens,
                         uposes,
-                        lemmas
+                        lemmas,
+                        ufeats
                     )
                 )
         return data_set
