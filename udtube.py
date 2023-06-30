@@ -8,6 +8,8 @@ from torchmetrics import Accuracy, F1Score, Recall, Precision
 from torch.utils.data import random_split, DataLoader
 from conllu_datasets import ConlluMapDataset, UPOS_CLASSES
 
+from batch import TrainBatch, InferenceBatch
+
 LOGGER = logging.getLogger('UDtube')
 BERT_MAX_LEN = 512
 
@@ -130,11 +132,11 @@ class UDTube(pl.LightningModule):
     def forward(self, batch):
         # NOTE: Forward is completely untested at the moment
         # assuming testDataloader usage with preprocessing (need to find out otherwise)
-        x_ids, x_word_mappings = batch
+        batch = InferenceBatch(*batch)
 
-        x_encoded = self.bert(x_ids)
+        x_encoded = self.bert(batch.ids)
         x_embs = x_encoded.last_hidden_state
-        x_word_embs = self.pool_embeddings(x_embs, x_word_mappings)
+        x_word_embs = self.pool_embeddings(x_embs, batch.word_mappings)
 
         y_pos_logits = self.pos_head(x_word_embs)
         y_lemma_logits = self.lemma_head(x_word_embs)
@@ -146,16 +148,16 @@ class UDTube(pl.LightningModule):
         return y_pos_hat, y_lemma_hat, y_ufeats_hat
 
     def training_step(self, batch, batch_idx, subset: str = "train"):
-        x_ids, x_word_mappings, X_attention_masks, y_pos, y_lemma, y_ufeats = batch  # X is a batch of sentences
+        batch = TrainBatch(*batch)
 
-        x_encoded = self.bert(x_ids, X_attention_masks)
+        x_encoded = self.bert(batch.ids, batch.attention_masks)
         x_embs = x_encoded.last_hidden_state
-        x_word_embs = self.pool_embeddings(x_embs, x_word_mappings)
+        x_word_embs = self.pool_embeddings(x_embs, batch.word_mappings)
 
         # # need to do some preprocessing on Y
-        y_pos_tensor, y_pos_padding_idxs = self.preprocess_target(y_pos, self.pos_pad)  # TODO passing self. is weird
-        y_lemma_tensor, y_lemma_padding_idxs = self.preprocess_target(y_lemma, self.lemma_pad)
-        y_ufeats_tensor, y_ufeats_padding_idxs = self.preprocess_target(y_ufeats, self.ufeats_pad)
+        y_pos_tensor, y_pos_padding_idxs = self.preprocess_target(batch.pos, self.pos_pad)  # TODO passing self. is weird
+        y_lemma_tensor, y_lemma_padding_idxs = self.preprocess_target(batch.lemma, self.lemma_pad)
+        y_ufeats_tensor, y_ufeats_padding_idxs = self.preprocess_target(batch.ufeats, self.ufeats_pad)
 
         # getting logits from each head, and then premuting them for metrics calculation
         y_pos_logits = self.pos_head(x_word_embs)
@@ -212,20 +214,19 @@ if __name__ == '__main__':
     # Loading the data into a dataloader with a preprocessing function to make X a tensor
     def preprocessing_func(batch):
         """Data pipeline -> tokenizing input and grouping token IDs to words. The output has varied dimensions"""
-        X, uposes, lemmas, ufeats = zip(*batch)  # make batches a class?
+        sentences, *args = zip(*batch)  # make batches a class?
         X_ids = []
         X_word_mappings = []
         X_attention_masks = []
 
-        desplit_X = [' '.join(x) for x in X]
-        tokenized_X = tokenizer(desplit_X, padding='max_length')
+        tokenized_X = tokenizer(sentences, padding='max_length')
         for i, tokens in enumerate(tokenized_X.encodings):
             X_ids.append(torch.IntTensor(tokens.ids))
             X_word_mappings.append(tokens.words)
             X_attention_masks.append(torch.IntTensor(tokens.attention_mask))
         X_ids_tensor = torch.stack(X_ids)
         X_att_tensor = torch.stack(X_attention_masks)
-        return X_ids_tensor, X_word_mappings, X_att_tensor, uposes, lemmas, ufeats
+        return X_ids_tensor, X_word_mappings, X_att_tensor, sentences, *args
 
 
     train_dataloader = DataLoader(train_data, batch_size=batch_size, collate_fn=preprocessing_func)

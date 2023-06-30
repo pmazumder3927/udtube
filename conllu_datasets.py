@@ -36,7 +36,7 @@ OVERRIDDEN_FIELD_PARSERS = {
     "deps": lambda line, i: conllu.parser.parse_paired_list_value(line[i]),
     "misc": lambda line, i: conllu.parser.parse_dict_value(line[i]),
 }
-
+# TODO https://universaldependencies.org/u/feat/index.html if I need the full enumerable possibilities of ufeats.
 
 class ConlluMapDataset(Dataset):
     """Conllu format Dataset. It loads the entire dataset into memory and therefore is only suitable for smaller
@@ -77,6 +77,7 @@ class ConlluMapDataset(Dataset):
         with open(self.conllu_file) as src:
             sent_generator = conllu.parse_incr(src, field_parsers=OVERRIDDEN_FIELD_PARSERS)
             for token_list in sent_generator:
+                sentence = token_list.metadata["text"]
                 tokens = []
                 uposes = []
                 lemmas = []
@@ -100,6 +101,7 @@ class ConlluMapDataset(Dataset):
                 ufeats = list(self.ufeats_class_encoder.transform(ufeats))
                 data_set.append(
                     (
+                        sentence,
                         tokens,
                         uposes,
                         lemmas,
