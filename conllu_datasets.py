@@ -1,11 +1,11 @@
+import torch
+from torch import tensor
+
+import edit_scripts
 from torch.utils.data import IterableDataset, Dataset
 from sklearn.preprocessing import LabelEncoder
-from typing import Dict
 import conllu
-import logging
 
-LOGGER = logging.getLogger('UDtube')
-LOGGER.setLevel(logging.DEBUG)
 PAD_TAG = "[PAD]"
 UPOS_CLASSES = [
     "ADJ",
@@ -38,77 +38,73 @@ OVERRIDDEN_FIELD_PARSERS = {
 }
 # TODO https://universaldependencies.org/u/feat/index.html if I need the full enumerable possibilities of ufeats.
 
+
 class ConlluMapDataset(Dataset):
     """Conllu format Dataset. It loads the entire dataset into memory and therefore is only suitable for smaller
     datasets """
 
-    def __init__(self, conllu_file):
+    def __init__(self, conllu_file: str, reverse_edits: bool = False):
         self.conllu_file = conllu_file
+        self.e_script = edit_scripts.ReverseEditScript if reverse_edits else edit_scripts.EditScript
         # setting up label encoders
-        self.upos_class_encoder = LabelEncoder()
-        self.ufeats_class_encoder = LabelEncoder()
-        self.lemma_class_encoder = LabelEncoder()
+        self.upos_encoder = LabelEncoder()
+        self.ufeats_encoder = LabelEncoder()
+        self.lemma_encoder = LabelEncoder()
         self.feats_classes = self._get_all_classes('feats')
         self.lemma_classes = self._get_all_classes('lemma')
         self._fit_label_encoders()
         self.data_set = self._get_data()
 
     def _fit_label_encoders(self):
-        self.upos_class_encoder.fit(UPOS_CLASSES)
-        self.ufeats_class_encoder.fit(self.feats_classes)
-        self.lemma_class_encoder.fit(self.lemma_classes)
+        self.upos_encoder.fit(UPOS_CLASSES)
+        self.ufeats_encoder.fit(self.feats_classes)
+        self.lemma_encoder.fit(self.lemma_classes)
 
-    def _get_all_classes(self, label_name: str):
+    def _get_all_classes(self, lname: str):
         """helper function to get all the classes observed in the training set"""
-        possible_labels = []
-        with open(self.conllu_file) as src:
-            d = conllu.parse_incr(src, field_parsers=OVERRIDDEN_FIELD_PARSERS)
-            for token_list in d:
-                for tok in token_list:
-                    if tok[label_name] not in possible_labels:
-                        possible_labels.append(tok[label_name])
-        # reshape is required to use one hot encoder later
-        return possible_labels
+        classes = []
+        with open(self.conllu_file) as f:
+            dt = conllu.parse_incr(f, field_parsers=OVERRIDDEN_FIELD_PARSERS)
+            for tk_list in dt:
+                for tok in tk_list:
+                    if lname != 'lemma' and tok[lname] not in classes:
+                        classes.append(tok[lname])
+                    elif lname == 'lemma':
+                        lrule = str(self.e_script(tok['form'].lower(), tok[lname].lower()))
+                        if lrule not in classes:
+                            classes.append(lrule)
+        return classes
 
     def _get_data(self):
         """Loads in the conllu data and prepares it as a list dataset so that it can be indexed for __getitem__"""
-        data_set = []
-        LOGGER.info("Building dataset")
-        with open(self.conllu_file) as src:
-            sent_generator = conllu.parse_incr(src, field_parsers=OVERRIDDEN_FIELD_PARSERS)
-            for token_list in sent_generator:
-                sentence = token_list.metadata["text"]
+        data = []
+        with open(self.conllu_file) as f:
+            dt = conllu.parse_incr(f, field_parsers=OVERRIDDEN_FIELD_PARSERS)
+            for tk_list in dt:
+                sentence = tk_list.metadata["text"]
                 tokens = []
                 uposes = []
-                lemmas = []
+                lemma_rules = []
                 ufeats = []
-                for token in token_list:
-                    tokens.append(token["form"])
-                    uposes.append(token["upos"])
-                    lemmas.append(token["lemma"])
-                    ufeats.append(token["feats"])
-                try:
-                    uposes = list(self.upos_class_encoder.transform(uposes))
-                except ValueError:
-                    for i, upos in enumerate(uposes):
-                        if upos.strip() in UPOS_CLASSES:
-                            uposes.append(upos)
-                        else:
-                            LOGGER.warning(f"UPOS: {upos} for form {tokens[i]} not found by label encoder, tagging as "
-                                         f"'X' (other) upos")
-                            uposes.append("X")
-                lemmas = list(self.lemma_class_encoder.transform(lemmas))
-                ufeats = list(self.ufeats_class_encoder.transform(ufeats))
-                data_set.append(
+                for tok in tk_list:
+                    l_rule = str(self.e_script(tok['form'].lower(), tok["lemma"].lower()))
+                    tokens.append(tok["form"])
+                    uposes.append(tok["upos"])
+                    lemma_rules.append(l_rule)
+                    ufeats.append(tok["feats"])
+                uposes = tensor(self.upos_encoder.transform(uposes), dtype=torch.float16)
+                lemma_rules = tensor(self.lemma_encoder.transform(lemma_rules), dtype=torch.float16)
+                ufeats = tensor(self.ufeats_encoder.transform(ufeats), dtype=torch.float16)
+                data.append(
                     (
                         sentence,
                         tokens,
                         uposes,
-                        lemmas,
+                        lemma_rules,
                         ufeats
                     )
                 )
-        return data_set
+        return data
 
     def __len__(self):
         return len(self.data_set)
@@ -118,4 +114,9 @@ class ConlluMapDataset(Dataset):
 
 
 class ConlluIterDataset(IterableDataset):
-    pass
+    """Iterable dataset, used for inference when labels are unknown"""
+    def __init__(self, text_file):
+        self.tf = open(text_file)
+
+    def __iter__(self):
+        return self.tf
