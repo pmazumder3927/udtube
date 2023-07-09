@@ -1,3 +1,4 @@
+import argparse
 from typing import Iterable
 
 import pytorch_lightning as pl
@@ -12,6 +13,88 @@ from conllu_datasets import UPOS_CLASSES, ConlluIterDataset, ConlluMapDataset
 from data_utils import inference_preprocessing, train_preprocessing
 
 
+def set_up_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="A trainable model for producing morphological analysis for UD files"
+    )
+    parser.add_argument(
+        "dataset_path",
+        type=str,
+        help="The file path of the input conllu file to be used for training "
+        "or inference",
+    )
+    parser.add_argument(
+        "model_name",
+        type=str,
+        help="The name of the model. If training, this makes a new file with "
+        "this name. At inference",
+    )
+    parser.add_argument(
+        "procedure",
+        type=str,
+        choices=["train", "evaluate", "inference"],
+        help="What will be done on this run of the model. "
+        'Choices are ["train", "evaluate", "inference"]',
+    )
+    parser.add_argument(
+        "--out_file_path",
+        type=str,
+        default="udtube_out.conllu",
+        help="The output file path if you are inferencing",
+    )
+    parser.add_argument(
+        "--bert_model",
+        default="bert-base-multilingual-cased",
+        type=str,
+        help="The base bert model to be fine-tuned.",
+    )
+    parser.add_argument(
+        "--epochs",
+        default=10,
+        type=int,
+        help="The number of epochs for training",
+    )
+    parser.add_argument(
+        "--batch_size",
+        default=32,
+        type=int,
+        help="The batch size for the bert model",
+    )
+    parser.add_argument(
+        "--manual_seed",
+        default=42,
+        type=int,
+        help="The random seed. Mainly used for data splitting in training",
+    )
+    parser.add_argument(
+        "-lr",
+        "--learning_rate",
+        default=0.001,
+        type=float,
+        help="The learning rate for the optimizer",
+    )
+    parser.add_argument(
+        "-r",
+        "--reverse",
+        default=False,
+        type=bool,
+        help="The direction of application for the edit script. Recommended to set to true for "
+        "suffixal languages.",
+    )
+    parser.add_argument(
+        "--gold_file",
+        type=str,
+        help="To be used with procedure=evaluate, this is the gold file.",
+    )
+    parser.add_argument(
+        "--pred_file",
+        type=str,
+        help="To be used with procedure=evaluate, this is the pred file.",
+    )
+    # TODO add other hyper params
+    return parser
+
+
 class UDTube(pl.LightningModule):
     def __init__(
         self,
@@ -19,11 +102,13 @@ class UDTube(pl.LightningModule):
         pos_out_label_size: int = 2,
         lemma_out_label_size: int = 2,
         ufeats_out_label_size: int = 2,
+        learning_rate: float = 0.001,
     ):
         super().__init__()
         self.bert = transformers.AutoModel.from_pretrained(
             model_name, output_hidden_states=True
         )
+        self.learning_rate = learning_rate
         self.pos_pad = tensor(
             pos_out_label_size - 1
         )  # last item in the list is a pad from the label encoder
@@ -167,7 +252,7 @@ class UDTube(pl.LightningModule):
         return new_embs, new_masks, longest_seq
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
 
     def log_metrics(
@@ -239,7 +324,10 @@ class UDTube(pl.LightningModule):
         y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
         y_lemma_hat = torch.argmax(y_lemma_logits, dim=-1)
         y_ufeats_hat = torch.argmax(y_ufeats_logits, dim=-1)
+
+        # TODO forward should write an output file.
         print(y_pos_hat, y_lemma_hat, y_ufeats_hat)
+
         return y_pos_hat, y_lemma_hat, y_ufeats_hat
 
     def training_step(self, batch, batch_idx: int, subset: str = "train"):
@@ -310,63 +398,69 @@ class UDTube(pl.LightningModule):
 
 
 if __name__ == "__main__":
-    # TODO get all this from parser
-    bert_model = "bert-base-multilingual-cased"
-    dataset_path = "el_gdt-ud-dev.conllu"
-    num_epochs = 3
-    batch_size = 8  # keeping it small for testing
-    random_seed = 42
-
-    # Loading in the data
-    data = ConlluMapDataset(dataset_path, reverse_edits=True)
-
-    # making a validation set
-    seed_for_reproducibility = torch.Generator().manual_seed(random_seed)
-    train_data, val_data = random_split(
-        data, [0.8, 0.2], seed_for_reproducibility
-    )
+    parser = set_up_parser()
+    # TODO remove those args, they are for developing purposes
+    args = parser.parse_args("el_gdt-ud-dev.conllu el_ud_tube train".split())
 
     # initializing a tokenizer for preprocessing
-    tokenizer = transformers.AutoTokenizer.from_pretrained(bert_model)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(args.bert_model)
 
-    # Loading the data into a dataloader with a preprocessing function to make X a tensor
-    train_dataloader = DataLoader(
-        train_data,
-        batch_size=batch_size,
-        collate_fn=lambda batch: train_preprocessing(
-            batch, tokenizer=tokenizer
-        ),
-    )
-    val_dataloader = DataLoader(
-        val_data,
-        batch_size=batch_size,
-        collate_fn=lambda batch: train_preprocessing(
-            batch, tokenizer=tokenizer
-        ),
-    )
+    if args.procedure == "train":
+        # Loading in the data
+        data = ConlluMapDataset(args.dataset_path, reverse_edits=True)
 
-    # initializing the model
-    pos_out_label_size = len(UPOS_CLASSES)
-    ufeats_out_label_size = len(data.feats_classes)
-    lemma_out_label_size = len(data.lemma_classes)
-    model = UDTube(
-        bert_model,
-        pos_out_label_size=pos_out_label_size,
-        lemma_out_label_size=lemma_out_label_size,
-        ufeats_out_label_size=ufeats_out_label_size,
-    )
+        # making a validation set
+        seed_for_reproducibility = torch.Generator().manual_seed(
+            args.manual_seed
+        )
+        train_data, val_data = random_split(
+            data, [0.8, 0.2], seed_for_reproducibility
+        )
 
-    # Training the model
-    trainer = pl.Trainer(max_epochs=num_epochs)
-    trainer.fit(model, train_dataloader, val_dataloader)
+        # Loading the data into a dataloader with a preprocessing function to make X a tensor
+        train_dataloader = DataLoader(
+            train_data,
+            batch_size=args.batch_size,
+            collate_fn=lambda batch: train_preprocessing(
+                batch, tokenizer=tokenizer
+            ),
+        )
+        val_dataloader = DataLoader(
+            val_data,
+            batch_size=args.batch_size,
+            collate_fn=lambda batch: train_preprocessing(
+                batch, tokenizer=tokenizer
+            ),
+        )
 
-    # What prediction looks like
-    tdata = ConlluIterDataset("ex.txt")
-    test_dataloader = DataLoader(
-        tdata,
-        batch_size=3,
-        collate_fn=lambda batch: inference_preprocessing(
-            batch, tokenizer=tokenizer
-        ),
-    )
-    trainer.predict(model, test_dataloader)
+        # initializing the model
+        pos_out_label_size = len(UPOS_CLASSES)
+        ufeats_out_label_size = len(data.feats_classes)
+        lemma_out_label_size = len(data.lemma_classes)
+        model = UDTube(
+            args.bert_model,
+            pos_out_label_size=pos_out_label_size,
+            lemma_out_label_size=lemma_out_label_size,
+            ufeats_out_label_size=ufeats_out_label_size,
+        )
+
+        # Training the model
+        trainer = pl.Trainer(max_epochs=args.epochs)
+        trainer.fit(model, train_dataloader, val_dataloader)
+
+    if args.procedure == "inference":
+        # this is assuming the input file is a regular text file
+        tdata = ConlluIterDataset(args.dataset_path)
+        test_dataloader = DataLoader(
+            tdata,
+            batch_size=args.batch_size,
+            collate_fn=lambda batch: inference_preprocessing(
+                batch, tokenizer=tokenizer
+            ),
+        )
+        trainer.predict(model, test_dataloader)
+
+    if args.produce == "evaluate":
+        gold_file_path = args.gold_file
+        pred_file_path = args.pred_file
+        # Evaluation script would go here!
