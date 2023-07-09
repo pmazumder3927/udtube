@@ -43,6 +43,14 @@ def set_up_parser() -> argparse.ArgumentParser:
         help="The output file path if you are inferencing",
     )
     parser.add_argument(
+        "--inference_input_type",
+        type=str,
+        default="txt",
+        choices=["txt", "conllu"],
+        help="The input file type for inferencing. Choices are either txt (a txt file with a sentence on each line) "
+             "or conllu."
+    )
+    parser.add_argument(
         "--bert_model",
         default="bert-base-multilingual-cased",
         type=str,
@@ -449,8 +457,10 @@ if __name__ == "__main__":
         trainer.fit(model, train_dataloader, val_dataloader)
 
     if args.procedure == "inference":
-        # this is assuming the input file is a regular text file
-        tdata = ConlluIterDataset(args.dataset_path)
+        if args.inference_input_type == "txt":
+            tdata = ConlluIterDataset(args.dataset_path)
+        else:
+            raise Exception(f"The inference input type: {args.inference_input_type} is not implemented just yet")
         test_dataloader = DataLoader(
             tdata,
             batch_size=args.batch_size,
@@ -463,4 +473,4 @@ if __name__ == "__main__":
     if args.produce == "evaluate":
         gold_file_path = args.gold_file
         pred_file_path = args.pred_file
-        # Evaluation script would go here!
+        raise Exception("Evaluation is not yet implemented!")
