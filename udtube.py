@@ -16,7 +16,6 @@ class UDTube(pl.LightningModule):
     def __init__(
         self,
         model_name: str,
-        tokenizer: transformers.AutoTokenizer,
         pos_out_label_size: int = 2,
         lemma_out_label_size: int = 2,
         ufeats_out_label_size: int = 2,
@@ -25,7 +24,6 @@ class UDTube(pl.LightningModule):
         self.bert = transformers.AutoModel.from_pretrained(
             model_name, output_hidden_states=True
         )
-        self.tokenizer = tokenizer
         self.pos_pad = tensor(
             pos_out_label_size - 1
         )  # last item in the list is a pad from the label encoder
@@ -353,7 +351,6 @@ if __name__ == "__main__":
     lemma_out_label_size = len(data.lemma_classes)
     model = UDTube(
         bert_model,
-        tokenizer,
         pos_out_label_size=pos_out_label_size,
         lemma_out_label_size=lemma_out_label_size,
         ufeats_out_label_size=ufeats_out_label_size,
