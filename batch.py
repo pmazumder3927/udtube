@@ -1,6 +1,5 @@
 import torch
-from torch import nn
-from torch import tensor
+from torch import nn, tensor
 
 
 class TrainBatch(nn.Module):
@@ -13,10 +12,12 @@ class TrainBatch(nn.Module):
         self.ufeats = ufeats
 
     def _pad_y(self, y, y_pad):
-        longest_sequence = len(self.tokens[0]) # all token sequences are same len
+        longest_sequence = len(
+            self.tokens[0]
+        )  # all token sequences are same len
         padded_y = []
         for y_i in y:
-            l_padding = tensor([y_pad]) # for [CLS] token
+            l_padding = tensor([y_pad])  # for [CLS] token
             r_padding = tensor([y_pad] * (longest_sequence - len(y_i) - 1))
             padded_y.append(torch.cat((l_padding, y_i, r_padding)))
         return torch.stack(padded_y)

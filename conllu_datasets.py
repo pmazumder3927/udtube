@@ -1,10 +1,10 @@
+import conllu
 import torch
+from sklearn.preprocessing import LabelEncoder
 from torch import tensor
+from torch.utils.data import Dataset, IterableDataset
 
 import edit_scripts
-from torch.utils.data import IterableDataset, Dataset
-from sklearn.preprocessing import LabelEncoder
-import conllu
 
 PAD_TAG = "[PAD]"
 UPOS_CLASSES = [
@@ -26,12 +26,14 @@ UPOS_CLASSES = [
     "VERB",
     "X",
     "_",
-    PAD_TAG
+    PAD_TAG,
 ]
 OVERRIDDEN_FIELD_PARSERS = {
     "id": lambda line, i: conllu.parser.parse_id_value(line[i]),
     "xpos": lambda line, i: conllu.parser.parse_nullable_value(line[i]),
-    "feats": lambda line, i: conllu.parser.parse_nullable_value(line[i]), # overriding this, in conllu it's a dict
+    "feats": lambda line, i: conllu.parser.parse_nullable_value(
+        line[i]
+    ),  # overriding this, in conllu it's a dict
     "head": lambda line, i: conllu.parser.parse_int_value(line[i]),
     "deps": lambda line, i: conllu.parser.parse_paired_list_value(line[i]),
     "misc": lambda line, i: conllu.parser.parse_dict_value(line[i]),
@@ -41,17 +43,21 @@ OVERRIDDEN_FIELD_PARSERS = {
 
 class ConlluMapDataset(Dataset):
     """Conllu format Dataset. It loads the entire dataset into memory and therefore is only suitable for smaller
-    datasets """
+    datasets"""
 
     def __init__(self, conllu_file: str, reverse_edits: bool = False):
         self.conllu_file = conllu_file
-        self.e_script = edit_scripts.ReverseEditScript if reverse_edits else edit_scripts.EditScript
+        self.e_script = (
+            edit_scripts.ReverseEditScript
+            if reverse_edits
+            else edit_scripts.EditScript
+        )
         # setting up label encoders
         self.upos_encoder = LabelEncoder()
         self.ufeats_encoder = LabelEncoder()
         self.lemma_encoder = LabelEncoder()
-        self.feats_classes = self._get_all_classes('feats')
-        self.lemma_classes = self._get_all_classes('lemma')
+        self.feats_classes = self._get_all_classes("feats")
+        self.lemma_classes = self._get_all_classes("lemma")
         self._fit_label_encoders()
         self.data_set = self._get_data()
 
@@ -67,10 +73,14 @@ class ConlluMapDataset(Dataset):
             dt = conllu.parse_incr(f, field_parsers=OVERRIDDEN_FIELD_PARSERS)
             for tk_list in dt:
                 for tok in tk_list:
-                    if lname != 'lemma' and tok[lname] not in classes:
+                    if lname != "lemma" and tok[lname] not in classes:
                         classes.append(tok[lname])
-                    elif lname == 'lemma':
-                        lrule = str(self.e_script(tok['form'].lower(), tok[lname].lower()))
+                    elif lname == "lemma":
+                        lrule = str(
+                            self.e_script(
+                                tok["form"].lower(), tok[lname].lower()
+                            )
+                        )
                         if lrule not in classes:
                             classes.append(lrule)
         return classes
@@ -87,23 +97,26 @@ class ConlluMapDataset(Dataset):
                 lemma_rules = []
                 ufeats = []
                 for tok in tk_list:
-                    l_rule = str(self.e_script(tok['form'].lower(), tok["lemma"].lower()))
+                    l_rule = str(
+                        self.e_script(
+                            tok["form"].lower(), tok["lemma"].lower()
+                        )
+                    )
                     tokens.append(tok["form"])
                     uposes.append(tok["upos"])
                     lemma_rules.append(l_rule)
                     ufeats.append(tok["feats"])
-                uposes = tensor(self.upos_encoder.transform(uposes), dtype=torch.float16)
-                lemma_rules = tensor(self.lemma_encoder.transform(lemma_rules), dtype=torch.float16)
-                ufeats = tensor(self.ufeats_encoder.transform(ufeats), dtype=torch.float16)
-                data.append(
-                    (
-                        sentence,
-                        tokens,
-                        uposes,
-                        lemma_rules,
-                        ufeats
-                    )
+                uposes = tensor(
+                    self.upos_encoder.transform(uposes), dtype=torch.float16
                 )
+                lemma_rules = tensor(
+                    self.lemma_encoder.transform(lemma_rules),
+                    dtype=torch.float16,
+                )
+                ufeats = tensor(
+                    self.ufeats_encoder.transform(ufeats), dtype=torch.float16
+                )
+                data.append((sentence, tokens, uposes, lemma_rules, ufeats))
         return data
 
     def __len__(self):
@@ -115,7 +128,8 @@ class ConlluMapDataset(Dataset):
 
 class ConlluIterDataset(IterableDataset):
     """Iterable dataset, used for inference when labels are unknown"""
-    def __init__(self, text_file):
+
+    def __init__(self, text_file: str):
         self.tf = open(text_file)
 
     def __iter__(self):
