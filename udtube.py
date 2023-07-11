@@ -66,7 +66,7 @@ def set_up_parser() -> argparse.ArgumentParser:
         "--manual_seed",
         default=42,
         type=int,
-        help="The random seed. Mainly used for data splitting in training",
+        help="The random seed.",
     )
     parser.add_argument(
         "--learning_rate",
