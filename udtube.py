@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader, random_split
 from torchmetrics import Accuracy, F1Score, Precision, Recall
 
 from batch import InferenceBatch, TrainBatch
-from conllu_datasets import UPOS_CLASSES, ConlluIterDataset, ConlluMapDataset
+from conllu_datasets import UPOS_CLASSES, TextIterDataset, ConlluMapDataset
 from data_utils import inference_preprocessing, train_preprocessing
 
 
@@ -19,32 +19,27 @@ def set_up_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "dataset_path",
-        type=str,
         help="The file path of the input conllu file to be used for training "
         "or inference",
     )
     parser.add_argument(
         "model_name",
-        type=str,
         help="The name of the model. If training, this makes a new file with "
         "this name. At inference",
     )
     parser.add_argument(
         "procedure",
-        type=str,
         choices=["train", "evaluate", "inference"],
         help="What will be done on this run of the model. "
         'Choices are ["train", "evaluate", "inference"]',
     )
     parser.add_argument(
         "--out_file_path",
-        type=str,
         default="udtube_out.conllu",
         help="The output file path if you are inferencing",
     )
     parser.add_argument(
         "--inference_input_type",
-        type=str,
         default="txt",
         choices=["txt", "conllu"],
         help="The input file type for inferencing. Choices are either txt (a txt file with a sentence on each line) "
@@ -53,8 +48,7 @@ def set_up_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--bert_model",
         default="bert-base-multilingual-cased",
-        type=str,
-        help="The base bert model to be fine-tuned.",
+        help="The base BERT model to be fine-tuned.",
     )
     parser.add_argument(
         "--epochs",
@@ -75,29 +69,36 @@ def set_up_parser() -> argparse.ArgumentParser:
         help="The random seed. Mainly used for data splitting in training",
     )
     parser.add_argument(
-        "-lr",
         "--learning_rate",
         default=0.001,
         type=float,
         help="The learning rate for the optimizer",
     )
     parser.add_argument(
-        "-r",
         "--reverse",
-        default=False,
-        type=bool,
-        help="The direction of application for the edit script. Recommended to set to true for "
-        "suffixal languages.",
+        action='store_true',
+        default=True,
+        help="Reverse edit script calculation. Recommended for suffixal languages. True by default.",
+    )
+    parser.add_argument(
+        "--no_reverse",
+        action='store_false',
+        dest="reverse",
+        help="Left to right edit script calculation. Recommended for non-suffixal languages.",
     )
     parser.add_argument(
         "--gold_file",
-        type=str,
         help="To be used with procedure=evaluate, this is the gold file.",
     )
     parser.add_argument(
         "--pred_file",
-        type=str,
         help="To be used with procedure=evaluate, this is the pred file.",
+    )
+    parser.add_argument(
+        "--pooling_layers",
+        default=4,
+        type=int,
+        help="The amount of layers we pull embeddings from. Default is 4."
     )
     # TODO add other hyper params
     return parser
@@ -111,29 +112,34 @@ class UDTube(pl.LightningModule):
         lemma_out_label_size: int = 2,
         ufeats_out_label_size: int = 2,
         learning_rate: float = 0.001,
+        pooling_layers: int = 4
     ):
         super().__init__()
         self.bert = transformers.AutoModel.from_pretrained(
             model_name, output_hidden_states=True
         )
         self.learning_rate = learning_rate
+        self.pooling_layers = pooling_layers
         self.pos_pad = tensor(
             pos_out_label_size - 1
         )  # last item in the list is a pad from the label encoder
         self.lemma_pad = tensor(lemma_out_label_size)
         self.ufeats_pad = tensor(ufeats_out_label_size)
         self.pos_head = nn.Sequential(
-            nn.Linear(768, pos_out_label_size), nn.Tanh()
+            nn.Linear(
+                self.bert.config.hidden_size, pos_out_label_size
+            ),
+            nn.Tanh()
         )
         self.lemma_head = nn.Sequential(
             nn.Linear(
-                768, lemma_out_label_size + 1
+                self.bert.config.hidden_size, lemma_out_label_size + 1
             ),  # + 1 for padding labels (for now)
             nn.Tanh(),
         )
         self.ufeats_head = nn.Sequential(
             nn.Linear(
-                768, ufeats_out_label_size + 1
+                self.bert.config.hidden_size, ufeats_out_label_size + 1
             ),  # + 1 for padding labels (for now)
             nn.Tanh(),
         )
@@ -319,8 +325,8 @@ class UDTube(pl.LightningModule):
         x_encoded = self.bert(
             batch.tokens.input_ids, batch.tokens.attention_mask
         )
-        last_4_layer_embs = torch.stack(x_encoded.hidden_states[-4:])
-        x_embs = torch.mean(last_4_layer_embs, keepdim=True, dim=0).squeeze()
+        last_n_layer_embs = torch.stack(x_encoded.hidden_states[-self.pooling_layers:])
+        x_embs = torch.mean(last_n_layer_embs, keepdim=True, dim=0).squeeze()
         x_word_embs, attn_masks, longest_seq = self.pool_embeddings(
             x_embs, batch.tokens
         )
@@ -329,14 +335,7 @@ class UDTube(pl.LightningModule):
         y_lemma_logits = self.lemma_head(x_word_embs)
         y_ufeats_logits = self.ufeats_head(x_word_embs)
 
-        y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
-        y_lemma_hat = torch.argmax(y_lemma_logits, dim=-1)
-        y_ufeats_hat = torch.argmax(y_ufeats_logits, dim=-1)
-
-        # TODO forward should write an output file.
-        print(y_pos_hat, y_lemma_hat, y_ufeats_hat)
-
-        return y_pos_hat, y_lemma_hat, y_ufeats_hat
+        return y_pos_logits, y_lemma_logits, y_ufeats_logits
 
     def training_step(self, batch, batch_idx: int, subset: str = "train"):
         batch = TrainBatch(*batch)
@@ -362,6 +361,8 @@ class UDTube(pl.LightningModule):
         )
 
         # getting logits from each head, and then permuting them for metrics calculation
+        # Each head returns batch X sequence_len X classes
+        # but CE and metrics want minibatch X Classes X sequence_len, (minibatch, C, d0...dk) & (N, C, ..) in the docs.
         y_pos_logits = self.pos_head(x_word_embs)
         y_pos_logits = y_pos_logits.permute(0, 2, 1)
 
@@ -386,7 +387,7 @@ class UDTube(pl.LightningModule):
         )
 
         # combining the loss of the heads
-        loss = (pos_loss + lemma_loss + ufeats_loss) / 3
+        loss = torch.mean(torch.stack([pos_loss, lemma_loss, ufeats_loss]))
         self.log(
             "Loss",
             loss,
@@ -396,19 +397,16 @@ class UDTube(pl.LightningModule):
             logger=True,
         )
 
-        res = {"loss": loss}
-
-        return res
+        return {"loss": loss}
 
     def validation_step(self, batch, batch_idx: int):
-        results = self.training_step(batch, batch_idx, subset="val")
-        return results
+        return self.training_step(batch, batch_idx, subset="val")
 
 
 if __name__ == "__main__":
     parser = set_up_parser()
     # TODO remove those args, they are for developing purposes
-    args = parser.parse_args("el_gdt-ud-dev.conllu el_ud_tube train".split())
+    args = parser.parse_args("el_gdt-ud-dev.conllu el_ud_tube train --reverse".split())
 
     # initializing a tokenizer for preprocessing
     tokenizer = transformers.AutoTokenizer.from_pretrained(args.bert_model)
@@ -450,6 +448,8 @@ if __name__ == "__main__":
             pos_out_label_size=pos_out_label_size,
             lemma_out_label_size=lemma_out_label_size,
             ufeats_out_label_size=ufeats_out_label_size,
+            learning_rate=args.learning_rate,
+            pooling_layers=args.pooling_layers
         )
 
         # Training the model
@@ -458,9 +458,9 @@ if __name__ == "__main__":
 
     if args.procedure == "inference":
         if args.inference_input_type == "txt":
-            tdata = ConlluIterDataset(args.dataset_path)
+            tdata = TextIterDataset(args.dataset_path)
         else:
-            raise Exception(f"The inference input type: {args.inference_input_type} is not implemented just yet")
+            raise NotImplementedError(f"The inference input type: {args.inference_input_type} is not implemented just yet")
         test_dataloader = DataLoader(
             tdata,
             batch_size=args.batch_size,
@@ -473,4 +473,4 @@ if __name__ == "__main__":
     if args.produce == "evaluate":
         gold_file_path = args.gold_file
         pred_file_path = args.pred_file
-        raise Exception("Evaluation is not yet implemented!")
+        raise NotImplementedError("Evaluation is not yet implemented!")

@@ -99,9 +99,3 @@ class ReverseEditScript(EditScript):
     def apply(self, istring: str) -> str:
         # Reverses input string and then reverse the output string.
         return self._reverse(super().apply(self._reverse(istring)))
-
-
-
-
-
-
