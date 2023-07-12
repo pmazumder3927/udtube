@@ -11,6 +11,7 @@ from torchmetrics import Accuracy, F1Score, Precision, Recall
 from batch import InferenceBatch, TrainBatch
 from conllu_datasets import UPOS_CLASSES, TextIterDataset, ConlluMapDataset
 from data_utils import inference_preprocessing, train_preprocessing
+from functools import partial
 
 
 def set_up_parser() -> argparse.ArgumentParser:
@@ -273,6 +274,7 @@ class UDTube(pl.LightningModule):
         self,
         y_pred: torch.tensor,
         y_true: torch.tensor,
+        batch_size: int,
         task_name: str,
         subset: str = "train",
     ):
@@ -293,6 +295,7 @@ class UDTube(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
             logger=True,
+            batch_size=batch_size
         )
         self.log(
             f"{subset}:{task_name}_recall",
@@ -301,6 +304,7 @@ class UDTube(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
             logger=True,
+            batch_size=batch_size
         )
         self.log(
             f"{subset}:{task_name}_f1",
@@ -309,6 +313,7 @@ class UDTube(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
             logger=True,
+            batch_size=batch_size
         )
         self.log(
             f"{subset}:{task_name}_acc",
@@ -317,11 +322,10 @@ class UDTube(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
             logger=True,
+            batch_size=batch_size
         )
 
     def forward(self, batch):
-        batch = InferenceBatch(*batch)
-
         x_encoded = self.bert(
             batch.tokens.input_ids, batch.tokens.attention_mask
         )
@@ -338,8 +342,6 @@ class UDTube(pl.LightningModule):
         return y_pos_logits, y_lemma_logits, y_ufeats_logits
 
     def training_step(self, batch, batch_idx: int, subset: str = "train"):
-        batch = TrainBatch(*batch)
-
         x_encoded = self.bert(
             batch.tokens.input_ids, batch.tokens.attention_mask
         )
@@ -373,17 +375,19 @@ class UDTube(pl.LightningModule):
         y_ufeats_logits = y_ufeats_logits.permute(0, 2, 1)
 
         # getting loss and logging for each head
+        batch_size = len(batch)
+
         pos_loss = self.pos_loss(y_pos_logits, y_pos_tensor)
-        self.log_metrics(y_pos_logits, y_pos_tensor, "pos", subset=subset)
+        self.log_metrics(y_pos_logits, y_pos_tensor, batch_size, "pos", subset=subset)
 
         lemma_loss = self.lemma_loss(y_lemma_logits, y_lemma_tensor)
         self.log_metrics(
-            y_lemma_logits, y_lemma_tensor, "lemma", subset=subset
+            y_lemma_logits, y_lemma_tensor, batch_size, "lemma", subset=subset
         )
 
         ufeats_loss = self.ufeats_loss(y_ufeats_logits, y_ufeats_tensor)
         self.log_metrics(
-            y_ufeats_logits, y_ufeats_tensor, "ufeats", subset=subset
+            y_ufeats_logits, y_ufeats_tensor, batch_size, "ufeats", subset=subset
         )
 
         # combining the loss of the heads
@@ -395,6 +399,7 @@ class UDTube(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
             logger=True,
+            batch_size=batch_size
         )
 
         return {"loss": loss}
@@ -427,16 +432,12 @@ if __name__ == "__main__":
         train_dataloader = DataLoader(
             train_data,
             batch_size=args.batch_size,
-            collate_fn=lambda batch: train_preprocessing(
-                batch, tokenizer=tokenizer
-            ),
+            collate_fn=partial(train_preprocessing, tokenizer=tokenizer),
         )
         val_dataloader = DataLoader(
             val_data,
             batch_size=args.batch_size,
-            collate_fn=lambda batch: train_preprocessing(
-                batch, tokenizer=tokenizer
-            ),
+            collate_fn=partial(train_preprocessing, tokenizer=tokenizer),
         )
 
         # initializing the model
@@ -464,9 +465,7 @@ if __name__ == "__main__":
         test_dataloader = DataLoader(
             tdata,
             batch_size=args.batch_size,
-            collate_fn=lambda batch: inference_preprocessing(
-                batch, tokenizer=tokenizer
-            ),
+            collate_fn=partial(inference_preprocessing, tokenizer=tokenizer),
         )
         trainer.predict(model, test_dataloader)
 
