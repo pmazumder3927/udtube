@@ -11,11 +11,11 @@ class TrainBatch(nn.Module):
     def __init__(
         self,
         tokens: BatchEncoding,
-        sentences: List[str],
-        toks: Iterable(tensor),
-        pos: Iterable(tensor),
-        lemma: Iterable(tensor),
-        ufeats: Iterable(tensor),
+        sentences: Iterable[str],
+        toks: Iterable[Iterable[str]],
+        pos: Iterable[tensor],
+        lemma: Iterable[tensor],
+        ufeats: Iterable[tensor],
     ):
         super().__init__()
         self.tokens = tokens
@@ -48,4 +48,4 @@ class InferenceBatch(nn.Module):
         self.sentences = sentences
 
     def __len__(self):
-        return len(self.ids)
+        return len(self.sentences)
