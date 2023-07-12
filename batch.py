@@ -1,9 +1,23 @@
 import torch
 from torch import nn, tensor
+from typing import List, Iterable
+
+from transformers import BatchEncoding
 
 
 class TrainBatch(nn.Module):
-    def __init__(self, tokens, sentences, toks, pos, lemma, ufeats):
+    """The batch object used in the training step and validation step of UDTube"""
+
+    def __init__(
+        self,
+        tokens: BatchEncoding,
+        sentences: List[str],
+        toks: Iterable(tensor),
+        pos: Iterable(tensor),
+        lemma: Iterable(tensor),
+        ufeats: Iterable(tensor),
+    ):
+        super().__init__()
         self.tokens = tokens
         self.sentences = sentences
         self.toks = toks
@@ -12,9 +26,8 @@ class TrainBatch(nn.Module):
         self.ufeats = ufeats
 
     def _pad_y(self, y, y_pad):
-        longest_sequence = len(
-            self.tokens[0]
-        )  # all token sequences are same len
+        # all token sequences are same len
+        longest_sequence = len(self.tokens[0])
         padded_y = []
         for y_i in y:
             l_padding = tensor([y_pad])  # for [CLS] token
@@ -23,11 +36,14 @@ class TrainBatch(nn.Module):
         return torch.stack(padded_y)
 
     def __len__(self):
-        return len(self.ids)
+        return len(self.sentences)
 
 
 class InferenceBatch(nn.Module):
-    def __init__(self, tokens, sentences):
+    """The batch object used in the forward pass of UDTube. It does not contain y labels"""
+
+    def __init__(self, tokens: BatchEncoding, sentences: List[str]):
+        super().__init__()
         self.tokens = tokens
         self.sentences = sentences
 
