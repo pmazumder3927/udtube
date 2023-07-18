@@ -5,14 +5,16 @@ from lightning.pytorch.cli import LightningCLI
 import torch
 import transformers
 from torch import nn, tensor
-from torchmetrics import Accuracy, F1Score, Precision, Recall
+from torchmetrics import Accuracy
 
 from batch import InferenceBatch, TrainBatch
-from conllu_datasets import UPOS_CLASSES
 from data_module import ConlluDataModule
 
 
 class UDTubeCLI(LightningCLI):
+    """A customized version of the Lightning CLI
+
+    This class manages all processes behind the scenes, to find out what it can do, run python udtube.py --help"""
     def add_arguments_to_parser(self, parser):
         parser.link_arguments("model.model_name", "data.model_name")
         parser.link_arguments("data.pos_classes_cnt", "model.pos_out_label_size", apply_on="instantiate")
@@ -33,7 +35,7 @@ class UDTube(pl.LightningModule):
             learning_rate: float = 0.001,
             pooling_layers: int = 4
     ):
-        """Initializes the instance based on spam preference.
+        """Initializes the instance based on user input.
 
         Args:
           model_name: The name of the model; used to tokenize and encode.

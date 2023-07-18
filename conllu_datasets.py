@@ -1,5 +1,4 @@
 import conllu
-import torch
 from sklearn.preprocessing import LabelEncoder
 from torch import tensor
 from torch.utils.data import Dataset, IterableDataset
@@ -43,10 +42,17 @@ OVERRIDDEN_FIELD_PARSERS = {
 
 
 class ConlluMapDataset(Dataset):
-    """Conllu format Dataset. It loads the entire dataset into memory and therefore is only suitable for smaller
-    datasets"""
+    """Conllu Map Dataset, used for small training/validation sets
 
+    This class loads the entire dataset into memory and is therefore only suitable for smaller datasets
+    """
     def __init__(self, conllu_file: str, reverse_edits: bool = False):
+        """Initializes the instance based on user input.
+
+        Args:
+            conllu_file: The path to the conllu file to make the dataset from
+            reverse_edits: Reverse edit script calculation. Recommended for suffixal languages. False by default
+        """
         super().__init__()
         self.conllu_file = conllu_file
         self.e_script = (
@@ -123,9 +129,16 @@ class ConlluMapDataset(Dataset):
 
 
 class TextIterDataset(IterableDataset):
-    """Iterable dataset, used for inference when labels are unknown"""
+    """Iterable dataset, used for inference when labels are unknown
 
+    This class is used when the data for inference is large and we do not want to load it entirely into memory.
+    """
     def __init__(self, text_file: str):
+        """Initializes the instance based on user input.
+
+        Args:
+            text_file: The path to the textfile to incrementally read from.
+        """
         super().__init__()
         if text_file:
             self.tf = open(text_file)
@@ -135,4 +148,4 @@ class TextIterDataset(IterableDataset):
 
     def __del__(self):
         if hasattr(self, "tf"):
-            self.tf.close()
+            self.tf.close() # want to make sure we close the file during garbage collection

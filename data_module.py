@@ -23,7 +23,7 @@ class ConlluDataModule(pl.LightningDataModule):
         batch_size: int = 32,
         reverse_edits: bool = False,
     ):
-        """Initializes the instance based on spam preference.
+        """Initializes the instance based on user input. Some attributes will not be set if train dataset is None.
 
         Args:
           model_name: The name of the model; used to tokenize and encode.
@@ -42,9 +42,9 @@ class ConlluDataModule(pl.LightningDataModule):
         self.tokenizer_name = model_name
         if self.train_dataset:
             # this is a bit hacky, but not sure how to do this with setup & CLI
-            self.pos_classes_cnt = len(self.train_dataset.upos_encoder.classes_)  # TODO fix, this is NASTY
-            self.lemma_classes_cnt = len(self.train_dataset.lemma_classes)
-            self.feats_classes_cnt = len(self.train_dataset.feats_classes)
+            self.pos_classes_cnt: int = len(self.train_dataset.upos_encoder.classes_)  # TODO fix, this is NASTY
+            self.lemma_classes_cnt: int = len(self.train_dataset.lemma_classes)
+            self.feats_classes_cnt: int = len(self.train_dataset.feats_classes)
 
     def setup(self, stage: str) -> None:
         self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
