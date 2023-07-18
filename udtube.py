@@ -75,21 +75,6 @@ class UDTube(pl.LightningModule):
 
         # Setting up all the metrics objects for each task
         self.pos_loss = nn.CrossEntropyLoss(ignore_index=self.pos_pad.item())
-        self.pos_precision = Precision(
-            task="multiclass",
-            num_classes=pos_out_label_size,
-            ignore_index=self.pos_pad.item(),
-        )
-        self.pos_recall = Recall(
-            task="multiclass",
-            num_classes=pos_out_label_size,
-            ignore_index=self.pos_pad.item(),
-        )
-        self.pos_f1 = F1Score(
-            task="multiclass",
-            num_classes=pos_out_label_size,
-            ignore_index=self.pos_pad.item(),
-        )
         self.pos_accuracy = Accuracy(
             task="multiclass",
             num_classes=pos_out_label_size,
@@ -99,21 +84,6 @@ class UDTube(pl.LightningModule):
         self.lemma_loss = nn.CrossEntropyLoss(
             ignore_index=self.lemma_pad.item()
         )
-        self.lemma_precision = Precision(
-            task="multiclass",
-            num_classes=lemma_out_label_size + 1,
-            ignore_index=self.lemma_pad.item(),
-        )
-        self.lemma_recall = Recall(
-            task="multiclass",
-            num_classes=lemma_out_label_size + 1,
-            ignore_index=self.lemma_pad.item(),
-        )
-        self.lemma_f1 = F1Score(
-            task="multiclass",
-            num_classes=lemma_out_label_size + 1,
-            ignore_index=self.lemma_pad.item(),
-        )
         self.lemma_accuracy = Accuracy(
             task="multiclass",
             num_classes=lemma_out_label_size + 1,
@@ -122,21 +92,6 @@ class UDTube(pl.LightningModule):
 
         self.feats_loss = nn.CrossEntropyLoss(
             ignore_index=self.feats_pad.item()
-        )
-        self.feats_precision = Precision(
-            task="multiclass",
-            num_classes=feats_out_label_size + 1,
-            ignore_index=self.feats_pad.item(),
-        )
-        self.feats_recall = Recall(
-            task="multiclass",
-            num_classes=feats_out_label_size + 1,
-            ignore_index=self.feats_pad.item(),
-        )
-        self.feats_f1 = F1Score(
-            task="multiclass",
-            num_classes=feats_out_label_size + 1,
-            ignore_index=self.feats_pad.item(),
         )
         self.feats_accuracy = Accuracy(
             task="multiclass",
@@ -206,46 +161,10 @@ class UDTube(pl.LightningModule):
             task_name: str,
             subset: str = "train",
     ):
-        precision = getattr(self, f"{task_name}_precision")
-        recall = getattr(self, f"{task_name}_recall")
-        f1 = getattr(self, f"{task_name}_f1")
         accuracy = getattr(self, f"{task_name}_accuracy")
-
-        avg_precision = precision(y_pred, y_true)
-        avg_recall = recall(y_pred, y_true)
-        avg_f1s = f1(y_pred, y_true)
-        avg_accs = accuracy(y_pred, y_true)
-
-        self.log(
-            f"{subset}:{task_name}_precision",
-            avg_precision,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True,
-            logger=True,
-            batch_size=batch_size
-        )
-        self.log(
-            f"{subset}:{task_name}_recall",
-            avg_recall,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True,
-            logger=True,
-            batch_size=batch_size
-        )
-        self.log(
-            f"{subset}:{task_name}_f1",
-            avg_f1s,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True,
-            logger=True,
-            batch_size=batch_size
-        )
         self.log(
             f"{subset}:{task_name}_acc",
-            avg_accs,
+            accuracy(y_pred, y_true),
             on_step=True,
             on_epoch=True,
             prog_bar=True,
