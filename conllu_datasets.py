@@ -47,6 +47,7 @@ class ConlluMapDataset(Dataset):
     datasets"""
 
     def __init__(self, conllu_file: str, reverse_edits: bool = False):
+        super().__init__()
         self.conllu_file = conllu_file
         self.e_script = (
             edit_scripts.ReverseEditScript
@@ -54,13 +55,14 @@ class ConlluMapDataset(Dataset):
             else edit_scripts.EditScript
         )
         # setting up label encoders
-        self.upos_encoder = LabelEncoder()
-        self.ufeats_encoder = LabelEncoder()
-        self.lemma_encoder = LabelEncoder()
-        self.feats_classes = self._get_all_classes("feats")
-        self.lemma_classes = self._get_all_classes("lemma")
-        self._fit_label_encoders()
-        self.data_set = self._get_data()
+        if conllu_file:
+            self.upos_encoder = LabelEncoder()
+            self.ufeats_encoder = LabelEncoder()
+            self.lemma_encoder = LabelEncoder()
+            self.feats_classes = self._get_all_classes("feats")
+            self.lemma_classes = self._get_all_classes("lemma")
+            self._fit_label_encoders()
+            self.data_set = self._get_data()
 
     def _fit_label_encoders(self):
         self.upos_encoder.fit(UPOS_CLASSES)
@@ -124,10 +126,13 @@ class TextIterDataset(IterableDataset):
     """Iterable dataset, used for inference when labels are unknown"""
 
     def __init__(self, text_file: str):
-        self.tf = open(text_file)
+        super().__init__()
+        if text_file:
+            self.tf = open(text_file)
 
     def __iter__(self):
         return self.tf
 
     def __del__(self):
-        self.tf.close()
+        if hasattr(self, "tf"):
+            self.tf.close()

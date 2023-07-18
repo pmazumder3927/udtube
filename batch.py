@@ -15,7 +15,7 @@ class TrainBatch(nn.Module):
         toks: Iterable[Iterable[str]],
         pos: Iterable[tensor],
         lemma: Iterable[tensor],
-        ufeats: Iterable[tensor],
+        feats: Iterable[tensor],
     ):
         super().__init__()
         self.tokens = tokens
@@ -23,7 +23,7 @@ class TrainBatch(nn.Module):
         self.toks = toks
         self.pos = pos
         self.lemmas = lemma
-        self.ufeats = ufeats
+        self.feats = feats
 
     def _pad_y(self, y, y_pad):
         # all token sequences are same len
