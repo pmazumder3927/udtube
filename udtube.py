@@ -194,8 +194,8 @@ class UDTube(pl.LightningModule):
         x_encoded = self.bert(
             batch.tokens.input_ids, batch.tokens.attention_mask
         )
-        last_4_layer_embs = torch.stack(x_encoded.hidden_states[-4:])
-        x_embs = torch.mean(last_4_layer_embs, keepdim=True, dim=0).squeeze()
+        last_n_layer_embs = torch.stack(x_encoded.hidden_states[-self.pooling_layers:])
+        x_embs = torch.mean(last_n_layer_embs, keepdim=True, dim=0).squeeze()
         x_word_embs, attn_masks, longest_seq = self.pool_embeddings(
             x_embs, batch.tokens
         )
