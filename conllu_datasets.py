@@ -101,7 +101,6 @@ class ConlluMapDataset(Dataset):
             dt = conllu.parse_incr(f, field_parsers=OVERRIDDEN_FIELD_PARSERS)
             for tk_list in dt:
                 sentence = tk_list.metadata["text"]
-                tokens = []
                 uposes = []
                 lemma_rules = []
                 ufeats = []
@@ -111,14 +110,13 @@ class ConlluMapDataset(Dataset):
                             tok["form"].lower(), tok["lemma"].lower()
                         )
                     )
-                    tokens.append(tok["form"])
                     uposes.append(tok["upos"])
                     lemma_rules.append(l_rule)
                     ufeats.append(tok["feats"])
                 uposes = self.upos_encoder.transform(uposes)
                 lemma_rules = self.lemma_encoder.transform(lemma_rules)
                 ufeats = self.ufeats_encoder.transform(ufeats)
-                data.append((sentence, tokens, uposes, lemma_rules, ufeats))
+                data.append((sentence, uposes, lemma_rules, ufeats))
         return data
 
     def __len__(self):

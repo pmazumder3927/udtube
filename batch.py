@@ -14,7 +14,6 @@ class TrainBatch(nn.Module):
         self,
         tokens: BatchEncoding,
         sentences: Iterable[str],
-        toks: Iterable[Iterable[str]],
         pos: Iterable[List[int]],
         lemma: Iterable[List[int]],
         feats: Iterable[List[int]],
@@ -24,8 +23,6 @@ class TrainBatch(nn.Module):
        Args:
            tokens: The raw output of the BERT tokenizer
            sentences: An iterable the length of the batch that contains all the raw sentences.
-           toks: An iterable the length of the batch that contains an Iterable of the token strings,
-           e.g. [['hello', 'world'...]...]
            pos: An iterable the length of the batch that contains a tensor of POS labels.
            Each tensor is as long as the respective entry in toks.
            lemma: An iterable the length of the batch that contains a tensor of lemma labels.
@@ -36,7 +33,6 @@ class TrainBatch(nn.Module):
         super().__init__()
         self.tokens = tokens
         self.sentences = sentences
-        self.toks = toks
         self.pos = pos
         self.lemmas = lemma
         self.feats = feats
