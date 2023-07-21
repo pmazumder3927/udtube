@@ -115,9 +115,9 @@ class ConlluMapDataset(Dataset):
                     uposes.append(tok["upos"])
                     lemma_rules.append(l_rule)
                     ufeats.append(tok["feats"])
-                uposes = tensor(self.upos_encoder.transform(uposes))
-                lemma_rules = tensor(self.lemma_encoder.transform(lemma_rules))
-                ufeats = tensor(self.ufeats_encoder.transform(ufeats))
+                uposes = self.upos_encoder.transform(uposes)
+                lemma_rules = self.lemma_encoder.transform(lemma_rules)
+                ufeats = self.ufeats_encoder.transform(ufeats)
                 data.append((sentence, tokens, uposes, lemma_rules, ufeats))
         return data
 

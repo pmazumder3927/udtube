@@ -15,9 +15,9 @@ class TrainBatch(nn.Module):
         tokens: BatchEncoding,
         sentences: Iterable[str],
         toks: Iterable[Iterable[str]],
-        pos: Iterable[tensor],
-        lemma: Iterable[tensor],
-        feats: Iterable[tensor],
+        pos: Iterable[List[int]],
+        lemma: Iterable[List[int]],
+        feats: Iterable[List[int]],
     ):
         """Initializes the instance based on what's passed to it by the Trainer collate_fn.
 
