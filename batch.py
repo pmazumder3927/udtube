@@ -56,7 +56,7 @@ class TrainBatch(nn.Module):
         return len(self.sentences)
 
 
-class InferenceBatch(nn.Module):
+class PredictBatch(nn.Module):
     """The batch object used in the predict step of UDTube
 
     The InferenceBatch consists of only tokenized inputs and sentences and does not take labels into account,

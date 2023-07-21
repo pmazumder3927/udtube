@@ -7,7 +7,7 @@ import transformers
 from torch import nn, tensor
 from torchmetrics import Accuracy
 
-from batch import InferenceBatch, TrainBatch
+from batch import PredictBatch, TrainBatch
 from data_module import ConlluDataModule
 
 
@@ -174,7 +174,7 @@ class UDTube(pl.LightningModule):
             batch_size=batch_size
         )
 
-    def forward(self, batch: InferenceBatch):
+    def forward(self, batch: PredictBatch):
         x_encoded = self.bert(
             batch.tokens.input_ids, batch.tokens.attention_mask
         )

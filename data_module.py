@@ -4,7 +4,7 @@ import lightning.pytorch as pl
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
-from batch import InferenceBatch, TrainBatch
+from batch import PredictBatch, TrainBatch
 from conllu_datasets import ConlluMapDataset, TextIterDataset
 
 
@@ -84,7 +84,7 @@ class ConlluDataModule(pl.LightningDataModule):
         tokenized_x = tokenizer(
             sentences, padding="longest", return_tensors="pt"
         )
-        return InferenceBatch(tokenized_x, sentences)
+        return PredictBatch(tokenized_x, sentences)
 
     def predict_dataloader(self):
         return DataLoader(
