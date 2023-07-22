@@ -16,7 +16,10 @@ class UDTubeCLI(LightningCLI):
 
     This class manages all processes behind the scenes, to find out what it can do, run python udtube.py --help"""
     def add_arguments_to_parser(self, parser):
+        parser.link_arguments("model.path_name", "data.path_name")
+        parser.link_arguments("model.path_name", "trainer.default_root_dir") # TODO ckpt_path?
         parser.link_arguments("model.model_name", "data.model_name")
+        # TODO confirm if this works for prediction
         parser.link_arguments("data.pos_classes_cnt", "model.pos_out_label_size", apply_on="instantiate")
         parser.link_arguments("data.lemma_classes_cnt", "model.lemma_out_label_size", apply_on="instantiate")
         parser.link_arguments("data.feats_classes_cnt", "model.feats_out_label_size", apply_on="instantiate")
@@ -28,6 +31,7 @@ class UDTube(pl.LightningModule):
     UDTube is a BERT based model that handles 3 tasks at once, pos tagging, lemmatization, and feature classification."""
     def __init__(
             self,
+            path_name: str = "UDTube",
             model_name: str = "bert-base-multilingual-cased",
             pos_out_label_size: int = 2,
             lemma_out_label_size: int = 2,
@@ -38,14 +42,16 @@ class UDTube(pl.LightningModule):
         """Initializes the instance based on user input.
 
         Args:
-          model_name: The name of the model; used to tokenize and encode.
-          pos_out_label_size: The amount of POS labels. This is usually passed by the dataset.
-          lemma_out_label_size: The amount of lemma rule labels in the dataset. This is usually passed by the dataset.
-          feats_out_label_size: The amount of feature labels in the dataset. This is usually passed by the dataset.
-          learning_rate: The learning rate
-          pooling_layers: The amount of layers used for embedding calculation
+            path_name: The name of the folder to save model assets in
+            model_name: The name of the model; used to tokenize and encode.
+            pos_out_label_size: The amount of POS labels. This is usually passed by the dataset.
+            lemma_out_label_size: The amount of lemma rule labels in the dataset. This is usually passed by the dataset.
+            feats_out_label_size: The amount of feature labels in the dataset. This is usually passed by the dataset.
+            learning_rate: The learning rate
+            pooling_layers: The amount of layers used for embedding calculation
         """
         super().__init__()
+        self.path_name = path_name
         self.bert = transformers.AutoModel.from_pretrained(
             model_name, output_hidden_states=True
         )
@@ -106,6 +112,7 @@ class UDTube(pl.LightningModule):
             num_classes=feats_out_label_size,
             ignore_index=feats_out_label_size - 1
         )
+        self.save_hyperparameters()
 
     def pad_seq(
             self,
@@ -268,3 +275,6 @@ class UDTube(pl.LightningModule):
 
 if __name__ == "__main__":
     UDTubeCLI(UDTube, ConlluDataModule)
+
+    # TODO remove when test/predict is up, this is for reference
+    # model = UDTube.load_from_checkpoint("UDTube/lightning_logs/version_2/checkpoints/epoch=0-step=51.ckpt", hparams_file="UDTube/lightning_logs/version_2/hparams.yaml")

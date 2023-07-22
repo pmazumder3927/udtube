@@ -1,4 +1,6 @@
+import os
 import conllu
+import joblib
 from sklearn.preprocessing import LabelEncoder
 from torch import tensor
 from torch.utils.data import Dataset, IterableDataset
@@ -46,7 +48,7 @@ class ConlluMapDataset(Dataset):
         "_",
     ]
 
-    def __init__(self, conllu_file: str, reverse_edits: bool = False):
+    def __init__(self, conllu_file: str, reverse_edits: bool = False, path_name: str = "UDTube"):
         """Initializes the instance based on user input.
 
         Args:
@@ -54,6 +56,7 @@ class ConlluMapDataset(Dataset):
             reverse_edits: Reverse edit script calculation. Recommended for suffixal languages. False by default
         """
         super().__init__()
+        self.path_name = path_name
         self.conllu_file = conllu_file
         self.e_script = (
             edit_scripts.ReverseEditScript
@@ -75,6 +78,12 @@ class ConlluMapDataset(Dataset):
         self.upos_encoder.fit(self.UPOS_CLASSES + [self.PAD_TAG])
         self.ufeats_encoder.fit(self.feats_classes + [self.PAD_TAG])
         self.lemma_encoder.fit(self.lemma_classes + [self.PAD_TAG])
+        # saving all the encoders
+        if not os.path.exists(self.path_name):
+            os.mkdir(self.path_name)
+        joblib.dump(self.upos_encoder, f'{self.path_name}/upos_encoder.joblib')
+        joblib.dump(self.ufeats_encoder, f'{self.path_name}/ufeats_encoder.joblib')
+        joblib.dump(self.lemma_encoder, f'{self.path_name}/lemma_encoder.joblib')
 
     def _get_all_classes(self, lname: str):
         """helper function to get all the classes observed in the training set"""

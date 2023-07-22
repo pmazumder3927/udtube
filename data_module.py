@@ -16,6 +16,7 @@ class ConlluDataModule(pl.LightningDataModule):
     """
     def __init__(
         self,
+        path_name: str = "UDTube",
         model_name: str = None,
         train_dataset: str = None,
         val_dataset: str = None,
@@ -26,17 +27,18 @@ class ConlluDataModule(pl.LightningDataModule):
         """Initializes the instance based on user input. Some attributes will not be set if train dataset is None.
 
         Args:
-          model_name: The name of the model; used to tokenize and encode.
-          train_dataset: The path to the training conllu file
-          val_dataset: The path to the validation conllu file
-          predict_dataset: The path to the prediction dataset, can either be text or conllu
-          batch_size: The batch_size
-          reverse_edits: Reverse edit script calculation. Recommended for suffixal languages. False by default
+            path_name: The name of the folder to save model assets in
+            model_name: The name of the model; used to tokenize and encode.
+            train_dataset: The path to the training conllu file
+            val_dataset: The path to the validation conllu file
+            predict_dataset: The path to the prediction dataset, can either be text or conllu
+            batch_size: The batch_size
+            reverse_edits: Reverse edit script calculation. Recommended for suffixal languages. False by default
         """
         super().__init__()
         self.reverse_edits = reverse_edits
-        self.train_dataset = ConlluMapDataset(train_dataset, reverse_edits=self.reverse_edits)
-        self.val_dataset = ConlluMapDataset(val_dataset, reverse_edits=self.reverse_edits)
+        self.train_dataset = ConlluMapDataset(train_dataset, reverse_edits=self.reverse_edits, path_name=path_name)
+        self.val_dataset = ConlluMapDataset(val_dataset, reverse_edits=self.reverse_edits, path_name=path_name)
         self.predict_dataset = TextIterDataset(predict_dataset)
         self.batch_size = batch_size
         self.tokenizer_name = model_name
