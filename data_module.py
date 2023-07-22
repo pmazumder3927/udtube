@@ -42,13 +42,13 @@ class ConlluDataModule(pl.LightningDataModule):
         self.tokenizer_name = model_name
         if self.train_dataset:
             # this is a bit hacky, but not sure how to do this with setup & CLI
-            self.pos_classes_cnt: int = len(self.train_dataset.upos_encoder.classes_)  # TODO fix, this is NASTY
-            self.lemma_classes_cnt: int = len(self.train_dataset.lemma_classes)
-            self.feats_classes_cnt: int = len(self.train_dataset.feats_classes)
+            # + 1 is the padding
+            self.pos_classes_cnt = len(self.train_dataset.UPOS_CLASSES) + 1
+            self.lemma_classes_cnt = len(self.train_dataset.lemma_classes) + 1
+            self.feats_classes_cnt = len(self.train_dataset.feats_classes) + 1
 
     def setup(self, stage: str) -> None:
         self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
-
 
     @staticmethod
     def train_preprocessing(batch, tokenizer: AutoTokenizer):

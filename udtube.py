@@ -54,8 +54,12 @@ class UDTube(pl.LightningModule):
         self.pos_pad = tensor(
             pos_out_label_size - 1
         )  # last item in the list is a pad from the label encoder
-        self.lemma_pad = tensor(lemma_out_label_size)
-        self.feats_pad = tensor(feats_out_label_size)
+        self.lemma_pad = tensor(
+            lemma_out_label_size - 1
+        )
+        self.feats_pad = tensor(
+            feats_out_label_size - 1
+        )
         self.pos_head = nn.Sequential(
             nn.Linear(
                 self.bert.config.hidden_size, pos_out_label_size
@@ -64,41 +68,43 @@ class UDTube(pl.LightningModule):
         )
         self.lemma_head = nn.Sequential(
             nn.Linear(
-                self.bert.config.hidden_size, lemma_out_label_size + 1
-            ),  # + 1 for padding labels (for now)
+                self.bert.config.hidden_size, lemma_out_label_size
+            ),
             nn.Tanh(),
         )
         self.feats_head = nn.Sequential(
             nn.Linear(
-                self.bert.config.hidden_size, feats_out_label_size + 1
-            ),  # + 1 for padding labels (for now)
+                self.bert.config.hidden_size, feats_out_label_size
+            ),
             nn.Tanh(),
         )
 
         # Setting up all the metrics objects for each task
-        self.pos_loss = nn.CrossEntropyLoss(ignore_index=self.pos_pad.item())
+        self.pos_loss = nn.CrossEntropyLoss(
+            ignore_index=pos_out_label_size - 1
+        )
         self.pos_accuracy = Accuracy(
             task="multiclass",
             num_classes=pos_out_label_size,
-            ignore_index=self.pos_pad.item(),
+            ignore_index=pos_out_label_size - 1  # last item in the list is a pad from the label encoder
         )
 
         self.lemma_loss = nn.CrossEntropyLoss(
-            ignore_index=self.lemma_pad.item()
+            ignore_index=lemma_out_label_size - 1
         )
         self.lemma_accuracy = Accuracy(
             task="multiclass",
-            num_classes=lemma_out_label_size + 1,
-            ignore_index=self.lemma_pad.item(),
+            num_classes=lemma_out_label_size,
+            ignore_index=lemma_out_label_size - 1
         )
 
         self.feats_loss = nn.CrossEntropyLoss(
-            ignore_index=self.feats_pad.item()
+            ignore_index=feats_out_label_size - 1
         )
         self.feats_accuracy = Accuracy(
             task="multiclass",
-            num_classes=feats_out_label_size + 1,
-            ignore_index=self.feats_pad.item(),
+            num_classes=feats_out_label_size,
+            ignore_index=feats_out_label_size - 1
         )
 
     def pad_seq(
@@ -110,6 +116,8 @@ class UDTube(pl.LightningModule):
     ):
         padded_seq = []
         for s in sequence:
+            if not torch.is_tensor(s):
+                s = tensor(s)
             if len(s) != max_len:
                 r_padding = torch.stack([pad] * (max_len - len(s)))
                 padded_seq.append(torch.cat((s, r_padding)))
@@ -201,6 +209,7 @@ class UDTube(pl.LightningModule):
         )
 
         # need to do some preprocessing on Y
+        # Has to be done here, after the adjustment of x_embs to the word level
         y_pos_tensor = self.pad_seq(
             batch.pos, self.pos_pad, longest_seq, return_long=True
         )  # TODO passing self. is weird
@@ -258,6 +267,4 @@ class UDTube(pl.LightningModule):
 
 
 if __name__ == "__main__":
-    cli = UDTubeCLI(UDTube, ConlluDataModule)
-
-
+    UDTubeCLI(UDTube, ConlluDataModule)

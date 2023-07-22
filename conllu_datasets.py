@@ -5,28 +5,6 @@ from torch.utils.data import Dataset, IterableDataset
 
 import edit_scripts
 
-PAD_TAG = "[PAD]"
-UPOS_CLASSES = [
-    "ADJ",
-    "ADP",
-    "ADV",
-    "AUX",
-    "CCONJ",
-    "DET",
-    "INTJ",
-    "NOUN",
-    "NUM",
-    "PART",
-    "PRON",
-    "PROPN",
-    "PUNCT",
-    "SCONJ",
-    "SYM",
-    "VERB",
-    "X",
-    "_",
-    PAD_TAG,
-]
 # Overriding the parser for the conllu reader. This is needed so that feats can be read in as a str instead of a dict
 OVERRIDDEN_FIELD_PARSERS = {
     "id": lambda line, i: conllu.parser.parse_id_value(line[i]),
@@ -46,6 +24,28 @@ class ConlluMapDataset(Dataset):
 
     This class loads the entire dataset into memory and is therefore only suitable for smaller datasets
     """
+    PAD_TAG = "[PAD]"
+    UPOS_CLASSES = [
+        "ADJ",
+        "ADP",
+        "ADV",
+        "AUX",
+        "CCONJ",
+        "DET",
+        "INTJ",
+        "NOUN",
+        "NUM",
+        "PART",
+        "PRON",
+        "PROPN",
+        "PUNCT",
+        "SCONJ",
+        "SYM",
+        "VERB",
+        "X",
+        "_",
+    ]
+
     def __init__(self, conllu_file: str, reverse_edits: bool = False):
         """Initializes the instance based on user input.
 
@@ -71,9 +71,10 @@ class ConlluMapDataset(Dataset):
             self.data_set = self._get_data()
 
     def _fit_label_encoders(self):
-        self.upos_encoder.fit(UPOS_CLASSES)
-        self.ufeats_encoder.fit(self.feats_classes)
-        self.lemma_encoder.fit(self.lemma_classes)
+        # this ensures that the PAD ends up last
+        self.upos_encoder.fit(self.UPOS_CLASSES + [self.PAD_TAG])
+        self.ufeats_encoder.fit(self.feats_classes + [self.PAD_TAG])
+        self.lemma_encoder.fit(self.lemma_classes + [self.PAD_TAG])
 
     def _get_all_classes(self, lname: str):
         """helper function to get all the classes observed in the training set"""
