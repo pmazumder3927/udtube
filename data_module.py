@@ -7,8 +7,8 @@ import lightning.pytorch as pl
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
-from batch import PredictBatch, TrainBatch
-from conllu_datasets import ConlluMapDataset, TextIterDataset
+from batch import ConlluBatch, TextBatch
+from conllu_datasets import ConlluMapDataset, ConlluIterDataset, TextIterDataset
 
 
 def get_most_recent_file(fp, t='dir'):
@@ -33,6 +33,7 @@ class ConlluDataModule(pl.LightningDataModule):
         train_dataset: str = None,
         val_dataset: str = None,
         predict_dataset: str = None,
+        test_dataset: str = None,
         batch_size: int = 32,
         reverse_edits: bool = False,
     ):
@@ -52,6 +53,7 @@ class ConlluDataModule(pl.LightningDataModule):
         self.train_dataset = ConlluMapDataset(train_dataset, reverse_edits=self.reverse_edits, path_name=path_name)
         self.val_dataset = ConlluMapDataset(val_dataset, reverse_edits=self.reverse_edits, path_name=path_name)
         self.predict_dataset = TextIterDataset(predict_dataset)
+        self.test_dataset = ConlluIterDataset(test_dataset)
         self.batch_size = batch_size
         self.tokenizer_name = model_name
         if self.train_dataset:
@@ -81,21 +83,21 @@ class ConlluDataModule(pl.LightningDataModule):
             self.feats_classes_cnt = hps.get("feats_out_label_size", 0)
 
     @staticmethod
-    def train_preprocessing(batch, tokenizer: AutoTokenizer):
+    def conllu_preprocessing(batch, tokenizer: AutoTokenizer):
         """Data pipeline -> tokenizing input and grouping token IDs to words. The output has varied dimensions"""
         sentences, *args = zip(*batch)
         # I want to load in tokens by batch to avoid using the inefficient max_length padding
         tokenized_x = tokenizer(
             sentences, padding="longest", return_tensors="pt"
         )
-        return TrainBatch(tokenized_x, sentences, *args)
+        return ConlluBatch(tokenized_x, sentences, *args)
 
     def train_dataloader(self):
         return DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
             collate_fn=partial(
-                self.train_preprocessing, tokenizer=self.tokenizer
+                self.conllu_preprocessing, tokenizer=self.tokenizer
             ),
         )
 
@@ -104,24 +106,33 @@ class ConlluDataModule(pl.LightningDataModule):
             self.val_dataset,
             batch_size=self.batch_size,
             collate_fn=partial(
-                self.train_preprocessing, tokenizer=self.tokenizer
+                self.conllu_preprocessing, tokenizer=self.tokenizer
+            ),
+        )
+
+    def test_dataloader(self):
+        return DataLoader(
+            self.test_dataset,
+            batch_size=self.batch_size,
+            collate_fn=partial(
+                self.conllu_preprocessing, tokenizer=self.tokenizer
             ),
         )
 
     @staticmethod
-    def txt_inference_preprocessing(sentences, tokenizer: AutoTokenizer):
+    def txt_file_preprocessing(sentences, tokenizer: AutoTokenizer):
         """This is the case where the input is NOT a conllu file"""
         tokenized_x = tokenizer(
             sentences, padding="longest", return_tensors="pt"
         )
-        return PredictBatch(tokenized_x, sentences)
+        return TextBatch(tokenized_x, sentences)
 
     def predict_dataloader(self):
         return DataLoader(
             self.predict_dataset,
             batch_size=self.batch_size,
             collate_fn=partial(
-                self.txt_inference_preprocessing, tokenizer=self.tokenizer
+                self.txt_file_preprocessing, tokenizer=self.tokenizer
             ),
         )
 

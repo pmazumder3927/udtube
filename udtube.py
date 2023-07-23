@@ -8,7 +8,7 @@ import transformers
 from torch import nn, tensor
 from torchmetrics import Accuracy
 
-from batch import PredictBatch, TrainBatch
+from batch import ConlluBatch, TextBatch
 from data_module import ConlluDataModule
 
 
@@ -195,7 +195,7 @@ class UDTube(pl.LightningModule):
             batch_size=batch_size
         )
 
-    def forward(self, batch: PredictBatch):
+    def forward(self, batch: TextBatch):
         x_encoded = self.bert(
             batch.tokens.input_ids, batch.tokens.attention_mask
         )
@@ -211,7 +211,7 @@ class UDTube(pl.LightningModule):
 
         return y_pos_logits, y_lemma_logits, y_feats_logits
 
-    def training_step(self, batch: TrainBatch, batch_idx: int, subset: str = "train"):
+    def training_step(self, batch: ConlluBatch, batch_idx: int, subset: str = "train"):
         x_encoded = self.bert(
             batch.tokens.input_ids, batch.tokens.attention_mask
         )
@@ -275,8 +275,11 @@ class UDTube(pl.LightningModule):
 
         return {"loss": loss}
 
-    def validation_step(self, batch, batch_idx: int):
+    def validation_step(self, batch: ConlluBatch, batch_idx: int):
         return self.training_step(batch, batch_idx, subset="val")
+
+    def test_step(self, batch: ConlluBatch, batch_idx: int):
+        return self.training_step(batch, batch_idx, subset="test")
 
 
 if __name__ == "__main__":
