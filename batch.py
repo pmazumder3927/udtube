@@ -67,7 +67,7 @@ class PredictBatch(nn.Module):
        """
         super().__init__()
         self.tokens = tokens
-        self.sentences = sentences
+        self.sentences = [s.strip("\n") for s in sentences]
 
     def __len__(self):
         return len(self.sentences)

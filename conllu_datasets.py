@@ -72,6 +72,9 @@ class ConlluMapDataset(Dataset):
             self.lemma_classes = self._get_all_classes("lemma")
             self._fit_label_encoders()
             self.data_set = self._get_data()
+        else:
+            # Instatiation of empty class, happens in prediction
+            self.data_set = []
 
     def _fit_label_encoders(self):
         # this ensures that the PAD ends up last

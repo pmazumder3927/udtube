@@ -1,4 +1,7 @@
 from functools import partial
+import os
+import torch
+import glob
 
 import lightning.pytorch as pl
 from torch.utils.data import DataLoader
@@ -6,6 +9,15 @@ from transformers import AutoTokenizer
 
 from batch import PredictBatch, TrainBatch
 from conllu_datasets import ConlluMapDataset, TextIterDataset
+
+
+def get_most_recent_file(fp, t='dir'):
+    if t == 'dir':
+        s = '*/'
+    else:
+        s = '*.ckpt'
+    # citation: https://stackoverflow.com/questions/2014554/find-the-newest-folder-in-a-directory-in-python
+    return max(glob.glob(os.path.join(fp, s)), key=os.path.getmtime)
 
 
 class ConlluDataModule(pl.LightningDataModule):
@@ -48,9 +60,25 @@ class ConlluDataModule(pl.LightningDataModule):
             self.pos_classes_cnt = len(self.train_dataset.UPOS_CLASSES) + 1
             self.lemma_classes_cnt = len(self.train_dataset.lemma_classes) + 1
             self.feats_classes_cnt = len(self.train_dataset.feats_classes) + 1
+        else:
+            self._set_values_from_path_name(path_name)
 
     def setup(self, stage: str) -> None:
         self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
+
+    def _set_values_from_path_name(self, path_name):
+        if path_name and os.path.exists(f"{path_name}/lightning_logs"):
+            # for now, the version we get is the newest one from the logs
+            # citation: https://stackoverflow.com/questions/2014554/find-the-newest-folder-in-a-directory-in-python
+            most_recent_ver = get_most_recent_file(f"{path_name}/lightning_logs", t='dir')
+            if not os.path.exists(f"{most_recent_ver}checkpoints"):
+                raise Exception("The most recent model version in the logs does not have a checkpoint file.")
+            most_recent_ckpt = get_most_recent_file(f"{most_recent_ver}checkpoints", t='file')
+            # This is sloppy, but it keeps things consistent for prediction
+            hps = torch.load(most_recent_ckpt)["hyper_parameters"]
+            self.pos_classes_cnt = hps.get("pos_out_label_size", 0)
+            self.lemma_classes_cnt = hps.get("lemma_out_label_size", 0)
+            self.feats_classes_cnt = hps.get("feats_out_label_size", 0)
 
     @staticmethod
     def train_preprocessing(batch, tokenizer: AutoTokenizer):
