@@ -5,10 +5,10 @@ from typing import List, Iterable
 from transformers import BatchEncoding
 
 
-class TrainBatch(nn.Module):
+class ConlluBatch(nn.Module):
     """The batch object used in the training step and validation step of UDTube
 
-    The TrainBatch consists of both inputs and labels. It also handles padding inputs and tensor-ization.
+    The ConlluBatch consists of both inputs and labels. It also handles padding inputs and tensor-ization.
     """
     def __init__(
         self,
@@ -37,25 +37,14 @@ class TrainBatch(nn.Module):
         self.lemmas = lemma
         self.feats = feats
 
-    def _pad_y(self, y, y_pad):
-        """Helper function to pad and stack y_labels."""
-        # all tokens sequences are same len
-        longest_sequence = len(self.tokens[0])
-        padded_y = []
-        for y_i in y:
-            l_padding = tensor([y_pad])  # for [CLS] token
-            r_padding = tensor([y_pad] * (longest_sequence - len(y_i) - 1))
-            padded_y.append(torch.cat((l_padding, y_i, r_padding)))
-        return torch.stack(padded_y)
-
     def __len__(self):
         return len(self.sentences)
 
 
-class PredictBatch(nn.Module):
+class TextBatch(nn.Module):
     """The batch object used in the predict step of UDTube
 
-    The InferenceBatch consists of only tokenized inputs and sentences and does not take labels into account,
+    The TextBatch consists of only tokenized inputs and sentences and does not take labels into account,
     distinct from TrainBatch
     """
     def __init__(self, tokens: BatchEncoding, sentences: List[str]):
@@ -71,3 +60,4 @@ class PredictBatch(nn.Module):
 
     def __len__(self):
         return len(self.sentences)
+
