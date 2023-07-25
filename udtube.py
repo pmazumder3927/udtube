@@ -195,6 +195,31 @@ class UDTube(pl.LightningModule):
             batch_size=batch_size
         )
 
+    def _get_loss_from_head(self, y_gold, longest_seq, x_word_embs, batch_size, task_name="pos", subset="train"):
+        pad = getattr(self, f"{task_name}_pad")
+        head = getattr(self, f"{task_name}_head")
+        obj_func = getattr(self, f"{task_name}_loss")
+
+        # need to do some preprocessing on Y
+        # Has to be done here, after the adjustment of x_embs to the word level
+        y_gold_tensor = self.pad_seq(
+            y_gold, pad, longest_seq, return_long=True
+        )
+
+        # getting logits from head, and then permuting them for metrics calculation
+        # Each head returns ( batch X sequence_len X classes )
+        # but CE & metrics want ( minibatch X Classes X sequence_len ); (minibatch, C, d0...dk) & (N, C, ..) in the docs
+        logits = head(x_word_embs)
+        logits = logits.permute(0, 2, 1)
+
+        # getting loss and logging
+        loss = obj_func(logits, y_gold_tensor)
+        self.log_metrics(
+            logits, y_gold_tensor, batch_size, task_name, subset=subset
+        )
+        return loss
+
+
     def forward(self, batch: TextBatch):
         x_encoded = self.bert(
             batch.tokens.input_ids, batch.tokens.attention_mask
@@ -223,43 +248,10 @@ class UDTube(pl.LightningModule):
 
         # need to do some preprocessing on Y
         # Has to be done here, after the adjustment of x_embs to the word level
-        y_pos_tensor = self.pad_seq(
-            batch.pos, self.pos_pad, longest_seq, return_long=True
-        )  # TODO passing self. is weird
-        y_lemma_tensor = self.pad_seq(
-            batch.lemmas, self.lemma_pad, longest_seq, return_long=True
-        )
-        y_feats_tensor = self.pad_seq(
-            batch.feats, self.feats_pad, longest_seq, return_long=True
-        )
-
-        # getting logits from each head, and then permuting them for metrics calculation
-        # Each head returns batch X sequence_len X classes
-        # but CE and metrics want minibatch X Classes X sequence_len, (minibatch, C, d0...dk) & (N, C, ..) in the docs.
-        y_pos_logits = self.pos_head(x_word_embs)
-        y_pos_logits = y_pos_logits.permute(0, 2, 1)
-
-        y_lemma_logits = self.lemma_head(x_word_embs)
-        y_lemma_logits = y_lemma_logits.permute(0, 2, 1)
-
-        y_feats_logits = self.feats_head(x_word_embs)
-        y_feats_logits = y_feats_logits.permute(0, 2, 1)
-
-        # getting loss and logging for each head
         batch_size = len(batch)
-
-        pos_loss = self.pos_loss(y_pos_logits, y_pos_tensor)
-        self.log_metrics(y_pos_logits, y_pos_tensor, batch_size, "pos", subset=subset)
-
-        lemma_loss = self.lemma_loss(y_lemma_logits, y_lemma_tensor)
-        self.log_metrics(
-            y_lemma_logits, y_lemma_tensor, batch_size, "lemma", subset=subset
-        )
-
-        feats_loss = self.feats_loss(y_feats_logits, y_feats_tensor)
-        self.log_metrics(
-            y_feats_logits, y_feats_tensor, batch_size, "feats", subset=subset
-        )
+        pos_loss = self._get_loss_from_head(batch.pos, longest_seq, x_word_embs, batch_size, task_name="pos", subset=subset)
+        lemma_loss = self._get_loss_from_head(batch.lemmas, longest_seq, x_word_embs, batch_size, task_name="lemma", subset=subset)
+        feats_loss = self._get_loss_from_head(batch.feats, longest_seq, x_word_embs, batch_size, task_name="feats", subset=subset)
 
         # combining the loss of the heads
         loss = torch.mean(torch.stack([pos_loss, lemma_loss, feats_loss]))
