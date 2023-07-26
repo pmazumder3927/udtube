@@ -2,9 +2,9 @@ import sys
 from typing import Iterable
 
 import lightning.pytorch as pl
-from lightning.pytorch.cli import LightningCLI
 import torch
 import transformers
+from lightning.pytorch.cli import LightningCLI
 from torch import nn, tensor
 from torchmetrics import Accuracy
 
@@ -15,30 +15,46 @@ from data_module import ConlluDataModule
 class UDTubeCLI(LightningCLI):
     """A customized version of the Lightning CLI
 
-    This class manages all processes behind the scenes, to find out what it can do, run python udtube.py --help"""
+    This class manages all processes behind the scenes, to find out what it can do, run python udtube.py --help
+    """
+
     def add_arguments_to_parser(self, parser):
         parser.link_arguments("model.path_name", "data.path_name")
         parser.link_arguments("model.path_name", "trainer.default_root_dir")
         parser.link_arguments("model.model_name", "data.model_name")
         # TODO confirm if this works for prediction
-        parser.link_arguments("data.pos_classes_cnt", "model.pos_out_label_size", apply_on="instantiate")
-        parser.link_arguments("data.lemma_classes_cnt", "model.lemma_out_label_size", apply_on="instantiate")
-        parser.link_arguments("data.feats_classes_cnt", "model.feats_out_label_size", apply_on="instantiate")
+        parser.link_arguments(
+            "data.pos_classes_cnt",
+            "model.pos_out_label_size",
+            apply_on="instantiate",
+        )
+        parser.link_arguments(
+            "data.lemma_classes_cnt",
+            "model.lemma_out_label_size",
+            apply_on="instantiate",
+        )
+        parser.link_arguments(
+            "data.feats_classes_cnt",
+            "model.feats_out_label_size",
+            apply_on="instantiate",
+        )
 
 
 class UDTube(pl.LightningModule):
     """The main model file
 
-    UDTube is a BERT based model that handles 3 tasks at once, pos tagging, lemmatization, and feature classification."""
+    UDTube is a BERT based model that handles 3 tasks at once, pos tagging, lemmatization, and feature classification.
+    """
+
     def __init__(
-            self,
-            path_name: str = "UDTube",
-            model_name: str = "bert-base-multilingual-cased",
-            pos_out_label_size: int = 2,
-            lemma_out_label_size: int = 2,
-            feats_out_label_size: int = 2,
-            learning_rate: float = 0.001,
-            pooling_layers: int = 4
+        self,
+        path_name: str = "UDTube",
+        model_name: str = "bert-base-multilingual-cased",
+        pos_out_label_size: int = 2,
+        lemma_out_label_size: int = 2,
+        feats_out_label_size: int = 2,
+        learning_rate: float = 0.001,
+        pooling_layers: int = 4,
     ):
         """Initializes the instance based on user input.
 
@@ -52,7 +68,9 @@ class UDTube(pl.LightningModule):
             pooling_layers: The amount of layers used for embedding calculation
         """
         super().__init__()
-        self._validate_input(pos_out_label_size, lemma_out_label_size, feats_out_label_size)
+        self._validate_input(
+            pos_out_label_size, lemma_out_label_size, feats_out_label_size
+        )
         self.path_name = path_name
         self.bert = transformers.AutoModel.from_pretrained(
             model_name, output_hidden_states=True
@@ -62,28 +80,18 @@ class UDTube(pl.LightningModule):
         self.pos_pad = tensor(
             pos_out_label_size - 1
         )  # last item in the list is a pad from the label encoder
-        self.lemma_pad = tensor(
-            lemma_out_label_size - 1
-        )
-        self.feats_pad = tensor(
-            feats_out_label_size - 1
-        )
+        self.lemma_pad = tensor(lemma_out_label_size - 1)
+        self.feats_pad = tensor(feats_out_label_size - 1)
         self.pos_head = nn.Sequential(
-            nn.Linear(
-                self.bert.config.hidden_size, pos_out_label_size
-            ),
-            nn.Tanh()
+            nn.Linear(self.bert.config.hidden_size, pos_out_label_size),
+            nn.Tanh(),
         )
         self.lemma_head = nn.Sequential(
-            nn.Linear(
-                self.bert.config.hidden_size, lemma_out_label_size
-            ),
+            nn.Linear(self.bert.config.hidden_size, lemma_out_label_size),
             nn.Tanh(),
         )
         self.feats_head = nn.Sequential(
-            nn.Linear(
-                self.bert.config.hidden_size, feats_out_label_size
-            ),
+            nn.Linear(self.bert.config.hidden_size, feats_out_label_size),
             nn.Tanh(),
         )
 
@@ -94,7 +102,8 @@ class UDTube(pl.LightningModule):
         self.pos_accuracy = Accuracy(
             task="multiclass",
             num_classes=pos_out_label_size,
-            ignore_index=pos_out_label_size - 1  # last item in the list is a pad from the label encoder
+            ignore_index=pos_out_label_size
+            - 1,  # last item in the list is a pad from the label encoder
         )
 
         self.lemma_loss = nn.CrossEntropyLoss(
@@ -103,7 +112,7 @@ class UDTube(pl.LightningModule):
         self.lemma_accuracy = Accuracy(
             task="multiclass",
             num_classes=lemma_out_label_size,
-            ignore_index=lemma_out_label_size - 1
+            ignore_index=lemma_out_label_size - 1,
         )
 
         self.feats_loss = nn.CrossEntropyLoss(
@@ -112,20 +121,28 @@ class UDTube(pl.LightningModule):
         self.feats_accuracy = Accuracy(
             task="multiclass",
             num_classes=feats_out_label_size,
-            ignore_index=feats_out_label_size - 1
+            ignore_index=feats_out_label_size - 1,
         )
         self.save_hyperparameters()
 
-    def _validate_input(self, pos_out_label_size, lemma_out_label_size, feats_out_label_size):
-        if pos_out_label_size == 0 or lemma_out_label_size == 0 or feats_out_label_size == 0:
-            raise ValueError("One of the label sizes given to the model was zero")
+    def _validate_input(
+        self, pos_out_label_size, lemma_out_label_size, feats_out_label_size
+    ):
+        if (
+            pos_out_label_size == 0
+            or lemma_out_label_size == 0
+            or feats_out_label_size == 0
+        ):
+            raise ValueError(
+                "One of the label sizes given to the model was zero"
+            )
 
     def pad_seq(
-            self,
-            sequence: Iterable,
-            pad: Iterable,
-            max_len: int,
-            return_long: bool = False,
+        self,
+        sequence: Iterable,
+        pad: Iterable,
+        max_len: int,
+        return_long: bool = False,
     ):
         padded_seq = []
         for s in sequence:
@@ -141,7 +158,7 @@ class UDTube(pl.LightningModule):
         return torch.stack(padded_seq)
 
     def pool_embeddings(
-            self, x_embs: torch.tensor, tokenized: transformers.BatchEncoding
+        self, x_embs: torch.tensor, tokenized: transformers.BatchEncoding
     ):
         new_embs = []
         new_masks = []
@@ -177,12 +194,12 @@ class UDTube(pl.LightningModule):
         return optimizer
 
     def log_metrics(
-            self,
-            y_pred: torch.tensor,
-            y_true: torch.tensor,
-            batch_size: int,
-            task_name: str,
-            subset: str = "train",
+        self,
+        y_pred: torch.tensor,
+        y_true: torch.tensor,
+        batch_size: int,
+        task_name: str,
+        subset: str = "train",
     ):
         accuracy = getattr(self, f"{task_name}_accuracy")
         self.log(
@@ -192,10 +209,18 @@ class UDTube(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
             logger=True,
-            batch_size=batch_size
+            batch_size=batch_size,
         )
 
-    def _get_loss_from_head(self, y_gold, longest_seq, x_word_embs, batch_size, task_name="pos", subset="train"):
+    def _get_loss_from_head(
+        self,
+        y_gold,
+        longest_seq,
+        x_word_embs,
+        batch_size,
+        task_name="pos",
+        subset="train",
+    ):
         pad = getattr(self, f"{task_name}_pad")
         head = getattr(self, f"{task_name}_head")
         obj_func = getattr(self, f"{task_name}_loss")
@@ -219,12 +244,13 @@ class UDTube(pl.LightningModule):
         )
         return loss
 
-
     def forward(self, batch: TextBatch):
         x_encoded = self.bert(
             batch.tokens.input_ids, batch.tokens.attention_mask
         )
-        last_n_layer_embs = torch.stack(x_encoded.hidden_states[-self.pooling_layers:])
+        last_n_layer_embs = torch.stack(
+            x_encoded.hidden_states[-self.pooling_layers :]
+        )
         x_embs = torch.mean(last_n_layer_embs, keepdim=True, dim=0).squeeze()
         x_word_embs, attn_masks, longest_seq = self.pool_embeddings(
             x_embs, batch.tokens
@@ -236,11 +262,15 @@ class UDTube(pl.LightningModule):
 
         return y_pos_logits, y_lemma_logits, y_feats_logits
 
-    def training_step(self, batch: ConlluBatch, batch_idx: int, subset: str = "train"):
+    def training_step(
+        self, batch: ConlluBatch, batch_idx: int, subset: str = "train"
+    ):
         x_encoded = self.bert(
             batch.tokens.input_ids, batch.tokens.attention_mask
         )
-        last_n_layer_embs = torch.stack(x_encoded.hidden_states[-self.pooling_layers:])
+        last_n_layer_embs = torch.stack(
+            x_encoded.hidden_states[-self.pooling_layers :]
+        )
         x_embs = torch.mean(last_n_layer_embs, keepdim=True, dim=0).squeeze()
         x_word_embs, attn_masks, longest_seq = self.pool_embeddings(
             x_embs, batch.tokens
@@ -249,9 +279,30 @@ class UDTube(pl.LightningModule):
         # need to do some preprocessing on Y
         # Has to be done here, after the adjustment of x_embs to the word level
         batch_size = len(batch)
-        pos_loss = self._get_loss_from_head(batch.pos, longest_seq, x_word_embs, batch_size, task_name="pos", subset=subset)
-        lemma_loss = self._get_loss_from_head(batch.lemmas, longest_seq, x_word_embs, batch_size, task_name="lemma", subset=subset)
-        feats_loss = self._get_loss_from_head(batch.feats, longest_seq, x_word_embs, batch_size, task_name="feats", subset=subset)
+        pos_loss = self._get_loss_from_head(
+            batch.pos,
+            longest_seq,
+            x_word_embs,
+            batch_size,
+            task_name="pos",
+            subset=subset,
+        )
+        lemma_loss = self._get_loss_from_head(
+            batch.lemmas,
+            longest_seq,
+            x_word_embs,
+            batch_size,
+            task_name="lemma",
+            subset=subset,
+        )
+        feats_loss = self._get_loss_from_head(
+            batch.feats,
+            longest_seq,
+            x_word_embs,
+            batch_size,
+            task_name="feats",
+            subset=subset,
+        )
 
         # combining the loss of the heads
         loss = torch.mean(torch.stack([pos_loss, lemma_loss, feats_loss]))
@@ -262,7 +313,7 @@ class UDTube(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
             logger=True,
-            batch_size=batch_size
+            batch_size=batch_size,
         )
 
         return {"loss": loss}
