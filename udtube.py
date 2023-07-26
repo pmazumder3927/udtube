@@ -2,15 +2,18 @@ import sys
 from typing import Iterable
 
 import lightning.pytorch as pl
+import string
 import torch
 import transformers
+import joblib
+import edit_scripts
 from lightning.pytorch.cli import LightningCLI
 from torch import nn, tensor
 from torchmetrics import Accuracy
 
 from batch import ConlluBatch, TextBatch
 from data_module import ConlluDataModule
-
+from conllu_datasets import ConlluMapDataset
 
 class UDTubeCLI(LightningCLI):
     """A customized version of the Lightning CLI
@@ -22,6 +25,7 @@ class UDTubeCLI(LightningCLI):
         parser.link_arguments("model.path_name", "data.path_name")
         parser.link_arguments("model.path_name", "trainer.default_root_dir")
         parser.link_arguments("model.model_name", "data.model_name")
+        parser.link_arguments("data.reverse_edits", "model.reverse_edits")
         # TODO confirm if this works for prediction
         parser.link_arguments(
             "data.pos_classes_cnt",
@@ -50,11 +54,13 @@ class UDTube(pl.LightningModule):
         self,
         path_name: str = "UDTube",
         model_name: str = "bert-base-multilingual-cased",
+        output_file: str = "output.conllu",
         pos_out_label_size: int = 2,
         lemma_out_label_size: int = 2,
         feats_out_label_size: int = 2,
         learning_rate: float = 0.001,
         pooling_layers: int = 4,
+        reverse_edits: bool = False
     ):
         """Initializes the instance based on user input.
 
@@ -75,11 +81,13 @@ class UDTube(pl.LightningModule):
         self.bert = transformers.AutoModel.from_pretrained(
             model_name, output_hidden_states=True
         )
+        self.output_file = output_file
         self.learning_rate = learning_rate
         self.pooling_layers = pooling_layers
+        # last item in the list is a pad from the label encoder
         self.pos_pad = tensor(
             pos_out_label_size - 1
-        )  # last item in the list is a pad from the label encoder
+        )
         self.lemma_pad = tensor(lemma_out_label_size - 1)
         self.feats_pad = tensor(feats_out_label_size - 1)
         self.pos_head = nn.Sequential(
@@ -94,6 +102,10 @@ class UDTube(pl.LightningModule):
             nn.Linear(self.bert.config.hidden_size, feats_out_label_size),
             nn.Tanh(),
         )
+        # retrieving the LabelEncoders set up by the Dataset
+        self.lemma_encoder = joblib.load(f"{self.path_name}/lemma_encoder.joblib")
+        self.ufeats_encoder = joblib.load(f"{self.path_name}/ufeats_encoder.joblib")
+        self.upos_encoder = joblib.load(f"{self.path_name}/upos_encoder.joblib")
 
         # Setting up all the metrics objects for each task
         self.pos_loss = nn.CrossEntropyLoss(
@@ -102,8 +114,7 @@ class UDTube(pl.LightningModule):
         self.pos_accuracy = Accuracy(
             task="multiclass",
             num_classes=pos_out_label_size,
-            ignore_index=pos_out_label_size
-            - 1,  # last item in the list is a pad from the label encoder
+            ignore_index=pos_out_label_size - 1,
         )
 
         self.lemma_loss = nn.CrossEntropyLoss(
@@ -122,6 +133,11 @@ class UDTube(pl.LightningModule):
             task="multiclass",
             num_classes=feats_out_label_size,
             ignore_index=feats_out_label_size - 1,
+        )
+        self.e_script = (
+            edit_scripts.ReverseEditScript
+            if reverse_edits
+            else edit_scripts.EditScript
         )
         self.save_hyperparameters()
 
@@ -162,8 +178,10 @@ class UDTube(pl.LightningModule):
     ):
         new_embs = []
         new_masks = []
+        words = []
         for encoding, x_emb_i in zip(tokenized.encodings, x_embs):
             embs_i = []
+            words_i = []
             mask_i = []
             last_word_idx = slice(0, 0)
             for word_id, x_emb_j in zip(encoding.word_ids, x_emb_i):
@@ -171,6 +189,7 @@ class UDTube(pl.LightningModule):
                     embs_i.append(x_emb_j)
                     # TODO maybe make dummy tensor a member of class
                     dummy_tensor = x_emb_j
+                    words_i.append(ConlluMapDataset.PAD_TAG)
                     mask_i.append(0)
                     continue
                 start, end = encoding.word_to_tokens(word_id)
@@ -181,13 +200,16 @@ class UDTube(pl.LightningModule):
                         x_emb_i[word_idxs], keepdim=True, dim=0
                     ).squeeze()
                     embs_i.append(word_emb_pooled)
+                    # TODO - make below code model specific
+                    words_i.append("".join(encoding.tokens[word_idxs]).replace('##', ''))
                     mask_i.append(1)
             new_embs.append(torch.stack(embs_i))
+            words.append(words_i)
             new_masks.append(tensor(mask_i))
         longest_seq = max(len(m) for m in new_masks)
         new_embs = self.pad_seq(new_embs, dummy_tensor, longest_seq)
         new_masks = self.pad_seq(new_masks, tensor(0), longest_seq)
-        return new_embs, new_masks, longest_seq
+        return new_embs, words, new_masks, longest_seq
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
@@ -244,6 +266,30 @@ class UDTube(pl.LightningModule):
         )
         return loss
 
+    def decode(self, words, y_pos_logits, y_lemma_logits, y_feats_logits):
+        # argmaxing
+        y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
+        y_lemma_hat = torch.argmax(y_lemma_logits, dim=-1)
+        y_feats_hat = torch.argmax(y_feats_logits, dim=-1)
+
+        # transforming to str
+        y_pos_str_batch = []
+        y_lemma_str_batch = []
+        y_feats_hat_batch = []
+        for batch_idx in range(len(words)):
+            lemmas_i = []
+            y_pos_str_batch.append(self.upos_encoder.inverse_transform(y_pos_hat[batch_idx]))
+            y_feats_hat_batch.append(self.ufeats_encoder.inverse_transform(y_feats_hat[batch_idx]))
+            # lemmas work through rule classification, so we have to also apply the rules.
+            lemma_rules = self.lemma_encoder.inverse_transform(y_lemma_hat[batch_idx])
+            for i, rule in enumerate(lemma_rules):
+                rscript = self.e_script.fromtag(rule)
+                lemma = rscript.apply(words[batch_idx][i])
+                lemmas_i.append(lemma)
+            y_lemma_str_batch.append(lemmas_i)
+
+        return y_pos_str_batch, y_lemma_str_batch, y_feats_hat_batch
+
     def forward(self, batch: TextBatch):
         x_encoded = self.bert(
             batch.tokens.input_ids, batch.tokens.attention_mask
@@ -252,7 +298,7 @@ class UDTube(pl.LightningModule):
             x_encoded.hidden_states[-self.pooling_layers :]
         )
         x_embs = torch.mean(last_n_layer_embs, keepdim=True, dim=0).squeeze()
-        x_word_embs, attn_masks, longest_seq = self.pool_embeddings(
+        x_word_embs, words, attn_masks, longest_seq = self.pool_embeddings(
             x_embs, batch.tokens
         )
 
@@ -260,6 +306,27 @@ class UDTube(pl.LightningModule):
         y_lemma_logits = self.lemma_head(x_word_embs)
         y_feats_logits = self.feats_head(x_word_embs)
 
+        poses, lemmas, feats = self.decode(words, y_pos_logits, y_lemma_logits, y_feats_logits)
+        # writing the output file
+        with open(self.output_file, 'a') as sink:
+            for batch_idx in range(len(words)):
+                print(
+                    f"# text = {batch.sentences[batch_idx]}",
+                    sep='\t', file=sink
+                      )
+                for item_idx in range(len(words[batch_idx])):
+                    if words[batch_idx][item_idx] == ConlluMapDataset.PAD_TAG:
+                        continue
+                    space_after = "SpaceAfter=No" if words[batch_idx][item_idx] in string.punctuation else ""
+                    print(item_idx,
+                          words[batch_idx][item_idx],
+                          poses[batch_idx][item_idx],
+                          lemmas[batch_idx][item_idx],
+                          feats[batch_idx][item_idx],
+                          '-',  # in place of dependency (for now)
+                          space_after,
+                          sep='\t', file=sink)
+                print('', file=sink)
         return y_pos_logits, y_lemma_logits, y_feats_logits
 
     def training_step(
@@ -272,7 +339,7 @@ class UDTube(pl.LightningModule):
             x_encoded.hidden_states[-self.pooling_layers :]
         )
         x_embs = torch.mean(last_n_layer_embs, keepdim=True, dim=0).squeeze()
-        x_word_embs, attn_masks, longest_seq = self.pool_embeddings(
+        x_word_embs, words, attn_masks, longest_seq = self.pool_embeddings(
             x_embs, batch.tokens
         )
 
@@ -322,6 +389,7 @@ class UDTube(pl.LightningModule):
         return self.training_step(batch, batch_idx, subset="val")
 
     def test_step(self, batch: ConlluBatch, batch_idx: int):
+        # This is definitely not correct
         return self.training_step(batch, batch_idx, subset="test")
 
 

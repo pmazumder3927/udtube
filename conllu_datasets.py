@@ -28,6 +28,7 @@ class ConlluMapDataset(Dataset):
 
     This class loads the entire dataset into memory and is therefore only suitable for smaller datasets
     """
+    UNK_TAG = "[UNKNOWN]"
     PAD_TAG = "[PAD]"
     UPOS_CLASSES = [
         "ADJ",
@@ -80,10 +81,10 @@ class ConlluMapDataset(Dataset):
             self.data_set = []
 
     def _fit_label_encoders(self):
-        # this ensures that the PAD ends up last
-        self.upos_encoder.fit(self.UPOS_CLASSES + [self.PAD_TAG])
-        self.ufeats_encoder.fit(self.feats_classes + [self.PAD_TAG])
-        self.lemma_encoder.fit(self.lemma_classes + [self.PAD_TAG])
+        # this ensures that the PAD ends up last and the UNK ends up at 0
+        self.upos_encoder.fit([self.UNK_TAG] + self.UPOS_CLASSES + [self.PAD_TAG])
+        self.ufeats_encoder.fit([self.UNK_TAG] + self.feats_classes + [self.PAD_TAG])
+        self.lemma_encoder.fit([self.UNK_TAG] + self.lemma_classes + [self.PAD_TAG])
         # saving all the encoders
         if not os.path.exists(self.path_name):
             os.mkdir(self.path_name)
