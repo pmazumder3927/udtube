@@ -143,56 +143,6 @@ class ConlluMapDataset(Dataset):
         return self.data_set[idx]
 
 
-class ConlluIterDataset(IterableDataset):
-    """
-    :param IterableDataset:
-    :return:
-    """
-
-    def __init__(self, conllu_file: str, reverse_edits: bool = False, path_name: str = "UDTube"):
-        super().__init__()
-        if conllu_file:
-            self.conllu_file = open(conllu_file)
-        if os.path.exists(path_name):
-            self.upos_encoder = joblib.load(f'{path_name}/upos_encoder.joblib')
-            self.ufeats_encoder = joblib.load(f'{path_name}/ufeats_encoder.joblib')
-            self.lemma_encoder = joblib.load(f'{path_name}/lemma_encoder.joblib')
-        self.e_script = (
-            edit_scripts.ReverseEditScript
-            if reverse_edits
-            else edit_scripts.EditScript
-        )
-
-    def __iter__(self):
-        dt = conllu.parse_incr(self.conllu_file, field_parsers=OVERRIDDEN_FIELD_PARSERS)
-
-        def _generator():
-            for tk_list in dt:
-                sentence = tk_list.metadata["text"]
-                uposes = []
-                lemma_rules = []
-                ufeats = []
-                for tok in tk_list:
-                    l_rule = str(
-                        self.e_script(
-                            tok["form"].lower(), tok["lemma"].lower()
-                        )
-                    )
-                    uposes.append(tok["upos"])
-                    lemma_rules.append(l_rule)
-                    ufeats.append(tok["feats"])
-                uposes = self.upos_encoder.transform(uposes)
-                lemma_rules = self.lemma_encoder.transform(lemma_rules)
-                ufeats = self.ufeats_encoder.transform(ufeats)
-                yield sentence, uposes, lemma_rules, ufeats
-
-        return _generator()
-
-    def __del__(self):
-        if hasattr(self, "conllu_file"):
-            self.conllu_file.close()  # want to make sure we close the file during garbage collection
-
-
 class TextIterDataset(IterableDataset):
     """Iterable dataset, used for inference when labels are unknown
 
