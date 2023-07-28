@@ -14,6 +14,7 @@ from torchmetrics import Accuracy
 from batch import ConlluBatch, TextBatch
 from data_module import ConlluDataModule
 from conllu_datasets import ConlluMapDataset
+from typing import Union
 
 class UDTubeCLI(LightningCLI):
     """A customized version of the Lightning CLI
@@ -266,7 +267,7 @@ class UDTube(pl.LightningModule):
         )
         return loss
 
-    def decode(self, words, y_pos_logits, y_lemma_logits, y_feats_logits):
+    def _decode_to_str(self, words, y_pos_logits, y_lemma_logits, y_feats_logits):
         # argmaxing
         y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
         y_lemma_hat = torch.argmax(y_lemma_logits, dim=-1)
@@ -290,30 +291,15 @@ class UDTube(pl.LightningModule):
 
         return y_pos_str_batch, y_lemma_str_batch, y_feats_hat_batch
 
-    def forward(self, batch: TextBatch):
-        x_encoded = self.bert(
-            batch.tokens.input_ids, batch.tokens.attention_mask
-        )
-        last_n_layer_embs = torch.stack(
-            x_encoded.hidden_states[-self.pooling_layers :]
-        )
-        x_embs = torch.mean(last_n_layer_embs, keepdim=True, dim=0).squeeze()
-        x_word_embs, words, attn_masks, longest_seq = self.pool_embeddings(
-            x_embs, batch.tokens
-        )
-
-        y_pos_logits = self.pos_head(x_word_embs)
-        y_lemma_logits = self.lemma_head(x_word_embs)
-        y_feats_logits = self.feats_head(x_word_embs)
-
-        poses, lemmas, feats = self.decode(words, y_pos_logits, y_lemma_logits, y_feats_logits)
+    def _write_to_conllu(self, batch, words, y_pos_logits, y_lemma_logits, y_feats_logits):
+        poses, lemmas, feats = self._decode_to_str(words, y_pos_logits, y_lemma_logits, y_feats_logits)
         # writing the output file
         with open(self.output_file, 'a') as sink:
             for batch_idx in range(len(words)):
                 print(
                     f"# text = {batch.sentences[batch_idx]}",
                     sep='\t', file=sink
-                      )
+                )
                 for item_idx in range(len(words[batch_idx])):
                     if words[batch_idx][item_idx] == ConlluMapDataset.PAD_TAG:
                         continue
@@ -327,6 +313,25 @@ class UDTube(pl.LightningModule):
                           space_after,
                           sep='\t', file=sink)
                 print('', file=sink)
+
+    def forward(self, batch: Union[TextBatch, ConlluBatch]):
+        x_encoded = self.bert(
+            batch.tokens.input_ids, batch.tokens.attention_mask
+        )
+        last_n_layer_embs = torch.stack(
+            x_encoded.hidden_states[-self.pooling_layers:]
+        )
+        x_embs = torch.mean(last_n_layer_embs, keepdim=True, dim=0).squeeze()
+        x_word_embs, words, attn_masks, longest_seq = self.pool_embeddings(
+            x_embs, batch.tokens
+        )
+
+        y_pos_logits = self.pos_head(x_word_embs)
+        y_lemma_logits = self.lemma_head(x_word_embs)
+        y_feats_logits = self.feats_head(x_word_embs)
+
+        self._write_to_conllu(batch, words, y_pos_logits, y_lemma_logits, y_feats_logits)
+
         return y_pos_logits, y_lemma_logits, y_feats_logits
 
     def training_step(
@@ -336,7 +341,7 @@ class UDTube(pl.LightningModule):
             batch.tokens.input_ids, batch.tokens.attention_mask
         )
         last_n_layer_embs = torch.stack(
-            x_encoded.hidden_states[-self.pooling_layers :]
+            x_encoded.hidden_states[-self.pooling_layers:]
         )
         x_embs = torch.mean(last_n_layer_embs, keepdim=True, dim=0).squeeze()
         x_word_embs, words, attn_masks, longest_seq = self.pool_embeddings(
@@ -389,8 +394,10 @@ class UDTube(pl.LightningModule):
         return self.training_step(batch, batch_idx, subset="val")
 
     def test_step(self, batch: ConlluBatch, batch_idx: int):
-        # This is definitely not correct
+        # The model is in eval mode (per docs) so it is okay to call training step
+        # TODO do I even have to overwrite this?
         return self.training_step(batch, batch_idx, subset="test")
+
 
 
 if __name__ == "__main__":
