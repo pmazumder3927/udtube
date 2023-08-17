@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
 from batch import ConlluBatch, TextBatch
-from conllu_datasets import ConlluMapDataset, ConlluIterDataset, TextIterDataset
+from conllu_datasets import ConlluMapDataset, TextIterDataset
 
 
 def get_most_recent_file(fp, t='dir'):
@@ -53,7 +53,7 @@ class ConlluDataModule(pl.LightningDataModule):
         self.train_dataset = ConlluMapDataset(train_dataset, reverse_edits=self.reverse_edits, path_name=path_name)
         self.val_dataset = ConlluMapDataset(val_dataset, reverse_edits=self.reverse_edits, path_name=path_name)
         self.predict_dataset = TextIterDataset(predict_dataset)
-        self.test_dataset = ConlluIterDataset(test_dataset)
+        self.test_dataset = ConlluMapDataset(test_dataset)
         self.batch_size = batch_size
         self.tokenizer_name = model_name
         if self.train_dataset:

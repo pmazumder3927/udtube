@@ -12,9 +12,11 @@ from torch import nn, tensor
 from torchmetrics import Accuracy
 
 from batch import ConlluBatch, TextBatch
+from callbacks import CustomWriter
 from data_module import ConlluDataModule
 from conllu_datasets import ConlluMapDataset
 from typing import Union
+
 
 class UDTubeCLI(LightningCLI):
     """A customized version of the Lightning CLI
@@ -23,11 +25,11 @@ class UDTubeCLI(LightningCLI):
     """
 
     def add_arguments_to_parser(self, parser):
+        parser.add_argument("--output_file")
         parser.link_arguments("model.path_name", "data.path_name")
         parser.link_arguments("model.path_name", "trainer.default_root_dir")
         parser.link_arguments("model.model_name", "data.model_name")
         parser.link_arguments("data.reverse_edits", "model.reverse_edits")
-        # TODO confirm if this works for prediction
         parser.link_arguments(
             "data.pos_classes_cnt",
             "model.pos_out_label_size",
@@ -44,6 +46,11 @@ class UDTubeCLI(LightningCLI):
             apply_on="instantiate",
         )
 
+    def before_instantiate_classes(self) -> None:
+        if self.subcommand == "predict":
+            self.trainer_defaults["callbacks"] = CustomWriter(self.config.predict.output_file)
+        elif self.subcommand == "test":
+            self.trainer_defaults["callbacks"] = CustomWriter(self.config.test.output_file)
 
 class UDTube(pl.LightningModule):
     """The main model file
@@ -52,16 +59,15 @@ class UDTube(pl.LightningModule):
     """
 
     def __init__(
-        self,
-        path_name: str = "UDTube",
-        model_name: str = "bert-base-multilingual-cased",
-        output_file: str = "output.conllu",
-        pos_out_label_size: int = 2,
-        lemma_out_label_size: int = 2,
-        feats_out_label_size: int = 2,
-        learning_rate: float = 0.001,
-        pooling_layers: int = 4,
-        reverse_edits: bool = False
+            self,
+            path_name: str = "UDTube",
+            model_name: str = "bert-base-multilingual-cased",
+            pos_out_label_size: int = 2,
+            lemma_out_label_size: int = 2,
+            feats_out_label_size: int = 2,
+            learning_rate: float = 0.001,
+            pooling_layers: int = 4,
+            reverse_edits: bool = False
     ):
         """Initializes the instance based on user input.
 
@@ -82,7 +88,6 @@ class UDTube(pl.LightningModule):
         self.bert = transformers.AutoModel.from_pretrained(
             model_name, output_hidden_states=True
         )
-        self.output_file = output_file
         self.learning_rate = learning_rate
         self.pooling_layers = pooling_layers
         # last item in the list is a pad from the label encoder
@@ -143,23 +148,23 @@ class UDTube(pl.LightningModule):
         self.save_hyperparameters()
 
     def _validate_input(
-        self, pos_out_label_size, lemma_out_label_size, feats_out_label_size
+            self, pos_out_label_size, lemma_out_label_size, feats_out_label_size
     ):
         if (
-            pos_out_label_size == 0
-            or lemma_out_label_size == 0
-            or feats_out_label_size == 0
+                pos_out_label_size == 0
+                or lemma_out_label_size == 0
+                or feats_out_label_size == 0
         ):
             raise ValueError(
                 "One of the label sizes given to the model was zero"
             )
 
     def pad_seq(
-        self,
-        sequence: Iterable,
-        pad: Iterable,
-        max_len: int,
-        return_long: bool = False,
+            self,
+            sequence: Iterable,
+            pad: Iterable,
+            max_len: int,
+            return_long: bool = False,
     ):
         padded_seq = []
         for s in sequence:
@@ -175,7 +180,7 @@ class UDTube(pl.LightningModule):
         return torch.stack(padded_seq)
 
     def pool_embeddings(
-        self, x_embs: torch.tensor, tokenized: transformers.BatchEncoding
+            self, x_embs: torch.tensor, tokenized: transformers.BatchEncoding
     ):
         new_embs = []
         new_masks = []
@@ -217,12 +222,12 @@ class UDTube(pl.LightningModule):
         return optimizer
 
     def log_metrics(
-        self,
-        y_pred: torch.tensor,
-        y_true: torch.tensor,
-        batch_size: int,
-        task_name: str,
-        subset: str = "train",
+            self,
+            y_pred: torch.tensor,
+            y_true: torch.tensor,
+            batch_size: int,
+            task_name: str,
+            subset: str = "train",
     ):
         accuracy = getattr(self, f"{task_name}_accuracy")
         self.log(
@@ -236,13 +241,13 @@ class UDTube(pl.LightningModule):
         )
 
     def _get_loss_from_head(
-        self,
-        y_gold,
-        longest_seq,
-        x_word_embs,
-        batch_size,
-        task_name="pos",
-        subset="train",
+            self,
+            y_gold,
+            longest_seq,
+            x_word_embs,
+            batch_size,
+            task_name="pos",
+            subset="train",
     ):
         pad = getattr(self, f"{task_name}_pad")
         head = getattr(self, f"{task_name}_head")
@@ -289,30 +294,7 @@ class UDTube(pl.LightningModule):
                 lemmas_i.append(lemma)
             y_lemma_str_batch.append(lemmas_i)
 
-        return y_pos_str_batch, y_lemma_str_batch, y_feats_hat_batch
-
-    def _write_to_conllu(self, batch, words, y_pos_logits, y_lemma_logits, y_feats_logits):
-        poses, lemmas, feats = self._decode_to_str(words, y_pos_logits, y_lemma_logits, y_feats_logits)
-        # writing the output file
-        with open(self.output_file, 'a') as sink:
-            for batch_idx in range(len(words)):
-                print(
-                    f"# text = {batch.sentences[batch_idx]}",
-                    sep='\t', file=sink
-                )
-                for item_idx in range(len(words[batch_idx])):
-                    if words[batch_idx][item_idx] == ConlluMapDataset.PAD_TAG:
-                        continue
-                    space_after = "SpaceAfter=No" if words[batch_idx][item_idx] in string.punctuation else ""
-                    print(item_idx,
-                          words[batch_idx][item_idx],
-                          poses[batch_idx][item_idx],
-                          lemmas[batch_idx][item_idx],
-                          feats[batch_idx][item_idx],
-                          '-',  # in place of dependency (for now)
-                          space_after,
-                          sep='\t', file=sink)
-                print('', file=sink)
+        return words, y_pos_str_batch, y_lemma_str_batch, y_feats_hat_batch
 
     def forward(self, batch: Union[TextBatch, ConlluBatch]):
         x_encoded = self.bert(
@@ -330,12 +312,10 @@ class UDTube(pl.LightningModule):
         y_lemma_logits = self.lemma_head(x_word_embs)
         y_feats_logits = self.feats_head(x_word_embs)
 
-        self._write_to_conllu(batch, words, y_pos_logits, y_lemma_logits, y_feats_logits)
-
-        return y_pos_logits, y_lemma_logits, y_feats_logits
+        return words, y_pos_logits, y_lemma_logits, y_feats_logits
 
     def training_step(
-        self, batch: ConlluBatch, batch_idx: int, subset: str = "train"
+            self, batch: ConlluBatch, batch_idx: int, subset: str = "train"
     ):
         x_encoded = self.bert(
             batch.tokens.input_ids, batch.tokens.attention_mask
@@ -394,10 +374,14 @@ class UDTube(pl.LightningModule):
         return self.training_step(batch, batch_idx, subset="val")
 
     def test_step(self, batch: ConlluBatch, batch_idx: int):
-        # The model is in eval mode (per docs) so it is okay to call training step
-        # TODO do I even have to overwrite this?
-        return self.training_step(batch, batch_idx, subset="test")
+        res = self.forward(batch)
+        words, poses, lemmas, feats = self._decode_to_str(*res)
+        return batch.sentences, words, poses, lemmas, feats
 
+    def predict_step(self, batch: TextBatch, batch_idx: int):
+        res = self.forward(batch)
+        words, poses, lemmas, feats = self._decode_to_str(*res)
+        return batch.sentences, words, poses, lemmas, feats
 
 
 if __name__ == "__main__":
