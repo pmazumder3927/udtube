@@ -148,6 +148,7 @@ class UDTube(pl.LightningModule):
             else edit_scripts.EditScript
         )
         self.save_hyperparameters()
+        self.dummy_tensor = torch.zeros(self.bert.config.hidden_size)
 
     def _validate_input(
             self, pos_out_label_size, lemma_out_label_size, feats_out_label_size
@@ -171,7 +172,7 @@ class UDTube(pl.LightningModule):
         padded_seq = []
         for s in sequence:
             if not torch.is_tensor(s):
-                s = tensor(s)
+                s = tensor(s, device=self.device)
             if len(s) != max_len:
                 r_padding = torch.stack([pad] * (max_len - len(s)))
                 padded_seq.append(torch.cat((s, r_padding)))
@@ -195,8 +196,6 @@ class UDTube(pl.LightningModule):
             for word_id, x_emb_j in zip(encoding.word_ids, x_emb_i):
                 if word_id is None:
                     embs_i.append(x_emb_j)
-                    # TODO maybe make dummy tensor a member of class
-                    dummy_tensor = x_emb_j
                     words_i.append(ConlluMapDataset.PAD_TAG)
                     mask_i.append(0)
                     continue
@@ -213,10 +212,10 @@ class UDTube(pl.LightningModule):
                     mask_i.append(1)
             new_embs.append(torch.stack(embs_i))
             words.append(words_i)
-            new_masks.append(tensor(mask_i))
+            new_masks.append(tensor(mask_i, device=self.device))
         longest_seq = max(len(m) for m in new_masks)
-        new_embs = self.pad_seq(new_embs, dummy_tensor, longest_seq)
-        new_masks = self.pad_seq(new_masks, tensor(0), longest_seq)
+        new_embs = self.pad_seq(new_embs, self.dummy_tensor, longest_seq)
+        new_masks = self.pad_seq(new_masks, tensor(0, device=self.device), longest_seq)
         return new_embs, words, new_masks, longest_seq
 
     def configure_optimizers(self):
