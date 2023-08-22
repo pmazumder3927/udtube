@@ -177,7 +177,6 @@ class UDTube(pl.LightningModule):
                 # I think the bellow operation puts the padding back on CPU, not great
                 r_padding = torch.stack([pad] * (max_len - len(s)))
                 r_padding = r_padding.to(s.device)
-                print(s.device, r_padding.device)
                 padded_seq.append(torch.cat((s, r_padding)))
             else:
                 padded_seq.append(s)
@@ -259,7 +258,6 @@ class UDTube(pl.LightningModule):
 
         # need to do some preprocessing on Y
         # Has to be done here, after the adjustment of x_embs to the word level
-        print('okay 4')
         y_gold_tensor = self.pad_seq(
             y_gold, pad, longest_seq, return_long=True
         )
@@ -360,11 +358,9 @@ class UDTube(pl.LightningModule):
             task_name="feats",
             subset=subset,
         )
-        print("Okay 1")
 
         # combining the loss of the heads
         loss = torch.mean(torch.stack([pos_loss, lemma_loss, feats_loss]))
-        print("Okay 2")
         self.log(
             "Loss",
             loss,
@@ -374,7 +370,6 @@ class UDTube(pl.LightningModule):
             logger=True,
             batch_size=batch_size,
         )
-        print("Okay 3")
 
         return {"loss": loss}
 

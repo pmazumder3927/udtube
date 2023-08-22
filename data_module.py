@@ -58,10 +58,10 @@ class ConlluDataModule(pl.LightningDataModule):
         self.tokenizer_name = model_name
         if self.train_dataset:
             # this is a bit hacky, but not sure how to do this with setup & CLI
-            # + 1 is the padding
-            self.pos_classes_cnt = len(self.train_dataset.UPOS_CLASSES) + 1
-            self.lemma_classes_cnt = len(self.train_dataset.lemma_classes) + 1
-            self.feats_classes_cnt = len(self.train_dataset.feats_classes) + 1
+            # + 1 is the padding & unk tok
+            self.pos_classes_cnt = len(self.train_dataset.UPOS_CLASSES) + 2
+            self.lemma_classes_cnt = len(self.train_dataset.lemma_classes) + 2
+            self.feats_classes_cnt = len(self.train_dataset.feats_classes) + 2
         else:
             self._set_values_from_path_name(path_name)
 
