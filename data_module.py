@@ -89,7 +89,7 @@ class ConlluDataModule(pl.LightningDataModule):
         # I want to load in tokens by batch to avoid using the inefficient max_length padding
         tokenized_x = tokenizer(
             sentences, padding="longest", return_tensors="pt"
-        )
+        ).to("cuda")
         return ConlluBatch(tokenized_x, sentences, *args)
 
     def train_dataloader(self):
@@ -124,7 +124,7 @@ class ConlluDataModule(pl.LightningDataModule):
         """This is the case where the input is NOT a conllu file"""
         tokenized_x = tokenizer(
             sentences, padding="longest", return_tensors="pt"
-        )
+        ).to("cuda")
         return TextBatch(tokenized_x, sentences)
 
     def predict_dataloader(self):
