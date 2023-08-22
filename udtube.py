@@ -10,6 +10,7 @@ import edit_scripts
 from lightning.pytorch.cli import LightningCLI
 from torch import nn, tensor
 from torchmetrics import Accuracy
+from lightning.pytorch.loggers.wandb import WandbLogger
 
 from batch import ConlluBatch, TextBatch
 from callbacks import CustomWriter
@@ -47,6 +48,7 @@ class UDTubeCLI(LightningCLI):
         )
 
     def before_instantiate_classes(self) -> None:
+        self.trainer_defaults['logger'] = WandbLogger()
         if self.subcommand == "predict":
             self.trainer_defaults["callbacks"] = CustomWriter(self.config.predict.output_file)
         elif self.subcommand == "test":
