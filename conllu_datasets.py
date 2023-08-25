@@ -1,9 +1,13 @@
 import os
+import re
+
 import conllu
 import joblib
 from sklearn.preprocessing import LabelEncoder
 from torch import tensor
 from torch.utils.data import Dataset, IterableDataset
+from pathlib import Path
+from ud_compatibility import marry, languages
 
 import edit_scripts
 
@@ -51,16 +55,19 @@ class ConlluMapDataset(Dataset):
         "_",
     ]
 
-    def __init__(self, conllu_file: str, reverse_edits: bool = False, path_name: str = "UDTube"):
+    def __init__(self, conllu_file: str, reverse_edits: bool = False, path_name: str = "UDTube",
+                 convert_to_um: bool = True):
         """Initializes the instance based on user input.
 
         Args:
             conllu_file: The path to the conllu file to make the dataset from
             reverse_edits: Reverse edit script calculation. Recommended for suffixal languages. False by default
+            path_name: The dir where everything will get saved
+            convert_to_um: Enable Universal Dependency (UD) file conversion to Universal Morphology (UM) format
         """
         super().__init__()
         self.path_name = path_name
-        self.conllu_file = conllu_file
+        self.conllu_file = self._convert_to_um(conllu_file, convert_to_um)
         self.e_script = (
             edit_scripts.ReverseEditScript
             if reverse_edits
@@ -68,7 +75,6 @@ class ConlluMapDataset(Dataset):
         )
         # setting up label encoders
         if conllu_file:
-            # TODO confirm that the encoders are the same for train and val
             self.upos_encoder = LabelEncoder()
             self.ufeats_encoder = LabelEncoder()
             self.lemma_encoder = LabelEncoder()
@@ -79,6 +85,21 @@ class ConlluMapDataset(Dataset):
         else:
             # Instatiation of empty class, happens in prediction
             self.data_set = []
+
+    def _convert_to_um(self, conllu_file, convert_to_um):
+        if not conllu_file:
+            return
+        # hopefully, as the marry.py repo stabilizes this will look less like an abomination
+        if convert_to_um:
+            language_match = re.search(r'^[a-zA-Z]+', conllu_file)
+            if language_match:
+                language = languages.get_lang(language_match.group(0))
+                fc = marry.FileConverter(Path(conllu_file), language=language, clever=False)
+                fc.convert() # writes a file
+            if not language_match:
+                raise Exception("File does not follow the naming convention for conllu files: <language>_<treebank>-<ud>-<split>.conllu")
+            return conllu_file.replace('-ud-', '-um-')
+        return conllu_file
 
     def _fit_label_encoders(self):
         # this ensures that the PAD ends up last and the UNK ends up at 0

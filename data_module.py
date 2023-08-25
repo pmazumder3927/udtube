@@ -35,6 +35,7 @@ class ConlluDataModule(pl.LightningDataModule):
         predict_dataset: str = None,
         test_dataset: str = None,
         batch_size: int = 32,
+        convert_to_um: bool = True,
         reverse_edits: bool = False,
     ):
         """Initializes the instance based on user input. Some attributes will not be set if train dataset is None.
@@ -46,14 +47,17 @@ class ConlluDataModule(pl.LightningDataModule):
             val_dataset: The path to the validation conllu file
             predict_dataset: The path to the prediction dataset, can either be text or conllu
             batch_size: The batch_size
+            convert_to_um: enable Universal Dependency (UD) file conversion to Universal Morphology (UM) format
             reverse_edits: Reverse edit script calculation. Recommended for suffixal languages. False by default
         """
         super().__init__()
         self.reverse_edits = reverse_edits
-        self.train_dataset = ConlluMapDataset(train_dataset, reverse_edits=self.reverse_edits, path_name=path_name)
-        self.val_dataset = ConlluMapDataset(val_dataset, reverse_edits=self.reverse_edits, path_name=path_name)
+        self.train_dataset = ConlluMapDataset(train_dataset, reverse_edits=self.reverse_edits, path_name=path_name,
+                                              convert_to_um=convert_to_um)
+        self.val_dataset = ConlluMapDataset(val_dataset, reverse_edits=self.reverse_edits, path_name=path_name,
+                                            convert_to_um=convert_to_um)
         self.predict_dataset = TextIterDataset(predict_dataset)
-        self.test_dataset = ConlluMapDataset(test_dataset)
+        self.test_dataset = ConlluMapDataset(test_dataset, convert_to_um=convert_to_um)
         self.batch_size = batch_size
         self.tokenizer_name = model_name
         if self.train_dataset:
@@ -89,7 +93,7 @@ class ConlluDataModule(pl.LightningDataModule):
         # I want to load in tokens by batch to avoid using the inefficient max_length padding
         tokenized_x = tokenizer(
             sentences, padding="longest", return_tensors="pt"
-        ).to("cuda")
+        ).to("cuda" if torch.cuda.is_available() else "cpu")
         return ConlluBatch(tokenized_x, sentences, *args)
 
     def train_dataloader(self):
@@ -124,7 +128,7 @@ class ConlluDataModule(pl.LightningDataModule):
         """This is the case where the input is NOT a conllu file"""
         tokenized_x = tokenizer(
             sentences, padding="longest", return_tensors="pt"
-        ).to("cuda")
+        ).to("cuda" if torch.cuda.is_available() else "cpu")
         return TextBatch(tokenized_x, sentences)
 
     def predict_dataloader(self):
