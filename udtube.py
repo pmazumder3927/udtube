@@ -87,9 +87,7 @@ class UDTube(pl.LightningModule):
             pos_out_label_size, lemma_out_label_size, feats_out_label_size
         )
         self.path_name = path_name
-        self.ecoder_model = transformers.AutoModel.from_pretrained(
-            model_name, output_hidden_states=True
-        )
+        self.encoder_model = self._load_model(model_name)
         self.learning_rate = learning_rate
         self.pooling_layers = pooling_layers
         # last item in the list is a pad from the label encoder
@@ -99,15 +97,15 @@ class UDTube(pl.LightningModule):
         self.lemma_pad = tensor(lemma_out_label_size - 1, device=self.device)
         self.feats_pad = tensor(feats_out_label_size - 1, device=self.device)
         self.pos_head = nn.Sequential(
-            nn.Linear(self.ecoder_model.config.hidden_size, pos_out_label_size),
+            nn.Linear(self.encoder_model.config.hidden_size, pos_out_label_size),
             nn.Tanh(),
         )
         self.lemma_head = nn.Sequential(
-            nn.Linear(self.ecoder_model.config.hidden_size, lemma_out_label_size),
+            nn.Linear(self.encoder_model.config.hidden_size, lemma_out_label_size),
             nn.Tanh(),
         )
         self.feats_head = nn.Sequential(
-            nn.Linear(self.ecoder_model.config.hidden_size, feats_out_label_size),
+            nn.Linear(self.encoder_model.config.hidden_size, feats_out_label_size),
             nn.Tanh(),
         )
         # retrieving the LabelEncoders set up by the Dataset
@@ -148,7 +146,16 @@ class UDTube(pl.LightningModule):
             else edit_scripts.EditScript
         )
         self.save_hyperparameters()
-        self.dummy_tensor = torch.zeros(self.ecoder_model.config.hidden_size, device=self.device)
+        self.dummy_tensor = torch.zeros(self.encoder_model.config.hidden_size, device=self.device)
+
+    def _load_model(self, model_name):
+        model = transformers.AutoModel.from_pretrained(
+                model_name, output_hidden_states=True
+        )
+        if 't5' in model_name:
+            model = model.encoder
+        return model
+
 
     def _validate_input(
             self, pos_out_label_size, lemma_out_label_size, feats_out_label_size
@@ -300,7 +307,7 @@ class UDTube(pl.LightningModule):
         return words, y_pos_str_batch, y_lemma_str_batch, y_feats_hat_batch
 
     def forward(self, batch: Union[TextBatch, ConlluBatch]):
-        x_encoded = self.ecoder_model(
+        x_encoded = self.encoder_model(
             batch.tokens.input_ids, batch.tokens.attention_mask
         )
         last_n_layer_embs = torch.stack(
@@ -320,7 +327,7 @@ class UDTube(pl.LightningModule):
     def training_step(
             self, batch: ConlluBatch, batch_idx: int, subset: str = "train"
     ):
-        x_encoded = self.ecoder_model(
+        x_encoded = self.encoder_model(
             batch.tokens.input_ids, batch.tokens.attention_mask
         )
         last_n_layer_embs = torch.stack(
