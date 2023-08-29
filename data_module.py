@@ -53,9 +53,9 @@ class ConlluDataModule(pl.LightningDataModule):
         super().__init__()
         self.reverse_edits = reverse_edits
         self.train_dataset = ConlluMapDataset(train_dataset, reverse_edits=self.reverse_edits, path_name=path_name,
-                                              convert_to_um=convert_to_um)
+                                              convert_to_um=convert_to_um, fit_encoders=True)
         self.val_dataset = ConlluMapDataset(val_dataset, reverse_edits=self.reverse_edits, path_name=path_name,
-                                            convert_to_um=convert_to_um)
+                                            convert_to_um=convert_to_um, fit_encoders=False)
         self.predict_dataset = TextIterDataset(predict_dataset)
         self.test_dataset = ConlluMapDataset(test_dataset, convert_to_um=convert_to_um)
         self.batch_size = batch_size

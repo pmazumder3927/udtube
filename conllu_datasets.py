@@ -56,7 +56,7 @@ class ConlluMapDataset(Dataset):
     ]
 
     def __init__(self, conllu_file: str, reverse_edits: bool = False, path_name: str = "UDTube",
-                 convert_to_um: bool = True):
+                 convert_to_um: bool = True, fit_encoders: bool = False):
         """Initializes the instance based on user input.
 
         Args:
@@ -64,6 +64,7 @@ class ConlluMapDataset(Dataset):
             reverse_edits: Reverse edit script calculation. Recommended for suffixal languages. False by default
             path_name: The dir where everything will get saved
             convert_to_um: Enable Universal Dependency (UD) file conversion to Universal Morphology (UM) format
+            fit_encoders: Fit the label encoders. Should only be true for the train dataset
         """
         super().__init__()
         self.path_name = path_name
@@ -80,7 +81,10 @@ class ConlluMapDataset(Dataset):
             self.lemma_encoder = LabelEncoder()
             self.feats_classes = self._get_all_classes("feats")
             self.lemma_classes = self._get_all_classes("lemma")
-            self._fit_label_encoders()
+            if fit_encoders:
+                self._fit_label_encoders()
+            else:
+                self._load_label_encoders()
             self.data_set = self._get_data()
         else:
             # Instatiation of empty class, happens in prediction
@@ -109,9 +113,15 @@ class ConlluMapDataset(Dataset):
         # saving all the encoders
         if not os.path.exists(self.path_name):
             os.mkdir(self.path_name)
+        print(f"Now saving label encoders for {self.conllu_file}")
         joblib.dump(self.upos_encoder, f'{self.path_name}/upos_encoder.joblib')
         joblib.dump(self.ufeats_encoder, f'{self.path_name}/ufeats_encoder.joblib')
         joblib.dump(self.lemma_encoder, f'{self.path_name}/lemma_encoder.joblib')
+
+    def _load_label_encoders(self):
+        self.lemma_encoder = joblib.load(f"{self.path_name}/lemma_encoder.joblib")
+        self.ufeats_encoder = joblib.load(f"{self.path_name}/ufeats_encoder.joblib")
+        self.upos_encoder = joblib.load(f"{self.path_name}/upos_encoder.joblib")
 
     def _get_all_classes(self, lname: str):
         """helper function to get all the classes observed in the training set"""
@@ -148,9 +158,19 @@ class ConlluMapDataset(Dataset):
                             tok["form"].lower(), tok["lemma"].lower()
                         )
                     )
-                    uposes.append(tok["upos"])
+                    # Here we have to check if the thing is unknown
+                    upos_ = tok["upos"]
+                    ufeat_ = tok["feats"]
+                    if tok["upos"] not in self.upos_encoder.classes_:
+                        upos_ = self.UNK_TAG
+                    if l_rule not in self.lemma_encoder.classes_:
+                        l_rule = self.UNK_TAG
+                    if ufeat_ not in self.ufeats_encoder.classes_:
+                        ufeat_ = self.UNK_TAG
+
+                    uposes.append(upos_)
                     lemma_rules.append(l_rule)
-                    ufeats.append(tok["feats"])
+                    ufeats.append(ufeat_)
                 uposes = self.upos_encoder.transform(uposes)
                 lemma_rules = self.lemma_encoder.transform(lemma_rules)
                 ufeats = self.ufeats_encoder.transform(ufeats)
