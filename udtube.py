@@ -1,8 +1,6 @@
-import sys
 from typing import Iterable
 
 import lightning.pytorch as pl
-import string
 import torch
 import transformers
 import joblib
@@ -10,7 +8,6 @@ import edit_scripts
 from lightning.pytorch.cli import LightningCLI
 from torch import nn, tensor
 from torchmetrics import Accuracy
-from lightning.pytorch.loggers.wandb import WandbLogger
 
 from batch import ConlluBatch, TextBatch
 from callbacks import CustomWriter
@@ -48,11 +45,10 @@ class UDTubeCLI(LightningCLI):
         )
 
     def before_instantiate_classes(self) -> None:
-        self.trainer_defaults['logger'] = WandbLogger()
         if self.subcommand == "predict":
-            self.trainer_defaults["callbacks"] = CustomWriter(self.config.predict.output_file)
+            self.trainer_defaults["callbacks"] = [CustomWriter(self.config.predict.output_file)]
         elif self.subcommand == "test":
-            self.trainer_defaults["callbacks"] = CustomWriter(self.config.test.output_file)
+            self.trainer_defaults["callbacks"] = [CustomWriter(self.config.test.output_file)]
 
 class UDTube(pl.LightningModule):
     """The main model file
@@ -369,7 +365,7 @@ class UDTube(pl.LightningModule):
         # combining the loss of the heads
         loss = torch.mean(torch.stack([pos_loss, lemma_loss, feats_loss]))
         self.log(
-            "Loss",
+            "loss",
             loss,
             on_step=True,
             on_epoch=True,
