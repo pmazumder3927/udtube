@@ -63,7 +63,10 @@ class UDTube(pl.LightningModule):
             pos_out_label_size: int = 2,
             lemma_out_label_size: int = 2,
             feats_out_label_size: int = 2,
-            learning_rate: float = 0.001,
+            udtube_dropout: float = 0.5,
+            encoder_dropout: float = 0.2,
+            udtube_learning_rate: float = 0.001,
+            encoder_model_learning_rate: float = 2e-5,
             pooling_layers: int = 4,
             reverse_edits: bool = False
     ):
@@ -75,7 +78,8 @@ class UDTube(pl.LightningModule):
             pos_out_label_size: The amount of POS labels. This is usually passed by the dataset.
             lemma_out_label_size: The amount of lemma rule labels in the dataset. This is usually passed by the dataset.
             feats_out_label_size: The amount of feature labels in the dataset. This is usually passed by the dataset.
-            learning_rate: The learning rate
+            udtube_learning_rate: The learning rate of the full model
+            encoder_model_learning_rate: The learning rate of only the encoder
             pooling_layers: The amount of layers used for embedding calculation
         """
         super().__init__()
@@ -83,8 +87,10 @@ class UDTube(pl.LightningModule):
             pos_out_label_size, lemma_out_label_size, feats_out_label_size
         )
         self.path_name = path_name
-        self.encoder_model = self._load_model(model_name)
-        self.learning_rate = learning_rate
+        self.udtube_learning_rate = udtube_learning_rate
+        self.encoder_model_learning_rate = encoder_model_learning_rate
+        self.udtube_dropout = udtube_dropout
+        self.encoder_dropout = encoder_dropout
         self.pooling_layers = pooling_layers
         # last item in the list is a pad from the label encoder
         self.pos_pad = tensor(
@@ -92,10 +98,12 @@ class UDTube(pl.LightningModule):
         )
         self.lemma_pad = tensor(lemma_out_label_size - 1, device=self.device)
         self.feats_pad = tensor(feats_out_label_size - 1, device=self.device)
+        self.encoder_model = self._load_model(model_name)
         self.pos_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, pos_out_label_size),
             nn.Tanh(),
         )
+        self.dropout_layer = nn.Dropout(p=udtube_dropout)
         self.lemma_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, lemma_out_label_size),
             nn.Tanh(),
@@ -146,12 +154,12 @@ class UDTube(pl.LightningModule):
 
     def _load_model(self, model_name):
         model = transformers.AutoModel.from_pretrained(
-                model_name, output_hidden_states=True
+                model_name, output_hidden_states=True,
+                hidden_dropout_prob=self.encoder_dropout
         )
         if 't5' in model_name:
             model = model.encoder
         return model
-
 
     def _validate_input(
             self, pos_out_label_size, lemma_out_label_size, feats_out_label_size
@@ -225,7 +233,11 @@ class UDTube(pl.LightningModule):
 
     def configure_optimizers(self):
         """Prepare optimizer and schedule (linear warmup and decay)"""
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
+        grouped_params = [
+                # {'params': self.parameters(), 'lr': self.udtube_learning_rate},
+                {'params': self.encoder_model.parameters(), 'lr': self.encoder_model_learning_rate}
+            ]
+        optimizer = torch.optim.AdamW(grouped_params)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
         return [optimizer], [{"scheduler": scheduler, "interval": "epoch"}]
 
@@ -267,6 +279,8 @@ class UDTube(pl.LightningModule):
             y_gold, pad, longest_seq, return_long=True
         )
 
+        # dropout
+        x_word_embs = self.dropout_layer(x_word_embs)
         # getting logits from head, and then permuting them for metrics calculation
         # Each head returns ( batch X sequence_len X classes )
         # but CE & metrics want ( minibatch X Classes X sequence_len ); (minibatch, C, d0...dk) & (N, C, ..) in the docs
