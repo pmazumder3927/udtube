@@ -224,8 +224,10 @@ class UDTube(pl.LightningModule):
         return new_embs, words, new_masks, longest_seq
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
-        return optimizer
+        """Prepare optimizer and schedule (linear warmup and decay)"""
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
+        return [optimizer], [{"scheduler": scheduler, "interval": "epoch"}]
 
     def log_metrics(
             self,
@@ -239,7 +241,7 @@ class UDTube(pl.LightningModule):
         self.log(
             f"{subset}:{task_name}_acc",
             accuracy(y_pred, y_true),
-            on_step=True,
+            on_step=False,
             on_epoch=True,
             prog_bar=True,
             logger=True,
