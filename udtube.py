@@ -92,7 +92,6 @@ class UDTube(pl.LightningModule):
         self.path_name = path_name
         self.udtube_learning_rate = udtube_learning_rate
         self.encoder_model_learning_rate = encoder_model_learning_rate
-        self.udtube_dropout = udtube_dropout
         self.encoder_dropout = encoder_dropout
         self.pooling_layers = pooling_layers
         # last item in the list is a pad from the label encoder
@@ -106,7 +105,6 @@ class UDTube(pl.LightningModule):
             nn.Linear(self.encoder_model.config.hidden_size, pos_out_label_size),
             nn.Tanh(),
         )
-        self.dropout_layer = nn.Dropout(p=udtube_dropout)
         self.lemma_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, lemma_out_label_size),
             nn.Tanh(),
@@ -284,8 +282,6 @@ class UDTube(pl.LightningModule):
             y_gold, pad, longest_seq, return_long=True
         )
 
-        # dropout
-        x_word_embs = self.dropout_layer(x_word_embs)
         # getting logits from head, and then permuting them for metrics calculation
         # Each head returns ( batch X sequence_len X classes )
         # but CE & metrics want ( minibatch X Classes X sequence_len ); (minibatch, C, d0...dk) & (N, C, ..) in the docs
