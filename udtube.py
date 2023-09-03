@@ -50,6 +50,7 @@ class UDTubeCLI(LightningCLI):
         elif self.subcommand == "test":
             self.trainer_defaults["callbacks"] = [CustomWriter(self.config.test.output_file)]
 
+
 class UDTube(pl.LightningModule):
     """The main model file
 
@@ -68,7 +69,8 @@ class UDTube(pl.LightningModule):
             udtube_learning_rate: float = 0.001,
             encoder_model_learning_rate: float = 2e-5,
             pooling_layers: int = 4,
-            reverse_edits: bool = False
+            reverse_edits: bool = False,
+            checkpoint: str = None
     ):
         """Initializes the instance based on user input.
 
@@ -81,6 +83,7 @@ class UDTube(pl.LightningModule):
             udtube_learning_rate: The learning rate of the full model
             encoder_model_learning_rate: The learning rate of only the encoder
             pooling_layers: The amount of layers used for embedding calculation
+            checkpoint: The model checkpoint file
         """
         super().__init__()
         self._validate_input(
@@ -151,6 +154,8 @@ class UDTube(pl.LightningModule):
         )
         self.save_hyperparameters()
         self.dummy_tensor = torch.zeros(self.encoder_model.config.hidden_size, device=self.device)
+        if checkpoint:
+            self.load_state_dict(checkpoint['state_dict'])
 
     def _load_model(self, model_name):
         model = transformers.AutoModel.from_pretrained(

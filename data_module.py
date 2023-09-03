@@ -11,15 +11,6 @@ from batch import ConlluBatch, TextBatch
 from conllu_datasets import ConlluMapDataset, TextIterDataset
 
 
-def get_most_recent_file(fp, t='dir'):
-    if t == 'dir':
-        s = '*/'
-    else:
-        s = '*.ckpt'
-    # citation: https://stackoverflow.com/questions/2014554/find-the-newest-folder-in-a-directory-in-python
-    return max(glob.glob(os.path.join(fp, s)), key=os.path.getmtime)
-
-
 class ConlluDataModule(pl.LightningDataModule):
     """Reusable DataModule that manages stages of UDTube
 
@@ -37,6 +28,7 @@ class ConlluDataModule(pl.LightningDataModule):
         batch_size: int = 32,
         convert_to_um: bool = True,
         reverse_edits: bool = False,
+        checkpoint: str = None
     ):
         """Initializes the instance based on user input. Some attributes will not be set if train dataset is None.
 
@@ -49,6 +41,7 @@ class ConlluDataModule(pl.LightningDataModule):
             batch_size: The batch_size
             convert_to_um: enable Universal Dependency (UD) file conversion to Universal Morphology (UM) format
             reverse_edits: Reverse edit script calculation. Recommended for suffixal languages. False by default
+            checkpoint: The path to the model checkpoint file
         """
         super().__init__()
         self.reverse_edits = reverse_edits
@@ -60,6 +53,7 @@ class ConlluDataModule(pl.LightningDataModule):
         self.test_dataset = ConlluMapDataset(test_dataset, convert_to_um=convert_to_um)
         self.batch_size = batch_size
         self.tokenizer_name = model_name
+        self.checkpoint = checkpoint
         if self.train_dataset:
             # this is a bit hacky, but not sure how to do this with setup & CLI
             # + 1 is the padding & unk tok
@@ -67,24 +61,17 @@ class ConlluDataModule(pl.LightningDataModule):
             self.lemma_classes_cnt = len(self.train_dataset.lemma_classes) + 2
             self.feats_classes_cnt = len(self.train_dataset.feats_classes) + 2
         else:
-            self._set_values_from_path_name(path_name)
+            self._set_values_from_path_name()
 
     def setup(self, stage: str) -> None:
         self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
 
-    def _set_values_from_path_name(self, path_name):
-        if path_name and os.path.exists(f"{path_name}/lightning_logs"):
-            # for now, the version we get is the newest one from the logs
-            # citation: https://stackoverflow.com/questions/2014554/find-the-newest-folder-in-a-directory-in-python
-            most_recent_ver = get_most_recent_file(f"{path_name}/lightning_logs", t='dir')
-            if not os.path.exists(f"{most_recent_ver}checkpoints"):
-                raise Exception("The most recent model version in the logs does not have a checkpoint file.")
-            most_recent_ckpt = get_most_recent_file(f"{most_recent_ver}checkpoints", t='file')
-            # This is sloppy, but it keeps things consistent for prediction
-            hps = torch.load(most_recent_ckpt)["hyper_parameters"]
-            self.pos_classes_cnt = hps.get("pos_out_label_size", 0)
-            self.lemma_classes_cnt = hps.get("lemma_out_label_size", 0)
-            self.feats_classes_cnt = hps.get("feats_out_label_size", 0)
+    def _set_values_from_path_name(self):
+        assert self.checkpoint,"model checkpoint must not be none"
+        hps = torch.load(self.checkpoint)["hyper_parameters"]
+        self.pos_classes_cnt = hps.get("pos_out_label_size", 0)
+        self.lemma_classes_cnt = hps.get("lemma_out_label_size", 0)
+        self.feats_classes_cnt = hps.get("feats_out_label_size", 0)
 
     @staticmethod
     def conllu_preprocessing(batch, tokenizer: AutoTokenizer):
