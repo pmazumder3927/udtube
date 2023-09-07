@@ -12,6 +12,7 @@ from torchmetrics import Accuracy
 from batch import ConlluBatch, TextBatch
 from callbacks import CustomWriter
 from data_module import ConlluDataModule
+from deps_head import BiAffineParser
 from conllu_datasets import ConlluMapDataset
 from typing import Union
 
@@ -43,6 +44,16 @@ class UDTubeCLI(LightningCLI):
             "model.feats_out_label_size",
             apply_on="instantiate",
         )
+        parser.link_arguments(
+            "data.head_classes_cnt",
+            "model.head_out_label_size",
+            apply_on="instantiate"
+        )
+        parser.link_arguments(
+            "data.deprel_classes_cnt",
+            "model.deprel_out_label_size",
+            apply_on="instantiate"
+        )
 
     def before_instantiate_classes(self) -> None:
         if self.subcommand == "predict":
@@ -64,9 +75,11 @@ class UDTube(pl.LightningModule):
             pos_out_label_size: int = 2,
             lemma_out_label_size: int = 2,
             feats_out_label_size: int = 2,
-            udtube_dropout: float = 0.5,
-            encoder_dropout: float = 0.2,
-            udtube_learning_rate: float = 0.001,
+            head_out_label_size: int = 2,
+            deprel_out_label_size: int = 2,
+            udtube_dropout: float = 0.3,
+            encoder_dropout: float = 0.5,
+            udtube_learning_rate: float = 5e-3,
             encoder_model_learning_rate: float = 2e-5,
             pooling_layers: int = 4,
             reverse_edits: bool = False,
@@ -100,6 +113,8 @@ class UDTube(pl.LightningModule):
         )
         self.lemma_pad = tensor(lemma_out_label_size - 1, device=self.device)
         self.feats_pad = tensor(feats_out_label_size - 1, device=self.device)
+        self.head_pad = tensor(head_out_label_size - 1, device=self.device)
+        self.deprel_pad = tensor(deprel_out_label_size - 1, device=self.device)
         self.encoder_model = self._load_model(model_name)
         self.pos_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, pos_out_label_size),
@@ -113,10 +128,15 @@ class UDTube(pl.LightningModule):
             nn.Linear(self.encoder_model.config.hidden_size, feats_out_label_size),
             nn.Tanh(),
         )
+        self.deps_head = BiAffineParser(
+            self.encoder_model.config.hidden_size, udtube_dropout, head_out_label_size, deprel_out_label_size
+        )
         # retrieving the LabelEncoders set up by the Dataset
         self.lemma_encoder = joblib.load(f"{self.path_name}/lemma_encoder.joblib")
         self.ufeats_encoder = joblib.load(f"{self.path_name}/ufeats_encoder.joblib")
         self.upos_encoder = joblib.load(f"{self.path_name}/upos_encoder.joblib")
+        self.head_encoder = joblib.load(f"{self.path_name}/head_encoder.joblib")
+        self.deprel_encoder = joblib.load(f"{self.path_name}/deprel_encoder.joblib")
 
         # Setting up all the metrics objects for each task
         self.pos_loss = nn.CrossEntropyLoss(
@@ -145,6 +165,18 @@ class UDTube(pl.LightningModule):
             num_classes=feats_out_label_size,
             ignore_index=feats_out_label_size - 1,
         )
+
+        self.head_accuracy = Accuracy(
+            task="multiclass",
+            num_classes=head_out_label_size,
+            ignore_index=head_out_label_size - 1,
+        )
+        self.deprel_accuracy = Accuracy(
+            task="multiclass",
+            num_classes=deprel_out_label_size,
+            ignore_index=deprel_out_label_size - 1,
+        )
+
         self.e_script = (
             edit_scripts.ReverseEditScript
             if reverse_edits
@@ -188,7 +220,7 @@ class UDTube(pl.LightningModule):
             if not torch.is_tensor(s):
                 s = tensor(s, device=self.device)
             if len(s) != max_len:
-                # I think the bellow operation puts the padding back on CPU, not great
+                # I think the below operation puts the padding back on CPU, not great
                 r_padding = torch.stack([pad] * (max_len - len(s)))
                 r_padding = r_padding.to(s.device)
                 padded_seq.append(torch.cat((s, r_padding)))
@@ -237,11 +269,11 @@ class UDTube(pl.LightningModule):
     def configure_optimizers(self):
         """Prepare optimizer and schedule (linear warmup and decay)"""
         grouped_params = [
-                # {'params': self.parameters(), 'lr': self.udtube_learning_rate},
+                {'params': self.deps_head.parameters(), 'lr': self.udtube_learning_rate},
                 {'params': self.encoder_model.parameters(), 'lr': self.encoder_model_learning_rate}
             ]
         optimizer = torch.optim.AdamW(grouped_params)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 100000)
         return [optimizer], [{"scheduler": scheduler, "interval": "epoch"}]
 
     def log_metrics(
@@ -296,6 +328,7 @@ class UDTube(pl.LightningModule):
         return loss
 
     def _decode_to_str(self, words, y_pos_logits, y_lemma_logits, y_feats_logits):
+        # TODO add deprel and heads
         # argmaxing
         y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
         y_lemma_hat = torch.argmax(y_lemma_logits, dim=-1)
@@ -379,8 +412,29 @@ class UDTube(pl.LightningModule):
             subset=subset,
         )
 
+        # getting loss from dep head, it's different from the rest
+        S_arc, S_lab = self.deps_head(x_word_embs)
+        gold_heads = self.pad_seq(
+            batch.heads, self.head_pad, longest_seq, return_long=True
+        )
+        gold_deprels = self.pad_seq(
+            batch.deprels, self.deprel_pad, longest_seq, return_long=True
+        )
+        # # credit for s_arc/s_lab: https://github.com/daandouwe/biaffine-dependency-parser/blob/9338c6fde6de5393ac1bbdd6a8bb152c2a015a6c/train.py
+        # S_arc = torch.argmax(S_arc, dim=-2)
+        # S_lab = S_lab.argmax(dim=1)
+        # S_lab = torch.gather(S_lab, 1, gold_deprels.unsqueeze(1)).squeeze(1)
+        #
+        # self.log_metrics(
+        #     S_arc, gold_heads, batch_size, 'head', subset=subset
+        # )
+        # self.log_metrics(
+        #     S_lab, gold_deprels, batch_size, 'deprel', subset=subset
+        # )
+        deps_loss = self.deps_head.loss(S_arc, S_lab, gold_heads, gold_deprels)
+
         # combining the loss of the heads
-        loss = torch.mean(torch.stack([pos_loss, lemma_loss, feats_loss]))
+        loss = torch.mean(torch.stack([pos_loss, lemma_loss, feats_loss, deps_loss]))
         self.log(
             "loss",
             loss,

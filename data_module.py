@@ -60,6 +60,8 @@ class ConlluDataModule(pl.LightningDataModule):
             self.pos_classes_cnt = len(self.train_dataset.UPOS_CLASSES) + 2
             self.lemma_classes_cnt = len(self.train_dataset.lemma_classes) + 2
             self.feats_classes_cnt = len(self.train_dataset.feats_classes) + 2
+            self.head_classes_cnt = len(self.train_dataset.head_classes) + 2
+            self.deprel_classes_cnt = len(self.train_dataset.deprel_classes) + 2
         else:
             self._set_values_from_path_name()
 
