@@ -8,6 +8,7 @@ from torch import tensor
 from torch.utils.data import Dataset, IterableDataset
 from pathlib import Path
 from ud_compatibility import marry, languages
+import numpy as np
 
 import edit_scripts
 
@@ -79,11 +80,9 @@ class ConlluMapDataset(Dataset):
             self.upos_encoder = LabelEncoder()
             self.ufeats_encoder = LabelEncoder()
             self.lemma_encoder = LabelEncoder()
-            self.head_encoder = LabelEncoder()
             self.deprel_encoder = LabelEncoder()
             self.feats_classes = self._get_all_classes("feats")
             self.lemma_classes = self._get_all_classes("lemma")
-            self.head_classes = self._get_all_classes("head")
             self.deprel_classes = self._get_all_classes("deprel")
             if fit_encoders:
                 self._fit_label_encoders()
@@ -114,7 +113,6 @@ class ConlluMapDataset(Dataset):
         self.upos_encoder.fit([self.UNK_TAG] + self.UPOS_CLASSES + [self.PAD_TAG])
         self.ufeats_encoder.fit([self.UNK_TAG] + self.feats_classes + [self.PAD_TAG])
         self.lemma_encoder.fit([self.UNK_TAG] + self.lemma_classes + [self.PAD_TAG])
-        self.head_encoder.fit([self.UNK_TAG] + self.head_classes + [self.PAD_TAG])
         self.deprel_encoder.fit([self.UNK_TAG] + self.deprel_classes + [self.PAD_TAG])
         # saving all the encoders
         if not os.path.exists(self.path_name):
@@ -123,14 +121,12 @@ class ConlluMapDataset(Dataset):
         joblib.dump(self.upos_encoder, f'{self.path_name}/upos_encoder.joblib')
         joblib.dump(self.ufeats_encoder, f'{self.path_name}/ufeats_encoder.joblib')
         joblib.dump(self.lemma_encoder, f'{self.path_name}/lemma_encoder.joblib')
-        joblib.dump(self.head_encoder, f'{self.path_name}/head_encoder.joblib')
         joblib.dump(self.deprel_encoder, f'{self.path_name}/deprel_encoder.joblib')
 
     def _load_label_encoders(self):
         self.lemma_encoder = joblib.load(f"{self.path_name}/lemma_encoder.joblib")
         self.ufeats_encoder = joblib.load(f"{self.path_name}/ufeats_encoder.joblib")
         self.upos_encoder = joblib.load(f"{self.path_name}/upos_encoder.joblib")
-        self.head_encoder = joblib.load(f"{self.path_name}/head_encoder.joblib")
         self.deprel_encoder = joblib.load(f"{self.path_name}/deprel_encoder.joblib")
 
     def _get_all_classes(self, lname: str):
@@ -173,8 +169,9 @@ class ConlluMapDataset(Dataset):
                     # Here we have to check if the thing is unknown
                     upos_ = tok["upos"] if tok["upos"] in self.upos_encoder.classes_ else self.UNK_TAG
                     ufeat_ = tok["feats"] if tok["feats"] in self.ufeats_encoder.classes_ else self.UNK_TAG
-                    head_ = str(tok["head"]) if str(tok["head"]) in self.head_encoder.classes_ else self.UNK_TAG
                     deprel_ = tok["deprel"] if tok['deprel'] in self.deprel_encoder.classes_ else self.UNK_TAG
+                    # heads is a little different
+                    head_ = tok["head"] if isinstance(tok["head"], int) else len(tk_list) # the sequence length is the unknown tag
                     if l_rule not in self.lemma_encoder.classes_:
                         l_rule = self.UNK_TAG
                     uposes.append(upos_)
@@ -185,8 +182,9 @@ class ConlluMapDataset(Dataset):
                 uposes = self.upos_encoder.transform(uposes)
                 lemma_rules = self.lemma_encoder.transform(lemma_rules)
                 ufeats = self.ufeats_encoder.transform(ufeats)
-                heads = self.head_encoder.transform(heads)
                 deprels = self.deprel_encoder.transform(deprels)
+                # heads do not need to be encoded, they are already numerical. Encoding them here causes problems later
+                heads = np.array(heads).T
                 data.append((sentence, uposes, lemma_rules, ufeats, heads, deprels))
         return data
 

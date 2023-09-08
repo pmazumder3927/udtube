@@ -56,7 +56,6 @@ class BiAffineParser(pl.LightningModule):
         self,
         input_size,
         dropout,
-        num_head_labels,
         num_arc_labels,
         arc_hidden=400,
         label_hidden=100,
@@ -72,12 +71,9 @@ class BiAffineParser(pl.LightningModule):
         self.lab_mlp_d = MLP(input_size, label_hidden, dropout=dropout)
 
         # BiAffine layers
-        self.arc_biaffine = Biaffine(arc_hidden, num_head_labels, bias_y=False)
+        self.arc_biaffine = Biaffine(arc_hidden, 1, bias_y=False)
         self.lab_biaffine = Biaffine(label_hidden, num_arc_labels)
 
-        self.arc_ce_loss = nn.CrossEntropyLoss(
-            ignore_index=num_head_labels - 1
-        )
         self.lab_ce_loss = nn.CrossEntropyLoss(ignore_index=num_arc_labels - 1)
 
     def forward(self, batch):
@@ -92,12 +88,24 @@ class BiAffineParser(pl.LightningModule):
 
         return S_arc, S_lab
 
+    def lab_loss(self, S_lab, heads, labels, longest_sequence):
+        """Compute the loss for the label predictions on the gold arcs (heads)."""
+        heads = heads.unsqueeze(1).unsqueeze(2)  # [batch, 1, 1, sent_len]
+        heads = heads.expand(-1, S_lab.size(1), -1, -1)  # [batch, n_labels, 1, sent_len]
+        heads = torch.where(heads != longest_sequence, heads, 0)  # Replacing padding due to index error
+        S_lab = torch.gather(S_lab, 2, heads).squeeze(2)  # [batch, n_labels, sent_len]
+        S_lab = S_lab.transpose(-1, -2)  # [batch, sent_len, n_labels]
+        S_lab = S_lab.contiguous().view(-1, S_lab.size(-1))  # [batch*sent_len, n_labels]
+        labels = labels.view(-1)  # [batch*sent_len]
+        return self.lab_ce_loss(S_lab, labels)
+
     def loss(
         self,
         s_arc: torch.Tensor,
         s_rel: torch.Tensor,
         arcs: torch.Tensor,
         rels: torch.Tensor,
+        longest_sequence,
     ) -> torch.Tensor:
         r"""
         Computes the arc and tag loss for a sequence given gold heads and tags.
@@ -122,9 +130,7 @@ class BiAffineParser(pl.LightningModule):
         """
         # select the predicted relations towards the correct heads
         # have to drop a dim here (both are [batch_size, n_out, seq_len, seq_len])
-        s_arc = torch.mean(s_arc, dim=-1)
-        s_rel = torch.mean(s_rel, dim=-1)
-        arc_loss = self.arc_ce_loss(s_arc, arcs)
-        rel_loss = self.lab_ce_loss(s_rel, rels)
+        arc_loss = nn.functional.cross_entropy(s_arc, arcs, ignore_index=longest_sequence)
+        rel_loss = self.lab_loss(s_rel, arcs, rels, longest_sequence)
 
         return arc_loss + rel_loss
