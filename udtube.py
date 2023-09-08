@@ -410,12 +410,12 @@ class UDTube(pl.LightningModule):
         gold_deprels = self.pad_seq(
             batch.deprels, self.deprel_pad, longest_seq, return_long=True
         )
-        deps_loss = self.deps_head.loss(S_arc, S_lab, gold_heads, gold_deprels, longest_seq)
+        deps_loss = self.deps_head.loss(S_arc, S_lab, gold_heads, gold_deprels, longest_seq, attn_masks)
 
         self.log(
             f"{subset}:head_acc",
             multiclass_accuracy(S_arc, gold_heads, longest_seq, ignore_index=longest_seq),
-            on_step=True,
+            on_step=False,
             on_epoch=True,
             prog_bar=True,
             logger=True,
@@ -432,7 +432,7 @@ class UDTube(pl.LightningModule):
         self.log(
             f"{subset}:dep_rel_acc",
             multiclass_accuracy(S_lab, labels, 40, ignore_index=39),
-            on_step=True,
+            on_step=False,
             on_epoch=True,
             prog_bar=True,
             logger=True,

@@ -106,6 +106,7 @@ class BiAffineParser(pl.LightningModule):
         arcs: torch.Tensor,
         rels: torch.Tensor,
         longest_sequence,
+            attn_masks
     ) -> torch.Tensor:
         r"""
         Computes the arc and tag loss for a sequence given gold heads and tags.
@@ -119,10 +120,6 @@ class BiAffineParser(pl.LightningModule):
                 The tensor of gold-standard arcs.
             rels (~torch.LongTensor): ``[batch_size, seq_len]``.
                 The tensor of gold-standard labels.
-            mask (~torch.BoolTensor): ``[batch_size, seq_len]``.
-                The mask for covering the unpadded tokens.
-            partial (bool):
-                ``True`` denotes the trees are partially annotated. Default: ``False``.
 
         Returns:
             ~torch.Tensor:
@@ -130,6 +127,7 @@ class BiAffineParser(pl.LightningModule):
         """
         # select the predicted relations towards the correct heads
         # have to drop a dim here (both are [batch_size, n_out, seq_len, seq_len])
+        s_arc = s_arc * attn_masks.unsqueeze(dim=1)
         arc_loss = nn.functional.cross_entropy(s_arc, arcs, ignore_index=longest_sequence)
         rel_loss = self.lab_loss(s_rel, arcs, rels, longest_sequence)
 
