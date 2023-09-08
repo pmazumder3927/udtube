@@ -161,6 +161,9 @@ class ConlluMapDataset(Dataset):
                 heads = []
                 deprels = []
                 for tok in tk_list:
+                    if isinstance(tok["id"], tuple):
+                        # This is a multiword token. For now, I am just skipping adding them to the data
+                        continue
                     l_rule = str(
                         self.e_script(
                             tok["form"].lower(), tok["lemma"].lower()
