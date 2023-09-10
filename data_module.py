@@ -1,3 +1,5 @@
+import json
+import re
 from functools import partial
 import os
 import torch
@@ -46,11 +48,13 @@ class ConlluDataModule(pl.LightningDataModule):
         super().__init__()
         self.reverse_edits = reverse_edits
         self.train_dataset = ConlluMapDataset(train_dataset, reverse_edits=self.reverse_edits, path_name=path_name,
-                                              convert_to_um=convert_to_um, fit_encoders=True)
+                                              convert_to_um=convert_to_um, train=True)
         self.val_dataset = ConlluMapDataset(val_dataset, reverse_edits=self.reverse_edits, path_name=path_name,
-                                            convert_to_um=convert_to_um, fit_encoders=False)
+                                            convert_to_um=convert_to_um, train=False)
         self.predict_dataset = TextIterDataset(predict_dataset)
         self.test_dataset = ConlluMapDataset(test_dataset, convert_to_um=convert_to_um)
+        with open(f"{path_name}/multiword_dict.json", "r") as mw_tb:
+            self.multiword_table = json.load(mw_tb)
         self.batch_size = batch_size
         self.tokenizer_name = model_name
         self.checkpoint = checkpoint
@@ -74,15 +78,31 @@ class ConlluDataModule(pl.LightningDataModule):
         self.lemma_classes_cnt = hps.get("lemma_out_label_size", 0)
         self.feats_classes_cnt = hps.get("feats_out_label_size", 0)
 
-    @staticmethod
-    def conllu_preprocessing(batch, tokenizer: AutoTokenizer):
+    def _adjust_sentence(self, sentences, lang_with_space=True):
+        delimiter = " " if lang_with_space else ""  # TODO does this actually make sense? Will find out when I try zh
+        new_sents = []
+        replacements = []  # will need to keep track of these to write out multiword tokens
+        # preprocessing sentences. The table is usually small so this is not too expensive
+        for s in sentences:
+            ns = s
+            rep_i = []
+            for k, v in self.multiword_table.items():
+                if re.search(fr"\b{k}\b", s):
+                    ns = re.sub(fr"\b{k}\b", delimiter.join(v), ns)
+                    rep_i.append((k, delimiter.join(v)))
+            new_sents.append(ns)
+            replacements.append(rep_i)
+        return new_sents, replacements
+
+    def conllu_preprocessing(self, batch, tokenizer: AutoTokenizer, lang_with_space=True):
         """Data pipeline -> tokenizing input and grouping token IDs to words. The output has varied dimensions"""
         sentences, *args = zip(*batch)
+        sentences, replacements = self._adjust_sentence(sentences, lang_with_space=lang_with_space)
         # I want to load in tokens by batch to avoid using the inefficient max_length padding
         tokenized_x = tokenizer(
             sentences, padding="longest", return_tensors="pt"
         ).to("cuda" if torch.cuda.is_available() else "cpu")
-        return ConlluBatch(tokenized_x, sentences, *args)
+        return ConlluBatch(tokenized_x, sentences, replacements, *args)
 
     def train_dataloader(self):
         return DataLoader(
@@ -111,13 +131,13 @@ class ConlluDataModule(pl.LightningDataModule):
             ),
         )
 
-    @staticmethod
-    def txt_file_preprocessing(sentences, tokenizer: AutoTokenizer):
+    def txt_file_preprocessing(self, sentences, tokenizer: AutoTokenizer, lang_with_space=True):
         """This is the case where the input is NOT a conllu file"""
+        sentences, replacements = self._adjust_sentence(sentences, lang_with_space=lang_with_space)
         tokenized_x = tokenizer(
             sentences, padding="longest", return_tensors="pt"
         ).to("cuda" if torch.cuda.is_available() else "cpu")
-        return TextBatch(tokenized_x, sentences)
+        return TextBatch(tokenized_x, sentences, replacements)
 
     def predict_dataloader(self):
         return DataLoader(

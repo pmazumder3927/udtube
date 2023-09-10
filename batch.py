@@ -1,6 +1,6 @@
 import torch
 from torch import nn, tensor
-from typing import List, Iterable
+from typing import List, Iterable, Tuple
 
 from transformers import BatchEncoding
 
@@ -14,6 +14,7 @@ class ConlluBatch(nn.Module):
         self,
         tokens: BatchEncoding,
         sentences: Iterable[str],
+        replacements: Iterable[Tuple[str, str]],
         pos: Iterable[List[int]],
         lemma: Iterable[List[int]],
         feats: Iterable[List[int]],
@@ -25,6 +26,7 @@ class ConlluBatch(nn.Module):
        Args:
            tokens: The raw output of the BERT tokenizer
            sentences: An iterable the length of the batch that contains all the raw sentences.
+           replacements: A mapping of multi-word token replacements per sentence.
            pos: An iterable the length of the batch that contains a tensor of POS labels.
            Each tensor is as long as the respective entry in toks.
            lemma: An iterable the length of the batch that contains a tensor of lemma labels.
@@ -35,6 +37,7 @@ class ConlluBatch(nn.Module):
         super().__init__()
         self.tokens = tokens
         self.sentences = sentences
+        self.replacements = replacements
         self.pos = pos
         self.lemmas = lemma
         self.feats = feats
@@ -51,16 +54,18 @@ class TextBatch(nn.Module):
     The TextBatch consists of only tokenized inputs and sentences and does not take labels into account,
     distinct from TrainBatch
     """
-    def __init__(self, tokens: BatchEncoding, sentences: List[str]):
+    def __init__(self, tokens: BatchEncoding, sentences: List[str], replacements: Iterable[Tuple[str, str]]):
         """Initializes the instance based on what's passed to it by the Trainer collate_fn.
 
        Args:
            tokens: The raw output of the BERT tokenizer
            sentences: An iterable the length of the batch that contains all the raw sentences.
+           replacements: A mapping of multi-word token replacements per sentence.
        """
         super().__init__()
         self.tokens = tokens
         self.sentences = [s.strip("\n") for s in sentences]
+        self.replacements = replacements
 
     def __len__(self):
         return len(self.sentences)

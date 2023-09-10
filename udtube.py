@@ -229,12 +229,11 @@ class UDTube(pl.LightningModule):
             words_i = []
             mask_i = []
             last_word_idx = slice(0, 0)
-            for word_id, x_emb_j in zip(encoding.word_ids, x_emb_i):
+            # skipping over the first padding token ([CLS])
+            for word_id, x_emb_j in zip(encoding.word_ids[1:], x_emb_i[1:]):
                 if word_id is None:
-                    embs_i.append(x_emb_j)
-                    words_i.append(ConlluMapDataset.PAD_TAG)
-                    mask_i.append(0)
-                    continue
+                    # emb padding
+                    break
                 start, end = encoding.word_to_tokens(word_id)
                 word_idxs = slice(start, end)
                 if word_idxs != last_word_idx:
@@ -243,7 +242,6 @@ class UDTube(pl.LightningModule):
                         x_emb_i[word_idxs], keepdim=True, dim=0
                     ).squeeze()
                     embs_i.append(word_emb_pooled)
-                    # TODO - make below code model specific
                     words_i.append("".join(encoding.tokens[word_idxs]).replace('##', ''))
                     mask_i.append(1)
             new_embs.append(torch.stack(embs_i))
@@ -252,6 +250,7 @@ class UDTube(pl.LightningModule):
         longest_seq = max(len(m) for m in new_masks)
         new_embs = self.pad_seq(new_embs, self.dummy_tensor, longest_seq)
         new_masks = self.pad_seq(new_masks, tensor(0, device=self.device), longest_seq)
+        # TODO there's one issue here. There are tokens like 2000-2004 that get split into 3 tokens, when conllu considers them just one.
         return new_embs, words, new_masks, longest_seq
 
     def configure_optimizers(self):
@@ -371,6 +370,11 @@ class UDTube(pl.LightningModule):
         x_word_embs, words, attn_masks, longest_seq = self.pool_embeddings(
             x_embs, batch.tokens
         )
+
+        # TODO, delete this, using it to understand how often this happens
+        for s, g in zip(words, batch.pos):
+            if len(s) != len(g):
+                print("sequence length mismatch")
 
         # need to do some preprocessing on Y
         # Has to be done here, after the adjustment of x_embs to the word level

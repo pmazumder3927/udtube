@@ -1,5 +1,7 @@
+import json
 import os
 import re
+from collections import defaultdict
 
 import conllu
 import joblib
@@ -57,7 +59,7 @@ class ConlluMapDataset(Dataset):
     ]
 
     def __init__(self, conllu_file: str, reverse_edits: bool = False, path_name: str = "UDTube",
-                 convert_to_um: bool = True, fit_encoders: bool = False):
+                 convert_to_um: bool = True, train: bool = False):
         """Initializes the instance based on user input.
 
         Args:
@@ -65,7 +67,7 @@ class ConlluMapDataset(Dataset):
             reverse_edits: Reverse edit script calculation. Recommended for suffixal languages. False by default
             path_name: The dir where everything will get saved
             convert_to_um: Enable Universal Dependency (UD) file conversion to Universal Morphology (UM) format
-            fit_encoders: Fit the label encoders. Should only be true for the train dataset
+            train: Should only be true for the train dataset. Used to decide if to fit encoders
         """
         super().__init__()
         self.path_name = path_name
@@ -84,11 +86,12 @@ class ConlluMapDataset(Dataset):
             self.feats_classes = self._get_all_classes("feats")
             self.lemma_classes = self._get_all_classes("lemma")
             self.deprel_classes = self._get_all_classes("deprel")
-            if fit_encoders:
+            if train:
                 self._fit_label_encoders()
+                self.multiword_table = {}
             else:
                 self._load_label_encoders()
-            self.data_set = self._get_data()
+            self.data_set = self._get_data(train)
         else:
             # Instatiation of empty class, happens in prediction
             self.data_set = []
@@ -136,39 +139,53 @@ class ConlluMapDataset(Dataset):
             dt = conllu.parse_incr(f, field_parsers=OVERRIDDEN_FIELD_PARSERS)
             for tk_list in dt:
                 for tok in tk_list:
-                    if tok[lname] and lname != "lemma" and tok[lname] not in classes:
-                        classes.append(tok[lname])
+                    item = tok[lname] if tok[lname] else '_'
+                    if lname != "lemma" and item not in classes:
+                        classes.append(item)
                     elif lname == "lemma":
                         lrule = str(
                             self.e_script(
-                                tok["form"].lower(), tok[lname].lower()
+                                tok["form"].lower(), item.lower()
                             )
                         )
                         if lrule not in classes:
                             classes.append(lrule)
         return classes
 
-    def _get_data(self):
+    def _get_data(self, train):
         """Loads in the conllu data and prepares it as a list dataset so that it can be indexed for __getitem__"""
         data = []
         with open(self.conllu_file) as f:
             dt = conllu.parse_incr(f, field_parsers=OVERRIDDEN_FIELD_PARSERS)
             for tk_list in dt:
+                if len(tk_list) == 1:
+                    # this is likely a date or meta data
+                    continue
                 sentence = tk_list.metadata["text"]
                 uposes = []
                 lemma_rules = []
                 ufeats = []
                 heads = []
                 deprels = []
-                for tok in tk_list:
+                for i, tok in enumerate(tk_list):
                     if isinstance(tok["id"], tuple):
-                        # This is a multiword token. For now, I am just skipping adding them to the data
-                        continue
+                        if train:
+                            # This is a multi-word token, id looks like (1, '-', 3)
+                            # creating a look-up table to be used when loading in sentences
+                            start, _, end = tok["id"] # these are not perfect indices because of the multiword token stuff
+                            x = (end - start) + i
+                            # below, i + 1 is because we want the next token, not the current.
+                            self.multiword_table[tok["form"]] = [t["form"] for t in tk_list[i + 1: x + 2]]
+                        continue  # we don't want to add it to the dataset!
                     l_rule = str(
                         self.e_script(
                             tok["form"].lower(), tok["lemma"].lower()
                         )
                     )
+                    # Label encoders can't handle None!
+                    if tok["feats"] is None:
+                        tok["feats"] = "_"
+
                     # Here we have to check if the thing is unknown
                     upos_ = tok["upos"] if tok["upos"] in self.upos_encoder.classes_ else self.UNK_TAG
                     ufeat_ = tok["feats"] if tok["feats"] in self.ufeats_encoder.classes_ else self.UNK_TAG
@@ -189,6 +206,9 @@ class ConlluMapDataset(Dataset):
                 # heads do not need to be encoded, they are already numerical. Encoding them here causes problems later
                 heads = np.array(heads).T
                 data.append((sentence, uposes, lemma_rules, ufeats, heads, deprels))
+                if train:
+                    with open(f'{self.path_name}/multiword_dict.json', 'w') as mw_tb:
+                        json.dump(self.multiword_table, mw_tb, ensure_ascii=False)
         return data
 
     def __len__(self):
