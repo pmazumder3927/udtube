@@ -183,8 +183,8 @@ class UDTube(pl.LightningModule):
 
     def _load_model(self, model_name, tokenizer_size):
         model = transformers.AutoModel.from_pretrained(
-                model_name, output_hidden_states=True,
-                hidden_dropout_prob=self.encoder_dropout
+            model_name, output_hidden_states=True,
+            hidden_dropout_prob=self.encoder_dropout
         )
         if 't5' in model_name:
             model = model.encoder
@@ -227,7 +227,7 @@ class UDTube(pl.LightningModule):
         return torch.stack(padded_seq)
 
     def pool_embeddings(
-            self, x_embs: torch.tensor, tokenized: transformers.BatchEncoding
+            self, x_embs: torch.tensor, tokenized: transformers.BatchEncoding, gold_label_ex
     ):
         new_embs = []
         new_masks = []
@@ -255,7 +255,8 @@ class UDTube(pl.LightningModule):
             new_embs.append(torch.stack(embs_i))
             words.append(words_i)
             new_masks.append(tensor(mask_i, device=self.device))
-        longest_seq = max(len(m) for m in new_masks)
+        longest_seq = max(max(len(m) for m in new_masks),
+                          max(len(l) for l in gold_label_ex))  # while seq mismatches exist
         new_embs = self.pad_seq(new_embs, self.dummy_tensor, longest_seq)
         new_masks = self.pad_seq(new_masks, tensor(0, device=self.device), longest_seq)
         # TODO there's one issue here. There are tokens like 2000-2004 that get split into 3 tokens, when conllu considers them just one.
@@ -264,9 +265,9 @@ class UDTube(pl.LightningModule):
     def configure_optimizers(self):
         """Prepare optimizer and schedule (linear warmup and decay)"""
         grouped_params = [
-                {'params': self.deps_head.parameters(), 'lr': self.udtube_learning_rate},
-                {'params': self.encoder_model.parameters(), 'lr': self.encoder_model_learning_rate}
-            ]
+            {'params': self.deps_head.parameters(), 'lr': self.udtube_learning_rate},
+            {'params': self.encoder_model.parameters(), 'lr': self.encoder_model_learning_rate}
+        ]
         optimizer = torch.optim.AdamW(grouped_params)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 100000)
         return [optimizer], [{"scheduler": scheduler, "interval": "epoch"}]
@@ -376,13 +377,13 @@ class UDTube(pl.LightningModule):
         )
         x_embs = torch.mean(last_n_layer_embs, keepdim=True, dim=0).squeeze()
         x_word_embs, words, attn_masks, longest_seq = self.pool_embeddings(
-            x_embs, batch.tokens
+            x_embs, batch.tokens, batch.pos
         )
 
         # TODO, delete this, using it to understand how often this happens
         for s, g in zip(words, batch.pos):
             if len(s) != len(g):
-                print("sequence length mismatch")
+                print(f"sequence length mismatch, s = {len(s)}, g = {len(g)}. Something in {words} is tokenized incorrectly.")
 
         # need to do some preprocessing on Y
         # Has to be done here, after the adjustment of x_embs to the word level
