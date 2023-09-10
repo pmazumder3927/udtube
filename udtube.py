@@ -50,6 +50,11 @@ class UDTubeCLI(LightningCLI):
             "model.deprel_out_label_size",
             apply_on="instantiate"
         )
+        parser.link_arguments(
+            "data.tokenizer_size",
+            "model.tokenizer_size",
+            apply_on="instantiate"
+        )
 
     def before_instantiate_classes(self) -> None:
         if self.subcommand == "predict":
@@ -72,6 +77,7 @@ class UDTube(pl.LightningModule):
             lemma_out_label_size: int = 2,
             feats_out_label_size: int = 2,
             deprel_out_label_size: int = 2,
+            tokenizer_size: int = None,
             udtube_dropout: float = 0.3,
             encoder_dropout: float = 0.5,
             udtube_learning_rate: float = 5e-3,
@@ -109,7 +115,7 @@ class UDTube(pl.LightningModule):
         self.lemma_pad = tensor(lemma_out_label_size - 1, device=self.device)
         self.feats_pad = tensor(feats_out_label_size - 1, device=self.device)
         self.deprel_pad = tensor(deprel_out_label_size - 1, device=self.device)
-        self.encoder_model = self._load_model(model_name)
+        self.encoder_model = self._load_model(model_name, tokenizer_size)
         self.pos_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, pos_out_label_size),
             nn.Tanh(),
@@ -175,13 +181,15 @@ class UDTube(pl.LightningModule):
         if checkpoint:
             self.load_state_dict(checkpoint['state_dict'])
 
-    def _load_model(self, model_name):
+    def _load_model(self, model_name, tokenizer_size):
         model = transformers.AutoModel.from_pretrained(
                 model_name, output_hidden_states=True,
                 hidden_dropout_prob=self.encoder_dropout
         )
         if 't5' in model_name:
             model = model.encoder
+        if tokenizer_size:
+            model.resize_token_embeddings(tokenizer_size)
         return model
 
     def _validate_input(

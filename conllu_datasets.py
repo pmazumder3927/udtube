@@ -206,10 +206,22 @@ class ConlluMapDataset(Dataset):
                 # heads do not need to be encoded, they are already numerical. Encoding them here causes problems later
                 heads = np.array(heads).T
                 data.append((sentence, uposes, lemma_rules, ufeats, heads, deprels))
-                if train:
-                    with open(f'{self.path_name}/multiword_dict.json', 'w') as mw_tb:
-                        json.dump(self.multiword_table, mw_tb, ensure_ascii=False)
+            if train:
+                with open(f'{self.path_name}/multiword_dict.json', 'w') as mw_tb:
+                    json.dump(self.multiword_table, mw_tb, ensure_ascii=False)
         return data
+
+    def get_special_words(self):
+        """Special words are ones that are not handled well by tokenizers, i.e. 2000-2004 or K., which are considered
+        single tokens in some conllu files."""
+        special_words = []
+        with open(self.conllu_file) as f:
+            dt = conllu.parse_incr(f, field_parsers=OVERRIDDEN_FIELD_PARSERS)
+            for tk_list in dt:
+                for tk in tk_list:
+                    if isinstance(tk["id"], int) and re.search(r"\w+[.'-\\/%]|[.'-\\/%]\w+", tk["form"]):
+                        special_words.append(tk["form"])
+        return special_words
 
     def __len__(self):
         return len(self.data_set)

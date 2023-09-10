@@ -56,7 +56,7 @@ class ConlluDataModule(pl.LightningDataModule):
         with open(f"{path_name}/multiword_dict.json", "r") as mw_tb:
             self.multiword_table = json.load(mw_tb)
         self.batch_size = batch_size
-        self.tokenizer_name = model_name
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.checkpoint = checkpoint
         if self.train_dataset:
             # this is a bit hacky, but not sure how to do this with setup & CLI
@@ -65,18 +65,20 @@ class ConlluDataModule(pl.LightningDataModule):
             self.lemma_classes_cnt = len(self.train_dataset.lemma_classes) + 2
             self.feats_classes_cnt = len(self.train_dataset.feats_classes) + 2
             self.deprel_classes_cnt = len(self.train_dataset.deprel_classes) + 2
+            # the tokenizer is missing special toks
+            new_words = self.train_dataset.get_special_words() + self.val_dataset.get_special_words()
+            self.tokenizer.add_tokens(new_words)
         else:
             self._set_values_from_path_name()
-
-    def setup(self, stage: str) -> None:
-        self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
+        self.tokenizer_size = len(self.tokenizer)
 
     def _set_values_from_path_name(self):
-        assert self.checkpoint,"model checkpoint must not be none"
+        assert self.checkpoint, "model checkpoint must not be none"
         hps = torch.load(self.checkpoint)["hyper_parameters"]
         self.pos_classes_cnt = hps.get("pos_out_label_size", 0)
         self.lemma_classes_cnt = hps.get("lemma_out_label_size", 0)
         self.feats_classes_cnt = hps.get("feats_out_label_size", 0)
+        self.deprel_classes_cnt = hps.get("deprel_out_label_size", 0)
 
     def _adjust_sentence(self, sentences, lang_with_space=True):
         delimiter = " " if lang_with_space else ""  # TODO does this actually make sense? Will find out when I try zh
