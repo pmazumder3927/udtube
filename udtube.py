@@ -259,7 +259,6 @@ class UDTube(pl.LightningModule):
                           max(len(l) for l in gold_label_ex))  # while seq mismatches exist
         new_embs = self.pad_seq(new_embs, self.dummy_tensor, longest_seq)
         new_masks = self.pad_seq(new_masks, tensor(0, device=self.device), longest_seq)
-        # TODO there's one issue here. There are tokens like 2000-2004 that get split into 3 tokens, when conllu considers them just one.
         return new_embs, words, new_masks, longest_seq
 
     def configure_optimizers(self):
@@ -375,7 +374,9 @@ class UDTube(pl.LightningModule):
         last_n_layer_embs = torch.stack(
             x_encoded.hidden_states[-self.pooling_layers:]
         )
-        x_embs = torch.mean(last_n_layer_embs, keepdim=True, dim=0).squeeze()
+        batch_size = len(batch)
+        x_embs = torch.mean(last_n_layer_embs, keepdim=True, dim=0).squeeze(dim=0)
+
         x_word_embs, words, attn_masks, longest_seq = self.pool_embeddings(
             x_embs, batch.tokens, batch.pos
         )
@@ -387,7 +388,6 @@ class UDTube(pl.LightningModule):
 
         # need to do some preprocessing on Y
         # Has to be done here, after the adjustment of x_embs to the word level
-        batch_size = len(batch)
         pos_loss = self._get_loss_from_head(
             batch.pos,
             longest_seq,
