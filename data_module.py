@@ -66,8 +66,7 @@ class ConlluDataModule(pl.LightningDataModule):
             self.feats_classes_cnt = len(self.train_dataset.feats_classes) + 2
             self.deprel_classes_cnt = len(self.train_dataset.deprel_classes) + 2
             # the tokenizer is missing special toks
-            new_words = self.train_dataset.get_special_words() + self.val_dataset.get_special_words()
-            self.tokenizer.add_tokens(new_words)
+            self.tokenizer.add_tokens(self.train_dataset.get_special_words())
         else:
             self._set_values_from_path_name()
         self.tokenizer_size = len(self.tokenizer)
