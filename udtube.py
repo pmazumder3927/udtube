@@ -13,8 +13,7 @@ from torchmetrics.functional.classification import multiclass_accuracy
 from batch import ConlluBatch, TextBatch
 from callbacks import CustomWriter
 from data_module import ConlluDataModule
-from deps_head import BiAffineParser
-from conllu_datasets import ConlluMapDataset
+from biaffine_parser import BiaffineParser
 from typing import Union
 
 
@@ -128,7 +127,7 @@ class UDTube(pl.LightningModule):
             nn.Linear(self.encoder_model.config.hidden_size, feats_out_label_size),
             nn.Tanh(),
         )
-        self.deps_head = BiAffineParser(
+        self.deps_head = BiaffineParser(
             self.encoder_model.config.hidden_size, udtube_dropout, deprel_out_label_size
         )
         # retrieving the LabelEncoders set up by the Dataset
@@ -169,6 +168,9 @@ class UDTube(pl.LightningModule):
             task="multiclass",
             num_classes=deprel_out_label_size,
             ignore_index=deprel_out_label_size - 1,
+        )
+        self.deprel_loss = nn.CrossEntropyLoss(
+            ignore_index=deprel_out_label_size - 1
         )
 
         self.e_script = (
@@ -322,21 +324,75 @@ class UDTube(pl.LightningModule):
         )
         return loss
 
-    def _decode_to_str(self, words, y_pos_logits, y_lemma_logits, y_feats_logits):
-        # TODO add deprel and heads
+    def _get_loss_from_deps_head(self, x_word_embs, batch, longest_seq, attn_masks, subset="train"):
+        S_arc, S_lab = self.deps_head(x_word_embs)
+        batch_size = len(batch)
+
+        # for head prediction, the padding is the length of the sequence, since num classes changes per sentence.
+        gold_heads = self.pad_seq(
+            batch.heads, tensor(longest_seq, device=self.device), longest_seq, return_long=True
+        )
+        gold_deprels = self.pad_seq(
+            batch.deprels, self.deprel_pad, longest_seq, return_long=True
+        )
+        # this is not an acc object, since head has a different amount of labels per sequence (L dim = S dim)
+        self.log(
+            f"{subset}:head_acc",
+            multiclass_accuracy(S_arc, gold_heads, longest_seq, ignore_index=longest_seq),
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            batch_size=batch_size
+        )
+        # A lot of tensor manipulation goes into making the S_lab tenable.
+        # Credit: https://github.com/daandouwe/biaffine-dependency-parser/tree/9338c6fde6de5393ac1bbdd6a8bb152c2a015a6c
+        heads = gold_heads.unsqueeze(1).unsqueeze(2)  # [batch, 1, 1, sent_len]
+        heads = heads.expand(-1, S_lab.size(1), -1, -1)  # [batch, n_labels, 1, sent_len]
+        heads = torch.where(heads != longest_seq, heads, 0)  # Replacing padding due to index error
+        S_lab = torch.gather(S_lab, 2, heads).squeeze(2)  # [batch, n_labels, sent_len]
+        S_lab = S_lab.transpose(-1, -2)  # [batch, sent_len, n_labels]
+        S_lab = S_lab.contiguous().view(-1, S_lab.size(-1))  # [batch*sent_len, n_labels]
+        labels = gold_deprels.view(-1)  # [batch*sent_len]
+        self.log(
+            f"{subset}:dep_rel_acc",
+            self.deprel_accuracy(S_lab, labels),
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            batch_size=batch_size
+        )
+        # getting losses
+        S_arc = S_arc * attn_masks.unsqueeze(dim=1)
+        # longest_seq is the ignored index because it is the padding used for this task
+        arc_loss = nn.functional.cross_entropy(S_arc, gold_heads, ignore_index=longest_seq)
+        rel_loss = self.deprel_loss(S_lab, labels)
+
+        return arc_loss + rel_loss
+
+
+    def _decode_to_str(self, words, y_pos_logits, y_lemma_logits, y_feats_logits, S_arc_logits, S_rel_logits):
         # argmaxing
         y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
         y_lemma_hat = torch.argmax(y_lemma_logits, dim=-1)
         y_feats_hat = torch.argmax(y_feats_logits, dim=-1)
+        y_s_arc_hat = torch.argmax(S_arc_logits, dim=-1)
+        y_s_rel_hat = torch.argmax(S_rel_logits, dim=-1)
 
         # transforming to str
         y_pos_str_batch = []
         y_lemma_str_batch = []
         y_feats_hat_batch = []
+        y_s_arc_batch = []
+        y_s_rel_batch = []
         for batch_idx in range(len(words)):
             lemmas_i = []
             y_pos_str_batch.append(self.upos_encoder.inverse_transform(y_pos_hat[batch_idx]))
             y_feats_hat_batch.append(self.ufeats_encoder.inverse_transform(y_feats_hat[batch_idx]))
+            y_s_rel_batch.append(self.deprel_encoder.inverse_transform(y_s_arc_hat[batch_idx]))
+            y_s_arc_batch.append(str(y_s_rel_hat[batch_idx])) # these were never encoded!
+
             # lemmas work through rule classification, so we have to also apply the rules.
             lemma_rules = self.lemma_encoder.inverse_transform(y_lemma_hat[batch_idx])
             for i, rule in enumerate(lemma_rules):
@@ -345,7 +401,7 @@ class UDTube(pl.LightningModule):
                 lemmas_i.append(lemma)
             y_lemma_str_batch.append(lemmas_i)
 
-        return words, y_pos_str_batch, y_lemma_str_batch, y_feats_hat_batch
+        return words, y_pos_str_batch, y_lemma_str_batch, y_feats_hat_batch, y_s_arc_batch, y_s_rel_batch
 
     def forward(self, batch: Union[TextBatch, ConlluBatch]):
         x_encoded = self.encoder_model(
@@ -362,8 +418,9 @@ class UDTube(pl.LightningModule):
         y_pos_logits = self.pos_head(x_word_embs)
         y_lemma_logits = self.lemma_head(x_word_embs)
         y_feats_logits = self.feats_head(x_word_embs)
+        S_arc, S_lab = self.deps_head(x_word_embs)
 
-        return words, y_pos_logits, y_lemma_logits, y_feats_logits
+        return words, y_pos_logits, y_lemma_logits, y_feats_logits, S_arc, S_lab
 
     def training_step(
             self, batch: ConlluBatch, batch_idx: int, subset: str = "train"
@@ -384,7 +441,8 @@ class UDTube(pl.LightningModule):
         # TODO, delete this, using it to understand how often this happens
         for s, g in zip(words, batch.pos):
             if len(s) != len(g):
-                print(f"sequence length mismatch, s = {len(s)}, g = {len(g)}. Something in {words} is tokenized incorrectly.")
+                print(
+                    f"sequence length mismatch, s = {len(s)}, g = {len(g)}. Something in {words} is tokenized incorrectly.")
 
         # need to do some preprocessing on Y
         # Has to be done here, after the adjustment of x_embs to the word level
@@ -413,44 +471,13 @@ class UDTube(pl.LightningModule):
             subset=subset,
         )
 
-        # TODO move to method
         # getting loss from dep head, it's different from the rest
-        S_arc, S_lab = self.deps_head(x_word_embs)
-        # for head prediction, the padding is the length of the sequence, since num classes changes per sentence.
-        gold_heads = self.pad_seq(
-            batch.heads, tensor(longest_seq, device=self.device), longest_seq, return_long=True
-        )
-        gold_deprels = self.pad_seq(
-            batch.deprels, self.deprel_pad, longest_seq, return_long=True
-        )
-        deps_loss = self.deps_head.loss(S_arc, S_lab, gold_heads, gold_deprels, longest_seq, attn_masks)
-
-        self.log(
-            f"{subset}:head_acc",
-            multiclass_accuracy(S_arc, gold_heads, longest_seq, ignore_index=longest_seq),
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True,
-            logger=True,
-            batch_size=batch_size
-        )
-        # TEMP !!!!!
-        heads = gold_heads.unsqueeze(1).unsqueeze(2)  # [batch, 1, 1, sent_len]
-        heads = heads.expand(-1, S_lab.size(1), -1, -1)  # [batch, n_labels, 1, sent_len]
-        heads = torch.where(heads != longest_seq, heads, 0)  # Replacing padding due to index error
-        S_lab = torch.gather(S_lab, 2, heads).squeeze(2)  # [batch, n_labels, sent_len]
-        S_lab = S_lab.transpose(-1, -2)  # [batch, sent_len, n_labels]
-        S_lab = S_lab.contiguous().view(-1, S_lab.size(-1))  # [batch*sent_len, n_labels]
-        labels = gold_deprels.view(-1)  # [batch*sent_len]
-        self.log(
-            f"{subset}:dep_rel_acc",
-            multiclass_accuracy(S_lab, labels, 40, ignore_index=39),
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True,
-            logger=True,
-            batch_size=batch_size
-        )
+        deps_loss = self._get_loss_from_deps_head(
+            x_word_embs,
+            batch,
+            longest_seq,
+            attn_masks,
+            subset=subset)
 
         # combining the loss of the heads
         loss = torch.mean(torch.stack([pos_loss, lemma_loss, feats_loss, deps_loss]))
@@ -470,18 +497,13 @@ class UDTube(pl.LightningModule):
         return self.training_step(batch, batch_idx, subset="val")
 
     def test_step(self, batch: ConlluBatch, batch_idx: int):
-        res = self.forward(batch)
-        words, poses, lemmas, feats = self._decode_to_str(*res)
-        return batch.sentences, words, poses, lemmas, feats
+        res = self(batch)
+        return self._decode_to_str(*res)
 
     def predict_step(self, batch: TextBatch, batch_idx: int):
-        res = self.forward(batch)
-        words, poses, lemmas, feats = self._decode_to_str(*res)
-        return batch.sentences, words, poses, lemmas, feats
+        res = self(batch)
+        return self._decode_to_str(*res)
 
 
 if __name__ == "__main__":
     UDTubeCLI(UDTube, ConlluDataModule)
-
-    # TODO remove when test/predict is up, this is for reference
-    # model = UDTube.load_from_checkpoint("UDTube/lightning_logs/version_2/checkpoints/epoch=0-step=51.ckpt", hparams_file="UDTube/lightning_logs/version_2/hparams.yaml")

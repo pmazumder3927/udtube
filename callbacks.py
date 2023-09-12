@@ -12,7 +12,7 @@ class CustomWriter(BasePredictionWriter):
         super().__init__("batch") # We only want to write at batch intervals, not epoch
         self.output_file = output_file
 
-    def _write_to_conllu(self, sentences, words, poses, lemmas, feats):
+    def _write_to_conllu(self, sentences, words, poses, lemmas, feats, s_arcs, s_rels):
         # writing the output file
         with open(self.output_file, 'a') as sink:
             for batch_idx in range(len(words)):
@@ -27,10 +27,12 @@ class CustomWriter(BasePredictionWriter):
                         space_after = "SpaceAfter=No" if words[batch_idx][item_idx + 1] in string.punctuation else ""
                     print(item_idx,
                           words[batch_idx][item_idx],
-                          poses[batch_idx][item_idx],
                           lemmas[batch_idx][item_idx],
+                          poses[batch_idx][item_idx],
+                          '_',  # In place of XPOS, for now!
                           feats[batch_idx][item_idx],
-                          '-',  # in place of dependency (for now)
+                          s_arcs[batch_idx][item_idx],
+                          s_rels[batch_idx][item_idx],
                           space_after,
                           sep='\t', file=sink)
                 print('', file=sink)
