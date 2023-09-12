@@ -270,7 +270,7 @@ class UDTube(pl.LightningModule):
             {'params': self.encoder_model.parameters(), 'lr': self.encoder_model_learning_rate, "weight_decay": 0.01}
         ]
         optimizer = torch.optim.AdamW(grouped_params)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 5000)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 1000)
         return [optimizer], [{"scheduler": scheduler, "interval": "epoch"}]
 
     def log_metrics(
