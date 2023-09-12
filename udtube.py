@@ -267,6 +267,9 @@ class UDTube(pl.LightningModule):
         """Prepare optimizer and schedule (linear warmup and decay)"""
         grouped_params = [
             {'params': self.deps_head.parameters(), 'lr': self.udtube_learning_rate},
+            {'params': self.lemma_head.parameters(), 'lr': self.udtube_learning_rate},
+            {'params': self.pos_head.parameters(), 'lr': self.udtube_learning_rate},
+            {'params': self.feats_head.parameters(), 'lr': self.udtube_learning_rate},
             {'params': self.encoder_model.parameters(), 'lr': self.encoder_model_learning_rate, "weight_decay": 0.01}
         ]
         optimizer = torch.optim.AdamW(grouped_params)
@@ -369,7 +372,7 @@ class UDTube(pl.LightningModule):
         arc_loss = nn.functional.cross_entropy(S_arc, gold_heads, ignore_index=longest_seq)
         rel_loss = self.deprel_loss(S_lab, labels)
 
-        return arc_loss + rel_loss
+        return arc_loss, rel_loss
 
 
     def _decode_to_str(self, words, y_pos_logits, y_lemma_logits, y_feats_logits, S_arc_logits, S_rel_logits):
@@ -472,7 +475,7 @@ class UDTube(pl.LightningModule):
         )
 
         # getting loss from dep head, it's different from the rest
-        deps_loss = self._get_loss_from_deps_head(
+        arc_loss, rel_loss = self._get_loss_from_deps_head(
             x_word_embs,
             batch,
             longest_seq,
@@ -480,7 +483,7 @@ class UDTube(pl.LightningModule):
             subset=subset)
 
         # combining the loss of the heads
-        loss = torch.mean(torch.stack([pos_loss, lemma_loss, feats_loss, deps_loss]))
+        loss = torch.mean(torch.stack([pos_loss, lemma_loss, feats_loss, arc_loss, rel_loss]))
         self.log(
             f"{subset}_loss",
             loss,
