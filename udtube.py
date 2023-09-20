@@ -49,11 +49,6 @@ class UDTubeCLI(LightningCLI):
             "model.deprel_out_label_size",
             apply_on="instantiate"
         )
-        parser.link_arguments(
-            "data.tokenizer_size",
-            "model.tokenizer_size",
-            apply_on="instantiate"
-        )
 
     def before_instantiate_classes(self) -> None:
         if self.subcommand == "predict":
@@ -190,8 +185,6 @@ class UDTube(pl.LightningModule):
         )
         if 't5' in model_name:
             model = model.encoder
-        if tokenizer_size:
-            model.resize_token_embeddings(tokenizer_size)
         return model
 
     def _validate_input(
@@ -445,7 +438,7 @@ class UDTube(pl.LightningModule):
         for s, g in zip(words, batch.pos):
             if len(s) != len(g):
                 print(
-                    f"sequence length mismatch, s = {len(s)}, g = {len(g)}. Something in {words} is tokenized incorrectly.")
+                    f"sequence length mismatch, s = {len(s)}, g = {len(g)}. Something in {s} is tokenized incorrectly.")
 
         # need to do some preprocessing on Y
         # Has to be done here, after the adjustment of x_embs to the word level

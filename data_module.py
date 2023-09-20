@@ -3,7 +3,7 @@ import re
 from functools import partial
 import os
 import torch
-import glob
+import spacy_udpipe
 
 import lightning.pytorch as pl
 from torch.utils.data import DataLoader
@@ -11,6 +11,7 @@ from transformers import AutoTokenizer
 
 from batch import ConlluBatch, TextBatch
 from conllu_datasets import ConlluMapDataset, TextIterDataset
+
 
 
 class ConlluDataModule(pl.LightningDataModule):
@@ -23,6 +24,7 @@ class ConlluDataModule(pl.LightningDataModule):
         self,
         path_name: str = "UDTube",
         model_name: str = None,
+        language: str = None,
         train_dataset: str = None,
         val_dataset: str = None,
         predict_dataset: str = None,
@@ -46,6 +48,7 @@ class ConlluDataModule(pl.LightningDataModule):
             checkpoint: The path to the model checkpoint file
         """
         super().__init__()
+        self.pretokenizer = spacy_udpipe.load(language)
         self.reverse_edits = reverse_edits
         self.train_dataset = ConlluMapDataset(train_dataset, reverse_edits=self.reverse_edits, path_name=path_name,
                                               convert_to_um=convert_to_um, train=True)
@@ -65,11 +68,8 @@ class ConlluDataModule(pl.LightningDataModule):
             self.lemma_classes_cnt = len(self.train_dataset.lemma_classes) + 2
             self.feats_classes_cnt = len(self.train_dataset.feats_classes) + 2
             self.deprel_classes_cnt = len(self.train_dataset.deprel_classes) + 2
-            # the tokenizer is missing special toks
-            self.tokenizer.add_tokens(self.train_dataset.get_special_words() + self.val_dataset.get_special_words())
         else:
             self._set_values_from_path_name()
-        self.tokenizer_size = len(self.tokenizer)
 
     def _set_values_from_path_name(self):
         assert self.checkpoint, "model checkpoint must not be none"
@@ -95,13 +95,21 @@ class ConlluDataModule(pl.LightningDataModule):
             replacements.append(rep_i)
         return new_sents, replacements
 
+    def _pretokenize(self, sentences):
+        batch_toks = []
+        for s in sentences:
+            toks = [t.text for t in self.pretokenizer(s)]
+            batch_toks.append(toks)
+        return batch_toks
+
     def conllu_preprocessing(self, batch, tokenizer: AutoTokenizer, lang_with_space=True):
         """Data pipeline -> tokenizing input and grouping token IDs to words. The output has varied dimensions"""
         sentences, *args = zip(*batch)
         sentences, replacements = self._adjust_sentence(sentences, lang_with_space=lang_with_space)
+        pretoks = self._pretokenize(sentences)
         # I want to load in tokens by batch to avoid using the inefficient max_length padding
         tokenized_x = tokenizer(
-            sentences, padding="longest", return_tensors="pt"
+            pretoks, padding="longest", return_tensors="pt", is_split_into_words=True
         ).to("cuda" if torch.cuda.is_available() else "cpu")
         return ConlluBatch(tokenized_x, sentences, replacements, *args)
 
@@ -135,8 +143,9 @@ class ConlluDataModule(pl.LightningDataModule):
     def txt_file_preprocessing(self, sentences, tokenizer: AutoTokenizer, lang_with_space=True):
         """This is the case where the input is NOT a conllu file"""
         sentences, replacements = self._adjust_sentence(sentences, lang_with_space=lang_with_space)
+        pretoks = self._pretokenize(sentences)
         tokenized_x = tokenizer(
-            sentences, padding="longest", return_tensors="pt"
+            pretoks, padding="longest", return_tensors="pt", is_split_into_words=True
         ).to("cuda" if torch.cuda.is_available() else "cpu")
         return TextBatch(tokenized_x, sentences, replacements)
 
