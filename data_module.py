@@ -47,6 +47,7 @@ class ConlluDataModule(pl.LightningDataModule):
             checkpoint: The path to the model checkpoint file
         """
         super().__init__()
+        spacy_udpipe.download(language)
         self.pretokenizer = spacy_udpipe.load(language)
         self.reverse_edits = reverse_edits
         self.train_dataset = ConlluMapDataset(train_dataset, reverse_edits=self.reverse_edits, path_name=path_name,
