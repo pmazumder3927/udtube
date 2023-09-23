@@ -121,19 +121,19 @@ class UDTube(pl.LightningModule):
         self.dense_non_linear_layer = nn.LeakyReLU()
         self.pos_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, pos_out_label_size),
-            nn.Tanh(),
+            nn.LeakyReLU(),
         )
         self.xpos_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, xpos_out_label_size),
-            nn.Tanh(),
+            nn.LeakyReLU(),
         )
         self.lemma_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, lemma_out_label_size),
-            nn.Tanh(),
+            nn.LeakyReLU(),
         )
         self.feats_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, feats_out_label_size),
-            nn.Tanh(),
+            nn.LeakyReLU(),
         )
         self.deps_head = BiaffineParser(
             self.encoder_model.config.hidden_size, udtube_dropout, deprel_out_label_size
@@ -208,6 +208,11 @@ class UDTube(pl.LightningModule):
         )
         if 't5' in model_name:
             model = model.encoder
+
+        # freezing params for first epoch
+        for p in model.parameters():
+            p.requires_grad = False
+        print("Encoder Parameters frozen for the first Epoch")
         return model
 
     def _validate_input(
@@ -467,7 +472,7 @@ class UDTube(pl.LightningModule):
                 print(
                     f"sequence length mismatch, s = {len(s)}, g = {len(g)}. Something in {s} is tokenized incorrectly.")
 
-        activated_embs = self.dense_non_linear_layer(x_word_embs)
+        activated_embs = self.dense_non_linear_layer(x_word_embs) + x_word_embs
         # need to do some preprocessing on Y
         # Has to be done here, after the adjustment of x_embs to the word level
         pos_loss = self._get_loss_from_head(
@@ -524,6 +529,12 @@ class UDTube(pl.LightningModule):
         )
 
         return {"loss": loss}
+
+    def on_train_epoch_end(self):
+        if self.current_epoch == 0:
+            for p in self.encoder_model.parameters():
+                p.requires_grad = True
+            print("Encoder Parameters unfrozen")
 
     def validation_step(self, batch: ConlluBatch, batch_idx: int):
         return self.training_step(batch, batch_idx, subset="val")
