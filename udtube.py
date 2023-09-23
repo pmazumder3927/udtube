@@ -145,51 +145,11 @@ class UDTube(pl.LightningModule):
         self.xpos_encoder = joblib.load(f"{self.path_name}/xpos_encoder.joblib")
         self.deprel_encoder = joblib.load(f"{self.path_name}/deprel_encoder.joblib")
 
-        # Setting up all the metrics objects for each task
-        self.pos_loss = nn.CrossEntropyLoss(
-            ignore_index=pos_out_label_size - 1
-        )
-        self.pos_accuracy = Accuracy(
-            task="multiclass",
-            num_classes=pos_out_label_size,
-            ignore_index=pos_out_label_size - 1,
-        )
-
-        self.xpos_loss = nn.CrossEntropyLoss(
-            ignore_index=xpos_out_label_size - 1
-        )
-        self.xpos_accuracy = Accuracy(
-            task="multiclass",
-            num_classes=xpos_out_label_size,
-            ignore_index=xpos_out_label_size - 1
-        )
-
-        self.lemma_loss = nn.CrossEntropyLoss(
-            ignore_index=lemma_out_label_size - 1
-        )
-        self.lemma_accuracy = Accuracy(
-            task="multiclass",
-            num_classes=lemma_out_label_size,
-            ignore_index=lemma_out_label_size - 1,
-        )
-
-        self.feats_loss = nn.CrossEntropyLoss(
-            ignore_index=feats_out_label_size - 1
-        )
-        self.feats_accuracy = Accuracy(
-            task="multiclass",
-            num_classes=feats_out_label_size,
-            ignore_index=feats_out_label_size - 1,
-        )
-
-        self.deprel_accuracy = Accuracy(
-            task="multiclass",
-            num_classes=deprel_out_label_size,
-            ignore_index=deprel_out_label_size - 1,
-        )
-        self.deprel_loss = nn.CrossEntropyLoss(
-            ignore_index=deprel_out_label_size - 1
-        )
+        self.pos_num_classes = pos_out_label_size
+        self.xpos_num_classes = xpos_out_label_size
+        self.lemma_num_classes = lemma_out_label_size
+        self.feats_num_classes = feats_out_label_size
+        self.deprel_num_classes = deprel_out_label_size
 
         self.e_script = (
             edit_scripts.ReverseEditScript
@@ -300,11 +260,11 @@ class UDTube(pl.LightningModule):
             batch_size: int,
             task_name: str,
             subset: str = "train",
+            num_classes: int = 2
     ):
-        accuracy = getattr(self, f"{task_name}_accuracy")
         self.log(
             f"{subset}:{task_name}_acc",
-            accuracy(y_pred, y_true),
+            multiclass_accuracy(y_pred, y_true, ignore_index=num_classes - 1, num_classes=num_classes),
             on_step=False,
             on_epoch=True,
             prog_bar=True,
@@ -323,7 +283,7 @@ class UDTube(pl.LightningModule):
     ):
         pad = getattr(self, f"{task_name}_pad")
         head = getattr(self, f"{task_name}_head")
-        obj_func = getattr(self, f"{task_name}_loss")
+        num_classes = getattr(self, f"{task_name}_num_classes")
 
         # need to do some preprocessing on Y
         # Has to be done here, after the adjustment of x_embs to the word level
@@ -338,9 +298,9 @@ class UDTube(pl.LightningModule):
         logits = logits.permute(0, 2, 1)
 
         # getting loss and logging
-        loss = obj_func(logits, y_gold_tensor)
+        loss = nn.functional.cross_entropy(logits, y_gold_tensor, ignore_index=num_classes - 1)
         self.log_metrics(
-            logits, y_gold_tensor, batch_size, task_name, subset=subset
+            logits, y_gold_tensor, batch_size, task_name, subset=subset, num_classes=num_classes
         )
         return loss
 
@@ -376,7 +336,7 @@ class UDTube(pl.LightningModule):
         labels = gold_deprels.view(-1)  # [batch*sent_len]
         self.log(
             f"{subset}:dep_rel_acc",
-            self.deprel_accuracy(S_lab, labels),
+            multiclass_accuracy(S_lab, labels, num_classes=self.deprel_num_classes, ignore_index=self.deprel_num_classes - 1),
             on_step=False,
             on_epoch=True,
             prog_bar=True,
@@ -387,7 +347,7 @@ class UDTube(pl.LightningModule):
         S_arc = S_arc * attn_masks.unsqueeze(dim=1)
         # longest_seq is the ignored index because it is the padding used for this task
         arc_loss = nn.functional.cross_entropy(S_arc, gold_heads, ignore_index=longest_seq)
-        rel_loss = self.deprel_loss(S_lab, labels)
+        rel_loss = nn.functional.cross_entropy(S_lab, labels, ignore_index=self.deprel_num_classes - 1)
 
         return arc_loss, rel_loss
 
