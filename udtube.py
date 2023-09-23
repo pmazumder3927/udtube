@@ -35,6 +35,11 @@ class UDTubeCLI(LightningCLI):
             apply_on="instantiate",
         )
         parser.link_arguments(
+            "data.xpos_classes_cnt",
+            "model.xpos_out_label_size",
+            apply_on="instantiate",
+        )
+        parser.link_arguments(
             "data.lemma_classes_cnt",
             "model.lemma_out_label_size",
             apply_on="instantiate",
@@ -68,6 +73,7 @@ class UDTube(pl.LightningModule):
             path_name: str = "UDTube",
             model_name: str = "bert-base-multilingual-cased",
             pos_out_label_size: int = 2,
+            xpos_out_label_size: int = 2,
             lemma_out_label_size: int = 2,
             feats_out_label_size: int = 2,
             deprel_out_label_size: int = 2,
@@ -86,6 +92,7 @@ class UDTube(pl.LightningModule):
             path_name: The name of the folder to save/load model assets. This includes the lightning logs and the encoders.
             model_name: The name of the model; used to tokenize and encode.
             pos_out_label_size: The amount of POS labels. This is usually passed by the dataset.
+            xpos_out_label_size: The amount of language specific POS labels. This is usually passed by the dataset.
             lemma_out_label_size: The amount of lemma rule labels in the dataset. This is usually passed by the dataset.
             feats_out_label_size: The amount of feature labels in the dataset. This is usually passed by the dataset.
             udtube_learning_rate: The learning rate of the full model
@@ -106,12 +113,17 @@ class UDTube(pl.LightningModule):
         self.pos_pad = tensor(
             pos_out_label_size - 1, device=self.device
         )
+        self.xpos_pad = tensor(xpos_out_label_size - 1, device=self.device)
         self.lemma_pad = tensor(lemma_out_label_size - 1, device=self.device)
         self.feats_pad = tensor(feats_out_label_size - 1, device=self.device)
         self.deprel_pad = tensor(deprel_out_label_size - 1, device=self.device)
         self.encoder_model = self._load_model(model_name, tokenizer_size)
         self.pos_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, pos_out_label_size),
+            nn.Tanh(),
+        )
+        self.xpos_head = nn.Sequential(
+            nn.Linear(self.encoder_model.config.hidden_size, xpos_out_label_size),
             nn.Tanh(),
         )
         self.lemma_head = nn.Sequential(
@@ -129,6 +141,7 @@ class UDTube(pl.LightningModule):
         self.lemma_encoder = joblib.load(f"{self.path_name}/lemma_encoder.joblib")
         self.ufeats_encoder = joblib.load(f"{self.path_name}/ufeats_encoder.joblib")
         self.upos_encoder = joblib.load(f"{self.path_name}/upos_encoder.joblib")
+        self.xpos_encoder = joblib.load(f"{self.path_name}/xpos_encoder.joblib")
         self.deprel_encoder = joblib.load(f"{self.path_name}/deprel_encoder.joblib")
 
         # Setting up all the metrics objects for each task
@@ -139,6 +152,15 @@ class UDTube(pl.LightningModule):
             task="multiclass",
             num_classes=pos_out_label_size,
             ignore_index=pos_out_label_size - 1,
+        )
+
+        self.xpos_loss = nn.CrossEntropyLoss(
+            ignore_index=xpos_out_label_size - 1
+        )
+        self.xpos_accuracy = Accuracy(
+            task="multiclass",
+            num_classes=xpos_out_label_size,
+            ignore_index=xpos_out_label_size - 1
         )
 
         self.lemma_loss = nn.CrossEntropyLoss(
@@ -262,6 +284,7 @@ class UDTube(pl.LightningModule):
             {'params': self.deps_head.parameters(), 'lr': self.udtube_learning_rate},
             {'params': self.lemma_head.parameters(), 'lr': self.udtube_learning_rate},
             {'params': self.pos_head.parameters(), 'lr': self.udtube_learning_rate},
+            {'params': self.xpos_head.parameters(), 'lr': self.udtube_learning_rate},
             {'params': self.feats_head.parameters(), 'lr': self.udtube_learning_rate},
             {'params': self.encoder_model.parameters(), 'lr': self.encoder_model_learning_rate, "weight_decay": 0.01}
         ]
@@ -367,10 +390,10 @@ class UDTube(pl.LightningModule):
 
         return arc_loss, rel_loss
 
-
-    def _decode_to_str(self, words, y_pos_logits, y_lemma_logits, y_feats_logits, S_arc_logits, S_rel_logits):
+    def _decode_to_str(self, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, S_arc_logits, S_rel_logits):
         # argmaxing
         y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
+        y_xpos_hat = torch.argmax(y_xpos_logits, dim=-1)
         y_lemma_hat = torch.argmax(y_lemma_logits, dim=-1)
         y_feats_hat = torch.argmax(y_feats_logits, dim=-1)
         y_s_arc_hat = torch.argmax(S_arc_logits, dim=-1)
@@ -378,6 +401,7 @@ class UDTube(pl.LightningModule):
 
         # transforming to str
         y_pos_str_batch = []
+        y_xpos_str_batch = []
         y_lemma_str_batch = []
         y_feats_hat_batch = []
         y_s_arc_batch = []
@@ -385,6 +409,7 @@ class UDTube(pl.LightningModule):
         for batch_idx in range(len(words)):
             lemmas_i = []
             y_pos_str_batch.append(self.upos_encoder.inverse_transform(y_pos_hat[batch_idx]))
+            y_xpos_str_batch.append(self.xpos_encoder.inverse_transform(y_xpos_hat[batch_idx]))
             y_feats_hat_batch.append(self.ufeats_encoder.inverse_transform(y_feats_hat[batch_idx]))
             y_s_rel_batch.append(self.deprel_encoder.inverse_transform(y_s_arc_hat[batch_idx]))
             y_s_arc_batch.append(str(y_s_rel_hat[batch_idx])) # these were never encoded!
@@ -397,7 +422,7 @@ class UDTube(pl.LightningModule):
                 lemmas_i.append(lemma)
             y_lemma_str_batch.append(lemmas_i)
 
-        return words, y_pos_str_batch, y_lemma_str_batch, y_feats_hat_batch, y_s_arc_batch, y_s_rel_batch
+        return words, y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch, y_s_arc_batch, y_s_rel_batch
 
     def forward(self, batch: Union[TextBatch, ConlluBatch]):
         x_encoded = self.encoder_model(
@@ -412,11 +437,12 @@ class UDTube(pl.LightningModule):
         )
 
         y_pos_logits = self.pos_head(x_word_embs)
+        y_xpos_logits = self.xpos_head(x_word_embs)
         y_lemma_logits = self.lemma_head(x_word_embs)
         y_feats_logits = self.feats_head(x_word_embs)
         S_arc, S_lab = self.deps_head(x_word_embs)
 
-        return words, y_pos_logits, y_lemma_logits, y_feats_logits, S_arc, S_lab
+        return words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, S_arc, S_lab
 
     def training_step(
             self, batch: ConlluBatch, batch_idx: int, subset: str = "train"
@@ -450,6 +476,14 @@ class UDTube(pl.LightningModule):
             task_name="pos",
             subset=subset,
         )
+        xpos_loss = self._get_loss_from_head(
+            batch.xpos,
+            longest_seq,
+            x_word_embs,
+            batch_size,
+            task_name="xpos",
+            subset=subset
+        )
         lemma_loss = self._get_loss_from_head(
             batch.lemmas,
             longest_seq,
@@ -476,7 +510,7 @@ class UDTube(pl.LightningModule):
             subset=subset)
 
         # combining the loss of the heads
-        loss = torch.mean(torch.stack([pos_loss, lemma_loss, feats_loss, arc_loss, rel_loss]))
+        loss = torch.mean(torch.stack([pos_loss, xpos_loss, lemma_loss, feats_loss, arc_loss, rel_loss]))
         self.log(
             f"{subset}_loss",
             loss,

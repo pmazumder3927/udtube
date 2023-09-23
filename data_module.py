@@ -13,7 +13,6 @@ from batch import ConlluBatch, TextBatch
 from conllu_datasets import ConlluMapDataset, TextIterDataset
 
 
-
 class ConlluDataModule(pl.LightningDataModule):
     """Reusable DataModule that manages stages of UDTube
 
@@ -63,8 +62,9 @@ class ConlluDataModule(pl.LightningDataModule):
         self.checkpoint = checkpoint
         if self.train_dataset:
             # this is a bit hacky, but not sure how to do this with setup & CLI
-            # + 1 is the padding & unk tok
+            # + 2 is the padding & unk tok
             self.pos_classes_cnt = len(self.train_dataset.UPOS_CLASSES) + 2
+            self.xpos_classes_cnt = len(self.train_dataset.xpos_classes) + 2
             self.lemma_classes_cnt = len(self.train_dataset.lemma_classes) + 2
             self.feats_classes_cnt = len(self.train_dataset.feats_classes) + 2
             self.deprel_classes_cnt = len(self.train_dataset.deprel_classes) + 2

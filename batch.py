@@ -16,6 +16,7 @@ class ConlluBatch(nn.Module):
         sentences: Iterable[str],
         replacements: Iterable[Tuple[str, str]],
         pos: Iterable[List[int]],
+        xpos: Iterable[List[int]],
         lemma: Iterable[List[int]],
         feats: Iterable[List[int]],
         head: Iterable[List[int]],
@@ -28,6 +29,7 @@ class ConlluBatch(nn.Module):
            sentences: An iterable the length of the batch that contains all the raw sentences.
            replacements: A mapping of multi-word token replacements per sentence.
            pos: An iterable the length of the batch that contains a tensor of POS labels.
+           xpos: An iterable the length of the batch that contains a tensor of language-specific POS labels
            Each tensor is as long as the respective entry in toks.
            lemma: An iterable the length of the batch that contains a tensor of lemma labels.
            Each tensor is as long as the respective entry in toks.
@@ -39,6 +41,7 @@ class ConlluBatch(nn.Module):
         self.sentences = sentences
         self.replacements = replacements
         self.pos = pos
+        self.xpos = xpos
         self.lemmas = lemma
         self.feats = feats
         self.heads = head
