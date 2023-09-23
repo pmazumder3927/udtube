@@ -118,6 +118,7 @@ class UDTube(pl.LightningModule):
         self.feats_pad = tensor(feats_out_label_size - 1, device=self.device)
         self.deprel_pad = tensor(deprel_out_label_size - 1, device=self.device)
         self.encoder_model = self._load_model(model_name, tokenizer_size)
+        self.dense_non_linear_layer = nn.LeakyReLU()
         self.pos_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, pos_out_label_size),
             nn.Tanh(),
@@ -466,12 +467,13 @@ class UDTube(pl.LightningModule):
                 print(
                     f"sequence length mismatch, s = {len(s)}, g = {len(g)}. Something in {s} is tokenized incorrectly.")
 
+        activated_embs = self.dense_non_linear_layer(x_word_embs)
         # need to do some preprocessing on Y
         # Has to be done here, after the adjustment of x_embs to the word level
         pos_loss = self._get_loss_from_head(
             batch.pos,
             longest_seq,
-            x_word_embs,
+            activated_embs,
             batch_size,
             task_name="pos",
             subset=subset,
@@ -479,7 +481,7 @@ class UDTube(pl.LightningModule):
         xpos_loss = self._get_loss_from_head(
             batch.xpos,
             longest_seq,
-            x_word_embs,
+            activated_embs,
             batch_size,
             task_name="xpos",
             subset=subset
@@ -487,7 +489,7 @@ class UDTube(pl.LightningModule):
         lemma_loss = self._get_loss_from_head(
             batch.lemmas,
             longest_seq,
-            x_word_embs,
+            activated_embs,
             batch_size,
             task_name="lemma",
             subset=subset,
@@ -495,7 +497,7 @@ class UDTube(pl.LightningModule):
         feats_loss = self._get_loss_from_head(
             batch.feats,
             longest_seq,
-            x_word_embs,
+            activated_embs,
             batch_size,
             task_name="feats",
             subset=subset,
