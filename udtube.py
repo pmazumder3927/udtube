@@ -82,6 +82,7 @@ class UDTube(pl.LightningModule):
             encoder_dropout: float = 0.5,
             udtube_learning_rate: float = 5e-3,
             encoder_model_learning_rate: float = 2e-5,
+            warmup_steps: int = 8000,
             pooling_layers: int = 4,
             reverse_edits: bool = False,
             checkpoint: str = None
@@ -97,6 +98,7 @@ class UDTube(pl.LightningModule):
             feats_out_label_size: The amount of feature labels in the dataset. This is usually passed by the dataset.
             udtube_learning_rate: The learning rate of the full model
             encoder_model_learning_rate: The learning rate of only the encoder
+            warmup_steps: number of steps for the learning rate to warm up
             pooling_layers: The amount of layers used for embedding calculation
             checkpoint: The model checkpoint file
         """
@@ -107,6 +109,7 @@ class UDTube(pl.LightningModule):
         self.path_name = path_name
         self.udtube_learning_rate = udtube_learning_rate
         self.encoder_model_learning_rate = encoder_model_learning_rate
+        self.warmup_steps = warmup_steps
         self.encoder_dropout = encoder_dropout
         self.pooling_layers = pooling_layers
         # last item in the list is a pad from the label encoder
@@ -168,6 +171,12 @@ class UDTube(pl.LightningModule):
         )
         if 't5' in model_name:
             model = model.encoder
+
+        # For regularization, the model starts out frozen
+        for param in model.parameters():
+            param.requires_grad = False
+        self.frozen_encoder = True
+
         return model
 
     def _validate_input(
@@ -239,6 +248,12 @@ class UDTube(pl.LightningModule):
         new_masks = self.pad_seq(new_masks, tensor(0, device=self.device), longest_seq)
         return new_embs, words, new_masks, longest_seq
 
+    def _warmup(self, current_step: int):
+        if current_step < self.warmup_steps:  # current_step / warmup_steps * base_lr
+            return float(current_step / self.warmup_steps)
+        else:
+            return self.encoder_model_learning_rate
+
     def configure_optimizers(self):
         """Prepare optimizer and schedule (linear warmup and decay)"""
         grouped_params = [
@@ -249,9 +264,16 @@ class UDTube(pl.LightningModule):
             {'params': self.feats_head.parameters(), 'lr': self.udtube_learning_rate},
             {'params': self.encoder_model.parameters(), 'lr': self.encoder_model_learning_rate, "weight_decay": 0.01}
         ]
+
+        # Warmup scheduler with 5 warmup epochs
+        # credit: https://stackoverflow.com/questions/65343377/adam-optimizer-with-warmup-on-pytorch
+
         optimizer = torch.optim.AdamW(grouped_params)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 1000)
-        return [optimizer], [{"scheduler": scheduler, "interval": "epoch"}]
+        warmup_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=self._warmup)
+        train_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 1000)
+        scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup_scheduler, train_scheduler], [5])
+
+        return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
 
     def log_metrics(
             self,
@@ -427,7 +449,9 @@ class UDTube(pl.LightningModule):
                 print(
                     f"sequence length mismatch, s = {len(s)}, g = {len(g)}. Something in {s} is tokenized incorrectly.")
 
-        activated_embs = self.dense_non_linear_layer(x_word_embs)
+        # residual connection
+        activated_embs = self.dense_non_linear_layer(x_word_embs) + x_word_embs
+
         # need to do some preprocessing on Y
         # Has to be done here, after the adjustment of x_embs to the word level
         pos_loss = self._get_loss_from_head(
@@ -484,6 +508,12 @@ class UDTube(pl.LightningModule):
         )
 
         return {"loss": loss}
+
+    def on_train_epoch_end(self) -> None:
+        # unfreezing the encoder. This really only has to happen at the end of the first epoch
+        if self.frozen_encoder:
+            for param in self.encoder_model:
+                param.requires_grad = True
 
     def validation_step(self, batch: ConlluBatch, batch_idx: int):
         return self.training_step(batch, batch_idx, subset="val")
