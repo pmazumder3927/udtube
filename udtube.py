@@ -77,7 +77,6 @@ class UDTube(pl.LightningModule):
             lemma_out_label_size: int = 2,
             feats_out_label_size: int = 2,
             deprel_out_label_size: int = 2,
-            tokenizer_size: int = None,
             udtube_dropout: float = 0.3,
             encoder_dropout: float = 0.5,
             udtube_learning_rate: float = 5e-3,
@@ -117,7 +116,7 @@ class UDTube(pl.LightningModule):
         self.lemma_pad = tensor(lemma_out_label_size - 1, device=self.device)
         self.feats_pad = tensor(feats_out_label_size - 1, device=self.device)
         self.deprel_pad = tensor(deprel_out_label_size - 1, device=self.device)
-        self.encoder_model = self._load_model(model_name, tokenizer_size)
+        self.encoder_model = self._load_model(model_name)
         self.dense_non_linear_layer = nn.LeakyReLU()
         self.pos_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, pos_out_label_size),
@@ -201,12 +200,18 @@ class UDTube(pl.LightningModule):
         if checkpoint:
             self.load_state_dict(checkpoint['state_dict'])
 
-    def _load_model(self, model_name, tokenizer_size):
-        model = transformers.AutoModel.from_pretrained(
-            model_name, output_hidden_states=True,
-            hidden_dropout_prob=self.encoder_dropout
-        )
+    def _load_model(self, model_name):
+        if 'bert' in model_name:
+            model = transformers.AutoModel.from_pretrained(
+                model_name, output_hidden_states=True,
+                hidden_dropout_prob=self.encoder_dropout
+            )
         if 't5' in model_name:
+            model = transformers.AutoModel.from_pretrained(
+                model_name,
+                output_hidden_states=True,
+                dropout_rate=self.encoder_dropout
+            )
             model = model.encoder
 
         # freezing params for first epoch
@@ -255,13 +260,18 @@ class UDTube(pl.LightningModule):
         new_embs = []
         new_masks = []
         words = []
-        for encoding, x_emb_i in zip(tokenized.encodings, x_embs):
+        encodings = tokenized.encodings
+        offset = 1
+        if not encodings:
+            encodings = tokenized.custom_encodings
+            offset = 0 # no offset here, this is the Byt5 case
+        for encoding, x_emb_i in zip(encodings, x_embs):
             embs_i = []
             words_i = []
             mask_i = []
             last_word_idx = slice(0, 0)
             # skipping over the first padding token ([CLS])
-            for word_id, x_emb_j in zip(encoding.word_ids[1:], x_emb_i[1:]):
+            for word_id, x_emb_j in zip(encoding.word_ids[offset:], x_emb_i[offset:]):
                 if word_id is None:
                     # emb padding
                     break
@@ -273,7 +283,10 @@ class UDTube(pl.LightningModule):
                         x_emb_i[word_idxs], keepdim=True, dim=0
                     ).squeeze()
                     embs_i.append(word_emb_pooled)
-                    words_i.append("".join(encoding.tokens[word_idxs]).replace('##', ''))
+                    try:
+                        words_i.append("".join(encoding.tokens[word_idxs]).replace('##', ''))
+                    except TypeError:
+                        words_i.append(bytes(encoding.tokens[word_idxs]).decode())
                     mask_i.append(1)
             new_embs.append(torch.stack(embs_i))
             words.append(words_i)
