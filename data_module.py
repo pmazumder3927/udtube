@@ -95,6 +95,7 @@ class ConlluDataModule(pl.LightningDataModule):
         assert self.checkpoint, "model checkpoint must not be none"
         hps = torch.load(self.checkpoint)["hyper_parameters"]
         self.pos_classes_cnt = hps.get("pos_out_label_size", 0)
+        self.xpos_classes_cnt = hps.get("xpos_out_label_size", 0)
         self.lemma_classes_cnt = hps.get("lemma_out_label_size", 0)
         self.feats_classes_cnt = hps.get("feats_out_label_size", 0)
         self.deprel_classes_cnt = hps.get("deprel_out_label_size", 0)

@@ -198,6 +198,7 @@ class UDTube(pl.LightningModule):
         self.save_hyperparameters()
         self.dummy_tensor = torch.zeros(self.encoder_model.config.hidden_size, device=self.device)
         if checkpoint:
+            checkpoint = torch.load(checkpoint)
             self.load_state_dict(checkpoint['state_dict'])
 
     def _load_model(self, model_name):
@@ -255,7 +256,7 @@ class UDTube(pl.LightningModule):
         return torch.stack(padded_seq)
 
     def pool_embeddings(
-            self, x_embs: torch.tensor, tokenized: transformers.BatchEncoding, gold_label_ex
+            self, x_embs: torch.tensor, tokenized: transformers.BatchEncoding, gold_label_ex = None
     ):
         new_embs = []
         new_masks = []
@@ -291,8 +292,11 @@ class UDTube(pl.LightningModule):
             new_embs.append(torch.stack(embs_i))
             words.append(words_i)
             new_masks.append(tensor(mask_i, device=self.device))
-        longest_seq = max(max(len(m) for m in new_masks),
-                          max(len(l) for l in gold_label_ex))  # while seq mismatches exist
+        if gold_label_ex:
+            longest_seq = max(max(len(m) for m in new_masks),
+                            max(len(l) for l in gold_label_ex))  # while seq mismatches exist
+        else:
+            longest_seq = max(len(m) for m in new_masks)
         new_embs = self.pad_seq(new_embs, self.dummy_tensor, longest_seq)
         new_masks = self.pad_seq(new_masks, tensor(0, device=self.device), longest_seq)
         return new_embs, words, new_masks, longest_seq
@@ -308,7 +312,7 @@ class UDTube(pl.LightningModule):
             {'params': self.encoder_model.parameters(), 'lr': self.encoder_model_learning_rate, "weight_decay": 0.01}
         ]
         optimizer = torch.optim.AdamW(grouped_params)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 1000)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 80)
         return [optimizer], [{"scheduler": scheduler, "interval": "epoch"}]
 
     def log_metrics(
@@ -409,7 +413,7 @@ class UDTube(pl.LightningModule):
 
         return arc_loss, rel_loss
 
-    def _decode_to_str(self, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, S_arc_logits, S_rel_logits):
+    def _decode_to_str(self, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, S_arc_logits, S_rel_logits):       
         # argmaxing
         y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
         y_xpos_hat = torch.argmax(y_xpos_logits, dim=-1)
@@ -425,16 +429,17 @@ class UDTube(pl.LightningModule):
         y_feats_hat_batch = []
         y_s_arc_batch = []
         y_s_rel_batch = []
-        for batch_idx in range(len(words)):
+        for batch_idx, w_i in enumerate(words):
             lemmas_i = []
-            y_pos_str_batch.append(self.upos_encoder.inverse_transform(y_pos_hat[batch_idx]))
-            y_xpos_str_batch.append(self.xpos_encoder.inverse_transform(y_xpos_hat[batch_idx]))
-            y_feats_hat_batch.append(self.ufeats_encoder.inverse_transform(y_feats_hat[batch_idx]))
-            y_s_rel_batch.append(self.deprel_encoder.inverse_transform(y_s_arc_hat[batch_idx]))
-            y_s_arc_batch.append(str(y_s_rel_hat[batch_idx])) # these were never encoded!
+            seq_len = len(w_i)  # used to get rid of padding
+            y_pos_str_batch.append(self.upos_encoder.inverse_transform(y_pos_hat[batch_idx][:seq_len].cpu()))
+            y_xpos_str_batch.append(self.xpos_encoder.inverse_transform(y_xpos_hat[batch_idx][:seq_len].cpu()))
+            y_feats_hat_batch.append(self.ufeats_encoder.inverse_transform(y_feats_hat[batch_idx][:seq_len].cpu()))
+            y_s_rel_batch.append(self.deprel_encoder.inverse_transform(y_s_rel_hat[batch_idx][:seq_len].cpu()))
+            y_s_arc_batch.append(str(y_s_arc_hat[batch_idx][:seq_len].cpu())) # these were never encoded!
 
             # lemmas work through rule classification, so we have to also apply the rules.
-            lemma_rules = self.lemma_encoder.inverse_transform(y_lemma_hat[batch_idx])
+            lemma_rules = self.lemma_encoder.inverse_transform(y_lemma_hat[batch_idx][:seq_len].cpu())
             for i, rule in enumerate(lemma_rules):
                 rscript = self.e_script.fromtag(rule)
                 lemma = rscript.apply(words[batch_idx][i])
