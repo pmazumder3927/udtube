@@ -4,6 +4,8 @@ import lightning.pytorch as pl
 import torch
 import transformers
 import joblib
+from mst import mst
+
 import edit_scripts
 from lightning.pytorch.cli import LightningCLI
 from torch import nn, tensor
@@ -413,14 +415,12 @@ class UDTube(pl.LightningModule):
 
         return arc_loss, rel_loss
 
-    def _decode_to_str(self, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, S_arc_logits, S_rel_logits):       
+    def _decode_to_str(self, sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, S_arc_logits, S_rel_logits):
         # argmaxing
         y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
         y_xpos_hat = torch.argmax(y_xpos_logits, dim=-1)
         y_lemma_hat = torch.argmax(y_lemma_logits, dim=-1)
         y_feats_hat = torch.argmax(y_feats_logits, dim=-1)
-        y_s_arc_hat = torch.argmax(S_arc_logits, dim=-1)
-        y_s_rel_hat = torch.argmax(S_rel_logits, dim=-1)
 
         # transforming to str
         y_pos_str_batch = []
@@ -432,11 +432,23 @@ class UDTube(pl.LightningModule):
         for batch_idx, w_i in enumerate(words):
             lemmas_i = []
             seq_len = len(w_i)  # used to get rid of padding
+            # Handle Deps
+            # https://github.com/daandouwe/biaffine-dependency-parser/blob/master/predict.py
+            S_arc_i = S_arc_logits[batch_idx, :seq_len, :seq_len]
+            S_rel_i = S_rel_logits[batch_idx, :, :seq_len, :seq_len]
+
+            heads = mst(S_arc_i)
+
+            # Predict labels
+            select = torch.LongTensor(heads).unsqueeze(0).expand(S_rel_i.size(0), -1)
+            selected = torch.gather(S_rel_i, 1, select.unsqueeze(1)).squeeze(1)
+            _, S_rel_i = selected.max(dim=0)
+
             y_pos_str_batch.append(self.upos_encoder.inverse_transform(y_pos_hat[batch_idx][:seq_len].cpu()))
             y_xpos_str_batch.append(self.xpos_encoder.inverse_transform(y_xpos_hat[batch_idx][:seq_len].cpu()))
             y_feats_hat_batch.append(self.ufeats_encoder.inverse_transform(y_feats_hat[batch_idx][:seq_len].cpu()))
-            y_s_rel_batch.append(self.deprel_encoder.inverse_transform(y_s_rel_hat[batch_idx][:seq_len].cpu()))
-            y_s_arc_batch.append(str(y_s_arc_hat[batch_idx][:seq_len].cpu())) # these were never encoded!
+            y_s_rel_batch.append(self.deprel_encoder.inverse_transform(S_rel_i.cpu()))
+            y_s_arc_batch.append([h.item() for h in heads]) # these were never encoded!
 
             # lemmas work through rule classification, so we have to also apply the rules.
             lemma_rules = self.lemma_encoder.inverse_transform(y_lemma_hat[batch_idx][:seq_len].cpu())
@@ -446,7 +458,7 @@ class UDTube(pl.LightningModule):
                 lemmas_i.append(lemma)
             y_lemma_str_batch.append(lemmas_i)
 
-        return words, y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch, y_s_arc_batch, y_s_rel_batch
+        return sentences, words, y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch, y_s_arc_batch, y_s_rel_batch
 
     def forward(self, batch: Union[TextBatch, ConlluBatch]):
         x_encoded = self.encoder_model(
@@ -466,7 +478,7 @@ class UDTube(pl.LightningModule):
         y_feats_logits = self.feats_head(x_word_embs)
         S_arc, S_lab = self.deps_head(x_word_embs)
 
-        return words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, S_arc, S_lab
+        return batch.sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, S_arc, S_lab
 
     def training_step(
             self, batch: ConlluBatch, batch_idx: int, subset: str = "train"
