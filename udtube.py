@@ -122,19 +122,19 @@ class UDTube(pl.LightningModule):
         self.dense_non_linear_layer = nn.LeakyReLU()
         self.pos_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, pos_out_label_size),
-            nn.Softmax(dim=-1)
+            nn.LeakyReLU()
         )
         self.xpos_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, xpos_out_label_size),
-            nn.Softmax(dim=-1)
+            nn.LeakyReLU()
         )
         self.lemma_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, lemma_out_label_size),
-            nn.Softmax(dim=-1)
+            nn.LeakyReLU()
         )
         self.feats_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, feats_out_label_size),
-            nn.Softmax(dim=-1)
+            nn.LeakyReLU()
         )
         self.deps_head = BiaffineParser(
             self.encoder_model.config.hidden_size, udtube_dropout, deprel_out_label_size
@@ -427,6 +427,11 @@ class UDTube(pl.LightningModule):
         return arc_loss, rel_loss
 
     def _decode_to_str(self, sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, S_arc_logits, S_rel_logits):
+        # softmaxing
+        y_pos_logits = nn.functional.softmax(y_pos_logits, dim=-1)
+        y_xpos_logits = nn.functional.softmax(y_xpos_logits, dim=-1)
+        y_lemma_logits = nn.functional.softmax(y_lemma_logits, dim=-1)
+        y_feats_logits = nn.functional.softmax(y_feats_logits, dim=-1)
         # argmaxing
         y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
         y_xpos_hat = torch.argmax(y_xpos_logits, dim=-1)
@@ -449,7 +454,8 @@ class UDTube(pl.LightningModule):
             S_rel_i = S_rel_logits[batch_idx, :, :seq_len + 1, :seq_len + 1]
 
             # MST expects scores, not logits (apparently)
-            S_arc_i = nn.functional.softmax(S_arc_i, dim=1)[0]
+            S_arc_i = nn.functional.softmax(S_arc_i, dim=1)[0].cpu()
+            S_rel_i = S_rel_i.cpu()
 
             heads = mst(S_arc_i)
 

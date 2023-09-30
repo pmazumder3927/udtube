@@ -47,16 +47,16 @@ model:
   udtube_learning_rate: 0.005
   encoder_model_learning_rate: 2.0e-05
   pooling_layers: 4
-  checkpoint: UDTube/epoch=20-step=546.ckpt
+  checkpoint: lightning_logs/ute747ob/checkpoints/epoch=19-step=520.ckpt
 data:
   language: el
   train_dataset: null
   val_dataset: null
   predict_dataset: null
-  test_dataset: el_gdt-um-dev.conllu
+  test_dataset: el_gdt-ud-train.conllu
   batch_size: 8
-  convert_to_um: true
-  reverse_edits: false
-  checkpoint: UDTube/epoch=20-step=546.ckpt
-output_file: el_gdt-um-dev-pred.conllu
+  convert_to_um: false
+  reverse_edits: true
+  checkpoint: lightning_logs/ute747ob/checkpoints/epoch=19-step=520.ckpt
+output_file: el_gdt-ud-train-pred.conllu
 verbose: true

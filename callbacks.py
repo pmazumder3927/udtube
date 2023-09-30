@@ -17,6 +17,10 @@ class CustomWriter(BasePredictionWriter):
         with open(self.output_file, 'a') as sink:
             for batch_idx in range(len(words)):
                 print(
+                    f"# sent_id = TBD",
+                    sep='\t', file=sink
+                )
+                print(
                     f"# text = {sentences[batch_idx]}",
                     sep='\t', file=sink
                 )
@@ -49,6 +53,9 @@ class CustomWriter(BasePredictionWriter):
         batch_idx: int,
         dataloader_idx: int,
     ) -> None:
+        if batch_idx == 0:
+            with open(self.output_file, 'w') as sink:
+                print("# newdoc id = TBD", file=sink)
         self._write_to_conllu(*prediction)
 
     def on_test_batch_end(
