@@ -21,6 +21,7 @@ class CustomWriter(BasePredictionWriter):
                     sep='\t', file=sink
                 )
                 for item_idx in range(len(words[batch_idx])):
+                    space_after = "_"
                     if words[batch_idx][item_idx] == ConlluMapDataset.PAD_TAG:
                         continue
                     if item_idx < len(words[batch_idx]) - 1:

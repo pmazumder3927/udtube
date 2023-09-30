@@ -13,6 +13,7 @@ from tokenizers import Encoding
 from batch import ConlluBatch, TextBatch
 from conllu_datasets import ConlluMapDataset, TextIterDataset
 
+ROOT_TOKEN = "ROOT"
 
 class CustomEncoding():
     def __init__(self, word_ids, tokens):
@@ -29,7 +30,6 @@ class CustomEncoding():
             else:
                 break
         return start, stop
-
 
 
 class ConlluDataModule(pl.LightningDataModule):
@@ -120,6 +120,7 @@ class ConlluDataModule(pl.LightningDataModule):
         batch_toks = []
         for s in sentences:
             toks = [t.text for t in self.pretokenizer(s)]
+            toks = [ROOT_TOKEN] + toks # root token is needed for dependency parsing
             batch_toks.append(toks)
         return batch_toks
 

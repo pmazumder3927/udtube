@@ -122,19 +122,19 @@ class UDTube(pl.LightningModule):
         self.dense_non_linear_layer = nn.LeakyReLU()
         self.pos_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, pos_out_label_size),
-            nn.LeakyReLU(),
+            nn.Softmax(dim=-1)
         )
         self.xpos_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, xpos_out_label_size),
-            nn.LeakyReLU(),
+            nn.Softmax(dim=-1)
         )
         self.lemma_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, lemma_out_label_size),
-            nn.LeakyReLU(),
+            nn.Softmax(dim=-1)
         )
         self.feats_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, feats_out_label_size),
-            nn.LeakyReLU(),
+            nn.Softmax(dim=-1)
         )
         self.deps_head = BiaffineParser(
             self.encoder_model.config.hidden_size, udtube_dropout, deprel_out_label_size
@@ -292,15 +292,16 @@ class UDTube(pl.LightningModule):
                         words_i.append(bytes(encoding.tokens[word_idxs]).decode())
                     mask_i.append(1)
             new_embs.append(torch.stack(embs_i))
-            words.append(words_i)
+            words.append(words_i[1:]) # ROOT is always first, dropping it here.
             new_masks.append(tensor(mask_i, device=self.device))
         if gold_label_ex:
-            longest_seq = max(max(len(m) for m in new_masks),
-                            max(len(l) for l in gold_label_ex))  # while seq mismatches exist
+            longest_seq = max(max(len(m) for m in words),
+                            max(len(l) for l in gold_label_ex))
         else:
-            longest_seq = max(len(m) for m in new_masks)
-        new_embs = self.pad_seq(new_embs, self.dummy_tensor, longest_seq)
-        new_masks = self.pad_seq(new_masks, tensor(0, device=self.device), longest_seq)
+            longest_seq = max(len(m) for m in words)
+        # longest_seq + 1 is the ROOT adjustment
+        new_embs = self.pad_seq(new_embs, self.dummy_tensor, longest_seq + 1)
+        new_masks = self.pad_seq(new_masks, tensor(0, device=self.device), longest_seq + 1)
         return new_embs, words, new_masks, longest_seq
 
     def configure_optimizers(self):
@@ -372,6 +373,11 @@ class UDTube(pl.LightningModule):
         S_arc, S_lab = self.deps_head(x_word_embs)
         batch_size = len(batch)
 
+        # Removing root
+        S_arc = S_arc[:, 1:, 1:]
+        S_lab = S_lab[:, :, 1:, 1:]
+        attn_masks = attn_masks[:, 1:]
+
         # for head prediction, the padding is the length of the sequence, since num classes changes per sentence.
         gold_heads = self.pad_seq(
             batch.heads, tensor(longest_seq, device=self.device), longest_seq, return_long=True
@@ -379,10 +385,15 @@ class UDTube(pl.LightningModule):
         gold_deprels = self.pad_seq(
             batch.deprels, self.deprel_pad, longest_seq, return_long=True
         )
+        # handmade accuracy, something is funky about using the functional acc
+        _, pred = S_arc.max(dim=-2)
+        mask = (gold_heads != longest_seq).float()
+        accuracy = torch.sum((pred == gold_heads).float() * mask, dim=-1) / (torch.sum(mask, dim=-1))
+        head_acc = torch.mean(accuracy).item()
         # this is not an acc object, since head has a different amount of labels per sequence (L dim = S dim)
         self.log(
             f"{subset}:head_acc",
-            multiclass_accuracy(S_arc, gold_heads, longest_seq, ignore_index=longest_seq),
+            head_acc,
             on_step=False,
             on_epoch=True,
             prog_bar=True,
@@ -434,8 +445,11 @@ class UDTube(pl.LightningModule):
             seq_len = len(w_i)  # used to get rid of padding
             # Handle Deps
             # https://github.com/daandouwe/biaffine-dependency-parser/blob/master/predict.py
-            S_arc_i = S_arc_logits[batch_idx, :seq_len, :seq_len]
-            S_rel_i = S_rel_logits[batch_idx, :, :seq_len, :seq_len]
+            S_arc_i = S_arc_logits[batch_idx, :seq_len + 1, :seq_len + 1]
+            S_rel_i = S_rel_logits[batch_idx, :, :seq_len + 1, :seq_len + 1]
+
+            # MST expects scores, not logits (apparently)
+            S_arc_i = nn.functional.softmax(S_arc_i, dim=1)[0]
 
             heads = mst(S_arc_i)
 
@@ -443,6 +457,10 @@ class UDTube(pl.LightningModule):
             select = torch.LongTensor(heads).unsqueeze(0).expand(S_rel_i.size(0), -1)
             selected = torch.gather(S_rel_i, 1, select.unsqueeze(1)).squeeze(1)
             _, S_rel_i = selected.max(dim=0)
+
+            # dropping ROOT
+            heads = heads[1:]
+            S_rel_i = S_rel_i[1:]
 
             y_pos_str_batch.append(self.upos_encoder.inverse_transform(y_pos_hat[batch_idx][:seq_len].cpu()))
             y_xpos_str_batch.append(self.xpos_encoder.inverse_transform(y_xpos_hat[batch_idx][:seq_len].cpu()))
@@ -472,11 +490,14 @@ class UDTube(pl.LightningModule):
             x_embs, batch.tokens
         )
 
+        x_word_embs_with_root = x_word_embs
+        x_word_embs = x_word_embs[:, 1:, :]  # dropping the root token embedding for every task but dependency
+
         y_pos_logits = self.pos_head(x_word_embs)
         y_xpos_logits = self.xpos_head(x_word_embs)
         y_lemma_logits = self.lemma_head(x_word_embs)
         y_feats_logits = self.feats_head(x_word_embs)
-        S_arc, S_lab = self.deps_head(x_word_embs)
+        S_arc, S_lab = self.deps_head(x_word_embs_with_root)
 
         return batch.sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, S_arc, S_lab
 
@@ -502,9 +523,13 @@ class UDTube(pl.LightningModule):
                 print(
                     f"sequence length mismatch, s = {len(s)}, g = {len(g)}. Something in {s} is tokenized incorrectly.")
 
-        activated_embs = self.dense_non_linear_layer(x_word_embs) + x_word_embs
+
         # need to do some preprocessing on Y
         # Has to be done here, after the adjustment of x_embs to the word level
+        x_word_embs_with_root = x_word_embs
+        x_word_embs = x_word_embs[:, 1:, :]  # dropping the root token embedding for every task but dependency
+        activated_embs = self.dense_non_linear_layer(x_word_embs) + x_word_embs
+
         pos_loss = self._get_loss_from_head(
             batch.pos,
             longest_seq,
@@ -540,7 +565,7 @@ class UDTube(pl.LightningModule):
 
         # getting loss from dep head, it's different from the rest
         arc_loss, rel_loss = self._get_loss_from_deps_head(
-            x_word_embs,
+            x_word_embs_with_root,
             batch,
             longest_seq,
             attn_masks,
@@ -579,4 +604,4 @@ class UDTube(pl.LightningModule):
 
 
 if __name__ == "__main__":
-    UDTubeCLI(UDTube, ConlluDataModule)
+    UDTubeCLI(UDTube, ConlluDataModule, save_config_callback=None)

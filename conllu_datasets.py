@@ -163,9 +163,6 @@ class ConlluMapDataset(Dataset):
         with open(self.conllu_file) as f:
             dt = conllu.parse_incr(f, field_parsers=OVERRIDDEN_FIELD_PARSERS)
             for tk_list in dt:
-                if len(tk_list) == 1:
-                    # this is likely a date or meta data
-                    continue
                 sentence = tk_list.metadata["text"]
                 uposes = []
                 xposes = []
