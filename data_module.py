@@ -74,7 +74,8 @@ class ConlluDataModule(pl.LightningDataModule):
         self.val_dataset = ConlluMapDataset(val_dataset, reverse_edits=self.reverse_edits, path_name=path_name,
                                             convert_to_um=convert_to_um, train=False)
         self.predict_dataset = TextIterDataset(predict_dataset)
-        self.test_dataset = ConlluMapDataset(test_dataset, convert_to_um=convert_to_um)
+        self.test_dataset = ConlluMapDataset(test_dataset, path_name=path_name,
+                                             convert_to_um=convert_to_um, train=False)
         with open(f"{path_name}/multiword_dict.json", "r") as mw_tb:
             self.multiword_table = json.load(mw_tb)
         self.batch_size = batch_size

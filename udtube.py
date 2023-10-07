@@ -201,6 +201,7 @@ class UDTube(pl.LightningModule):
         self.dummy_tensor = torch.zeros(self.encoder_model.config.hidden_size, device=self.device)
         if checkpoint:
             checkpoint = torch.load(checkpoint)
+            print("Loading from checkpoint")
             self.load_state_dict(checkpoint['state_dict'])
 
     def _load_model(self, model_name):
@@ -258,20 +259,16 @@ class UDTube(pl.LightningModule):
         return torch.stack(padded_seq)
 
     def pool_embeddings(
-            self, x_embs: torch.tensor, tokenized: transformers.BatchEncoding, gold_label_ex = None
+            self, x_embs: torch.tensor, tokenized: transformers.BatchEncoding, gold_label_ex=None
     ):
-        new_embs = []
-        new_masks = []
-        words = []
+        new_embs, new_masks, words = [], [], []
         encodings = tokenized.encodings
         offset = 1
         if not encodings:
             encodings = tokenized.custom_encodings
             offset = 0 # no offset here, this is the Byt5 case
         for encoding, x_emb_i in zip(encodings, x_embs):
-            embs_i = []
-            words_i = []
-            mask_i = []
+            embs_i, words_i, mask_i = [], [], []
             last_word_idx = slice(0, 0)
             # skipping over the first padding token ([CLS])
             for word_id, x_emb_j in zip(encoding.word_ids[offset:], x_emb_i[offset:]):
@@ -328,7 +325,7 @@ class UDTube(pl.LightningModule):
     ):
         accuracy = getattr(self, f"{task_name}_accuracy")
         self.log(
-            f"{subset}:{task_name}_acc",
+            f"{subset}_{task_name}_acc",
             accuracy(y_pred, y_true),
             on_step=False,
             on_epoch=True,
@@ -340,9 +337,7 @@ class UDTube(pl.LightningModule):
     def _get_loss_from_head(
             self,
             y_gold,
-            longest_seq,
-            x_word_embs,
-            batch_size,
+            logits,
             task_name="pos",
             subset="train",
     ):
@@ -352,6 +347,7 @@ class UDTube(pl.LightningModule):
 
         # need to do some preprocessing on Y
         # Has to be done here, after the adjustment of x_embs to the word level
+        batch_size, longest_seq, _ = logits.shape
         y_gold_tensor = self.pad_seq(
             y_gold, pad, longest_seq, return_long=True
         )
@@ -359,7 +355,6 @@ class UDTube(pl.LightningModule):
         # getting logits from head, and then permuting them for metrics calculation
         # Each head returns ( batch X sequence_len X classes )
         # but CE & metrics want ( minibatch X Classes X sequence_len ); (minibatch, C, d0...dk) & (N, C, ..) in the docs
-        logits = head(x_word_embs)
         logits = logits.permute(0, 2, 1)
 
         # getting loss and logging
@@ -369,14 +364,14 @@ class UDTube(pl.LightningModule):
         )
         return loss
 
-    def _get_loss_from_deps_head(self, x_word_embs, batch, longest_seq, attn_masks, subset="train"):
-        S_arc, S_lab = self.deps_head(x_word_embs)
+    def _get_loss_from_deps_head(self, S_arc, S_lab, batch, attn_masks, subset="train"):
         batch_size = len(batch)
 
         # Removing root
         S_arc = S_arc[:, 1:, 1:]
         S_lab = S_lab[:, :, 1:, 1:]
         attn_masks = attn_masks[:, 1:]
+        longest_seq = S_arc.shape[1]
 
         # for head prediction, the padding is the length of the sequence, since num classes changes per sentence.
         gold_heads = self.pad_seq(
@@ -392,7 +387,7 @@ class UDTube(pl.LightningModule):
         head_acc = torch.mean(accuracy).item()
         # this is not an acc object, since head has a different amount of labels per sequence (L dim = S dim)
         self.log(
-            f"{subset}:head_acc",
+            f"{subset}_head_acc",
             head_acc,
             on_step=False,
             on_epoch=True,
@@ -427,11 +422,6 @@ class UDTube(pl.LightningModule):
         return arc_loss, rel_loss
 
     def _decode_to_str(self, sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, S_arc_logits, S_rel_logits):
-        # softmaxing
-        y_pos_logits = nn.functional.softmax(y_pos_logits, dim=-1)
-        y_xpos_logits = nn.functional.softmax(y_xpos_logits, dim=-1)
-        y_lemma_logits = nn.functional.softmax(y_lemma_logits, dim=-1)
-        y_feats_logits = nn.functional.softmax(y_feats_logits, dim=-1)
         # argmaxing
         y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
         y_xpos_hat = torch.argmax(y_xpos_logits, dim=-1)
@@ -439,12 +429,8 @@ class UDTube(pl.LightningModule):
         y_feats_hat = torch.argmax(y_feats_logits, dim=-1)
 
         # transforming to str
-        y_pos_str_batch = []
-        y_xpos_str_batch = []
-        y_lemma_str_batch = []
-        y_feats_hat_batch = []
-        y_s_arc_batch = []
-        y_s_rel_batch = []
+        y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch = [], [], [], []
+        y_s_arc_batch, y_s_rel_batch = [], []
         for batch_idx, w_i in enumerate(words):
             lemmas_i = []
             seq_len = len(w_i)  # used to get rid of padding
@@ -453,8 +439,7 @@ class UDTube(pl.LightningModule):
             S_arc_i = S_arc_logits[batch_idx, :seq_len + 1, :seq_len + 1]
             S_rel_i = S_rel_logits[batch_idx, :, :seq_len + 1, :seq_len + 1]
 
-            # MST expects scores, not logits (apparently)
-            S_arc_i = nn.functional.softmax(S_arc_i, dim=1)[0].cpu()
+            S_arc_i = nn.functional.softmax(nn.functional.softmax(S_arc_i, dim=-1), dim=0).numpy()   # for mst
             S_rel_i = S_rel_i.cpu()
 
             heads = mst(S_arc_i)
@@ -485,100 +470,92 @@ class UDTube(pl.LightningModule):
         return sentences, words, y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch, y_s_arc_batch, y_s_rel_batch
 
     def forward(self, batch: Union[TextBatch, ConlluBatch]):
-        x_encoded = self.encoder_model(
+        # getting raw embeddings
+        x = self.encoder_model(
             batch.tokens.input_ids, batch.tokens.attention_mask
         )
-        last_n_layer_embs = torch.stack(
-            x_encoded.hidden_states[-self.pooling_layers:]
+        # stacking n (self.pooling_layer) embedding layers
+        x = torch.stack(
+            x.hidden_states[-self.pooling_layers:]
         )
-        x_embs = torch.mean(last_n_layer_embs, keepdim=True, dim=0).squeeze()
-        x_word_embs, words, attn_masks, longest_seq = self.pool_embeddings(
-            x_embs, batch.tokens
+        # averages n layers into one embedding layer
+        x = torch.mean(x, keepdim=True, dim=0).squeeze()
+
+        # this is used for padding, when present
+        if isinstance(batch, TextBatch):
+            gold_label_ex = None
+        else:
+            gold_label_ex = batch.pos
+
+        # converting x embeddings to the word level
+        x, words, masks, longest_seq = self.pool_embeddings(
+            x, batch.tokens, gold_label_ex=gold_label_ex
         )
 
-        x_word_embs_with_root = x_word_embs
-        x_word_embs = x_word_embs[:, 1:, :]  # dropping the root token embedding for every task but dependency
+        x_with_root = x.detach().clone()
+        x = x[:, 1:, :]  # dropping the root token embedding for every task but dependency
+        x = self.dense_non_linear_layer(x) + x
 
-        y_pos_logits = self.pos_head(x_word_embs)
-        y_xpos_logits = self.xpos_head(x_word_embs)
-        y_lemma_logits = self.lemma_head(x_word_embs)
-        y_feats_logits = self.feats_head(x_word_embs)
-        S_arc, S_lab = self.deps_head(x_word_embs_with_root)
+        y_pos_logits = self.pos_head(x)
+        y_xpos_logits = self.xpos_head(x)
+        y_lemma_logits = self.lemma_head(x)
+        y_feats_logits = self.feats_head(x)
+        S_arc, S_lab = self.deps_head(x_with_root)
 
-        return batch.sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, S_arc, S_lab
+        return batch.sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, S_arc, S_lab, masks
 
     def training_step(
             self, batch: ConlluBatch, batch_idx: int, subset: str = "train"
     ):
-        x_encoded = self.encoder_model(
-            batch.tokens.input_ids, batch.tokens.attention_mask
-        )
-        last_n_layer_embs = torch.stack(
-            x_encoded.hidden_states[-self.pooling_layers:]
-        )
+        response = {}
         batch_size = len(batch)
-        x_embs = torch.mean(last_n_layer_embs, keepdim=True, dim=0).squeeze(dim=0)
-
-        x_word_embs, words, attn_masks, longest_seq = self.pool_embeddings(
-            x_embs, batch.tokens, batch.pos
-        )
-
-        # TODO, delete this, using it to understand how often this happens
-        for s, g in zip(words, batch.pos):
-            if len(s) != len(g):
-                print(
-                    f"sequence length mismatch, s = {len(s)}, g = {len(g)}. Something in {s} is tokenized incorrectly.")
-
-
-        # need to do some preprocessing on Y
-        # Has to be done here, after the adjustment of x_embs to the word level
-        x_word_embs_with_root = x_word_embs
-        x_word_embs = x_word_embs[:, 1:, :]  # dropping the root token embedding for every task but dependency
-        activated_embs = self.dense_non_linear_layer(x_word_embs) + x_word_embs
+        sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, S_arc, S_lab, masks = self(batch)
 
         pos_loss = self._get_loss_from_head(
             batch.pos,
-            longest_seq,
-            activated_embs,
-            batch_size,
+            y_pos_logits,
             task_name="pos",
             subset=subset,
         )
+        response["pos_loss"] = pos_loss
+
         xpos_loss = self._get_loss_from_head(
             batch.xpos,
-            longest_seq,
-            activated_embs,
-            batch_size,
+            y_xpos_logits,
             task_name="xpos",
             subset=subset
         )
+        response["xpos_loss"] = xpos_loss
+
         lemma_loss = self._get_loss_from_head(
             batch.lemmas,
-            longest_seq,
-            activated_embs,
-            batch_size,
+            y_lemma_logits,
             task_name="lemma",
             subset=subset,
         )
+        response["lemma_loss"] = lemma_loss
+
         feats_loss = self._get_loss_from_head(
             batch.feats,
-            longest_seq,
-            activated_embs,
-            batch_size,
+            y_feats_logits,
             task_name="feats",
             subset=subset,
         )
+        response["feats_loss"] = feats_loss
 
         # getting loss from dep head, it's different from the rest
         arc_loss, rel_loss = self._get_loss_from_deps_head(
-            x_word_embs_with_root,
+            S_arc, S_lab,
             batch,
-            longest_seq,
-            attn_masks,
+            masks,
             subset=subset)
+        response["arc_loss"] = arc_loss
+        response["rel_loss"] = rel_loss
 
         # combining the loss of the heads
         loss = torch.mean(torch.stack([pos_loss, xpos_loss, lemma_loss, feats_loss, arc_loss, rel_loss]))
+        response["loss"] = loss
+
         self.log(
             f"{subset}_loss",
             loss,
@@ -589,7 +566,7 @@ class UDTube(pl.LightningModule):
             batch_size=batch_size,
         )
 
-        return {"loss": loss}
+        return response
 
     def on_train_epoch_end(self):
         if self.current_epoch == 0:
@@ -601,11 +578,11 @@ class UDTube(pl.LightningModule):
         return self.training_step(batch, batch_idx, subset="val")
 
     def test_step(self, batch: ConlluBatch, batch_idx: int):
-        res = self(batch)
+        *res, _ = self(batch)
         return self._decode_to_str(*res)
 
     def predict_step(self, batch: TextBatch, batch_idx: int):
-        res = self(batch)
+        *res, _ = self(batch)
         return self._decode_to_str(*res)
 
 
