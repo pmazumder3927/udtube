@@ -9,7 +9,6 @@ from mst import mst
 import edit_scripts
 from lightning.pytorch.cli import LightningCLI
 from torch import nn, tensor
-from torchmetrics import Accuracy
 from torchmetrics.functional.classification import multiclass_accuracy
 
 from batch import ConlluBatch, TextBatch
@@ -110,16 +109,8 @@ class UDTube(pl.LightningModule):
         self.encoder_model_learning_rate = encoder_model_learning_rate
         self.encoder_dropout = encoder_dropout
         self.pooling_layers = pooling_layers
-        # last item in the list is a pad from the label encoder
-        self.pos_pad = tensor(
-            pos_out_label_size - 1, device=self.device
-        )
-        self.xpos_pad = tensor(xpos_out_label_size - 1, device=self.device)
-        self.lemma_pad = tensor(lemma_out_label_size - 1, device=self.device)
-        self.feats_pad = tensor(feats_out_label_size - 1, device=self.device)
-        self.deprel_pad = tensor(deprel_out_label_size - 1, device=self.device)
+
         self.encoder_model = self._load_model(model_name)
-        self.dense_non_linear_layer = nn.LeakyReLU()
         self.pos_head = nn.Sequential(
             nn.Linear(self.encoder_model.config.hidden_size, pos_out_label_size),
             nn.LeakyReLU()
@@ -139,58 +130,13 @@ class UDTube(pl.LightningModule):
         self.deps_head = BiaffineParser(
             self.encoder_model.config.hidden_size, udtube_dropout, deprel_out_label_size
         )
+
         # retrieving the LabelEncoders set up by the Dataset
         self.lemma_encoder = joblib.load(f"{self.path_name}/lemma_encoder.joblib")
         self.ufeats_encoder = joblib.load(f"{self.path_name}/ufeats_encoder.joblib")
         self.upos_encoder = joblib.load(f"{self.path_name}/upos_encoder.joblib")
         self.xpos_encoder = joblib.load(f"{self.path_name}/xpos_encoder.joblib")
         self.deprel_encoder = joblib.load(f"{self.path_name}/deprel_encoder.joblib")
-
-        # Setting up all the metrics objects for each task
-        self.pos_loss = nn.CrossEntropyLoss(
-            ignore_index=pos_out_label_size - 1
-        )
-        self.pos_accuracy = Accuracy(
-            task="multiclass",
-            num_classes=pos_out_label_size,
-            ignore_index=pos_out_label_size - 1,
-        )
-
-        self.xpos_loss = nn.CrossEntropyLoss(
-            ignore_index=xpos_out_label_size - 1
-        )
-        self.xpos_accuracy = Accuracy(
-            task="multiclass",
-            num_classes=xpos_out_label_size,
-            ignore_index=xpos_out_label_size - 1
-        )
-
-        self.lemma_loss = nn.CrossEntropyLoss(
-            ignore_index=lemma_out_label_size - 1
-        )
-        self.lemma_accuracy = Accuracy(
-            task="multiclass",
-            num_classes=lemma_out_label_size,
-            ignore_index=lemma_out_label_size - 1,
-        )
-
-        self.feats_loss = nn.CrossEntropyLoss(
-            ignore_index=feats_out_label_size - 1
-        )
-        self.feats_accuracy = Accuracy(
-            task="multiclass",
-            num_classes=feats_out_label_size,
-            ignore_index=feats_out_label_size - 1,
-        )
-
-        self.deprel_accuracy = Accuracy(
-            task="multiclass",
-            num_classes=deprel_out_label_size,
-            ignore_index=deprel_out_label_size - 1,
-        )
-        self.deprel_loss = nn.CrossEntropyLoss(
-            ignore_index=deprel_out_label_size - 1
-        )
 
         self.e_script = (
             edit_scripts.ReverseEditScript
@@ -323,10 +269,13 @@ class UDTube(pl.LightningModule):
             task_name: str,
             subset: str = "train",
     ):
-        accuracy = getattr(self, f"{task_name}_accuracy")
+        num_classes = y_pred.shape[1]
+        ignore_index = num_classes - 1
+        acc = multiclass_accuracy(y_pred.permute(2, 1, 0), y_true.T, num_classes=num_classes,
+                                  ignore_index=ignore_index, average="micro")
         self.log(
             f"{subset}_{task_name}_acc",
-            accuracy(y_pred, y_true),
+            acc,
             on_step=False,
             on_epoch=True,
             prog_bar=True,
@@ -341,24 +290,19 @@ class UDTube(pl.LightningModule):
             task_name="pos",
             subset="train",
     ):
-        pad = getattr(self, f"{task_name}_pad")
-        head = getattr(self, f"{task_name}_head")
-        obj_func = getattr(self, f"{task_name}_loss")
-
-        # need to do some preprocessing on Y
-        # Has to be done here, after the adjustment of x_embs to the word level
-        batch_size, longest_seq, _ = logits.shape
+        batch_size, longest_seq, num_classes = logits.shape
+        # ignore_idx is used for padding!
+        ignore_idx = num_classes - 1
+        pad = tensor(ignore_idx, device=self.device)
         y_gold_tensor = self.pad_seq(
             y_gold, pad, longest_seq, return_long=True
         )
 
-        # getting logits from head, and then permuting them for metrics calculation
         # Each head returns ( batch X sequence_len X classes )
         # but CE & metrics want ( minibatch X Classes X sequence_len ); (minibatch, C, d0...dk) & (N, C, ..) in the docs
         logits = logits.permute(0, 2, 1)
 
-        # getting loss and logging
-        loss = obj_func(logits, y_gold_tensor)
+        loss = nn.functional.cross_entropy(logits, y_gold_tensor, ignore_index=num_classes - 1)
         self.log_metrics(
             logits, y_gold_tensor, batch_size, task_name, subset=subset
         )
@@ -370,6 +314,7 @@ class UDTube(pl.LightningModule):
         # Removing root
         S_arc = S_arc[:, 1:, 1:]
         S_lab = S_lab[:, :, 1:, 1:]
+        S_lab_ignore_idx = S_lab.shape[1] - 1
         attn_masks = attn_masks[:, 1:]
         longest_seq = S_arc.shape[1]
 
@@ -378,14 +323,9 @@ class UDTube(pl.LightningModule):
             batch.heads, tensor(longest_seq, device=self.device), longest_seq, return_long=True
         )
         gold_deprels = self.pad_seq(
-            batch.deprels, self.deprel_pad, longest_seq, return_long=True
+            batch.deprels, tensor(S_lab_ignore_idx, device=self.device), longest_seq, return_long=True
         )
-        # handmade accuracy, something is funky about using the functional acc
-        _, pred = S_arc.max(dim=-2)
-        mask = (gold_heads != longest_seq).float()
-        accuracy = torch.sum((pred == gold_heads).float() * mask, dim=-1) / (torch.sum(mask, dim=-1))
-        head_acc = torch.mean(accuracy).item()
-        # this is not an acc object, since head has a different amount of labels per sequence (L dim = S dim)
+        head_acc = multiclass_accuracy(S_arc.permute(1, 2, 0), gold_heads.T, num_classes=longest_seq, ignore_index=longest_seq, average="micro")
         self.log(
             f"{subset}_head_acc",
             head_acc,
@@ -404,9 +344,11 @@ class UDTube(pl.LightningModule):
         S_lab = S_lab.transpose(-1, -2)  # [batch, sent_len, n_labels]
         S_lab = S_lab.contiguous().view(-1, S_lab.size(-1))  # [batch*sent_len, n_labels]
         labels = gold_deprels.view(-1)  # [batch*sent_len]
+
+        srel_acc = multiclass_accuracy(S_lab, labels, num_classes=S_lab.shape[1], ignore_index=S_lab_ignore_idx, average="micro")
         self.log(
-            f"{subset}:dep_rel_acc",
-            self.deprel_accuracy(S_lab, labels),
+            f"{subset}_deprel_acc",
+            srel_acc,
             on_step=False,
             on_epoch=True,
             prog_bar=True,
@@ -415,9 +357,8 @@ class UDTube(pl.LightningModule):
         )
         # getting losses
         S_arc = S_arc * attn_masks.unsqueeze(dim=1)
-        # longest_seq is the ignored index because it is the padding used for this task
         arc_loss = nn.functional.cross_entropy(S_arc, gold_heads, ignore_index=longest_seq)
-        rel_loss = self.deprel_loss(S_lab, labels)
+        rel_loss = nn.functional.cross_entropy(S_lab, labels, ignore_index=S_lab_ignore_idx)
 
         return arc_loss, rel_loss
 
@@ -494,7 +435,6 @@ class UDTube(pl.LightningModule):
 
         x_with_root = x.detach().clone()
         x = x[:, 1:, :]  # dropping the root token embedding for every task but dependency
-        x = self.dense_non_linear_layer(x) + x
 
         y_pos_logits = self.pos_head(x)
         y_xpos_logits = self.xpos_head(x)
