@@ -127,9 +127,10 @@ class UDTube(pl.LightningModule):
             nn.Linear(self.encoder_model.config.hidden_size, feats_out_label_size),
             nn.LeakyReLU()
         )
-        self.deps_head = BiaffineParser(
-            self.encoder_model.config.hidden_size, udtube_dropout, deprel_out_label_size
-        )
+        # TODO add support back
+        # self.deps_head = BiaffineParser(
+        #     self.encoder_model.config.hidden_size, udtube_dropout, deprel_out_label_size
+        # )
 
         # retrieving the LabelEncoders set up by the Dataset
         self.lemma_encoder = joblib.load(f"{self.path_name}/lemma_encoder.joblib")
@@ -250,7 +251,7 @@ class UDTube(pl.LightningModule):
     def configure_optimizers(self):
         """Prepare optimizer and schedule (linear warmup and decay)"""
         grouped_params = [
-            {'params': self.deps_head.parameters(), 'lr': self.udtube_learning_rate},
+            # {'params': self.deps_head.parameters(), 'lr': self.udtube_learning_rate},
             {'params': self.lemma_head.parameters(), 'lr': self.udtube_learning_rate},
             {'params': self.pos_head.parameters(), 'lr': self.udtube_learning_rate},
             {'params': self.xpos_head.parameters(), 'lr': self.udtube_learning_rate},
@@ -325,16 +326,6 @@ class UDTube(pl.LightningModule):
         gold_deprels = self.pad_seq(
             batch.deprels, tensor(S_lab_ignore_idx, device=self.device), longest_seq, return_long=True
         )
-        head_acc = multiclass_accuracy(S_arc.permute(1, 2, 0), gold_heads.T, num_classes=longest_seq, ignore_index=longest_seq, average="micro")
-        self.log(
-            f"{subset}_head_acc",
-            head_acc,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True,
-            logger=True,
-            batch_size=batch_size
-        )
         # A lot of tensor manipulation goes into making the S_lab tenable.
         # Credit: https://github.com/daandouwe/biaffine-dependency-parser/tree/9338c6fde6de5393ac1bbdd6a8bb152c2a015a6c
         heads = gold_heads.unsqueeze(1).unsqueeze(2)  # [batch, 1, 1, sent_len]
@@ -362,7 +353,7 @@ class UDTube(pl.LightningModule):
 
         return arc_loss, rel_loss
 
-    def _decode_to_str(self, sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, S_arc_logits, S_rel_logits):
+    def _decode_to_str(self, sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits):
         # argmaxing
         y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
         y_xpos_hat = torch.argmax(y_xpos_logits, dim=-1)
@@ -371,34 +362,13 @@ class UDTube(pl.LightningModule):
 
         # transforming to str
         y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch = [], [], [], []
-        y_s_arc_batch, y_s_rel_batch = [], []
         for batch_idx, w_i in enumerate(words):
             lemmas_i = []
             seq_len = len(w_i)  # used to get rid of padding
-            # Handle Deps
-            # https://github.com/daandouwe/biaffine-dependency-parser/blob/master/predict.py
-            S_arc_i = S_arc_logits[batch_idx, :seq_len + 1, :seq_len + 1]
-            S_rel_i = S_rel_logits[batch_idx, :, :seq_len + 1, :seq_len + 1]
-
-            S_arc_i = nn.functional.softmax(nn.functional.softmax(S_arc_i, dim=-1), dim=0).numpy()   # for mst
-            S_rel_i = S_rel_i.cpu()
-
-            heads = mst(S_arc_i)
-
-            # Predict labels
-            select = torch.LongTensor(heads).unsqueeze(0).expand(S_rel_i.size(0), -1)
-            selected = torch.gather(S_rel_i, 1, select.unsqueeze(1)).squeeze(1)
-            _, S_rel_i = selected.max(dim=0)
-
-            # dropping ROOT
-            heads = heads[1:]
-            S_rel_i = S_rel_i[1:]
 
             y_pos_str_batch.append(self.upos_encoder.inverse_transform(y_pos_hat[batch_idx][:seq_len].cpu()))
             y_xpos_str_batch.append(self.xpos_encoder.inverse_transform(y_xpos_hat[batch_idx][:seq_len].cpu()))
             y_feats_hat_batch.append(self.ufeats_encoder.inverse_transform(y_feats_hat[batch_idx][:seq_len].cpu()))
-            y_s_rel_batch.append(self.deprel_encoder.inverse_transform(S_rel_i.cpu()))
-            y_s_arc_batch.append([h.item() for h in heads]) # these were never encoded!
 
             # lemmas work through rule classification, so we have to also apply the rules.
             lemma_rules = self.lemma_encoder.inverse_transform(y_lemma_hat[batch_idx][:seq_len].cpu())
@@ -408,7 +378,7 @@ class UDTube(pl.LightningModule):
                 lemmas_i.append(lemma)
             y_lemma_str_batch.append(lemmas_i)
 
-        return sentences, words, y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch, y_s_arc_batch, y_s_rel_batch
+        return sentences, words, y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch
 
     def forward(self, batch: Union[TextBatch, ConlluBatch]):
         # getting raw embeddings
@@ -440,16 +410,16 @@ class UDTube(pl.LightningModule):
         y_xpos_logits = self.xpos_head(x)
         y_lemma_logits = self.lemma_head(x)
         y_feats_logits = self.feats_head(x)
-        S_arc, S_lab = self.deps_head(x_with_root)
+        # S_arc, S_lab = self.deps_head(x_with_root)
 
-        return batch.sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, S_arc, S_lab, masks
+        return batch.sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, masks
 
     def training_step(
             self, batch: ConlluBatch, batch_idx: int, subset: str = "train"
     ):
         response = {}
         batch_size = len(batch)
-        sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, S_arc, S_lab, masks = self(batch)
+        sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, masks = self(batch)
 
         pos_loss = self._get_loss_from_head(
             batch.pos,
@@ -483,17 +453,18 @@ class UDTube(pl.LightningModule):
         )
         response["feats_loss"] = feats_loss
 
+        # TODO add back
         # getting loss from dep head, it's different from the rest
-        arc_loss, rel_loss = self._get_loss_from_deps_head(
-            S_arc, S_lab,
-            batch,
-            masks,
-            subset=subset)
-        response["arc_loss"] = arc_loss
-        response["rel_loss"] = rel_loss
+        # arc_loss, rel_loss = self._get_loss_from_deps_head(
+        #     S_arc, S_lab,
+        #     batch,
+        #     masks,
+        #     subset=subset)
+        # response["arc_loss"] = arc_loss
+        # response["rel_loss"] = rel_loss
 
         # combining the loss of the heads
-        loss = torch.mean(torch.stack([pos_loss, xpos_loss, lemma_loss, feats_loss, arc_loss, rel_loss]))
+        loss = torch.mean(torch.stack([pos_loss, xpos_loss, lemma_loss, feats_loss]))
         response["loss"] = loss
 
         self.log(
