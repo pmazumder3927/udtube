@@ -50,11 +50,6 @@ class UDTubeCLI(LightningCLI):
             "model.feats_out_label_size",
             apply_on="instantiate",
         )
-        parser.link_arguments(
-            "data.deprel_classes_cnt",
-            "model.deprel_out_label_size",
-            apply_on="instantiate"
-        )
 
     def before_instantiate_classes(self) -> None:
         if self.subcommand == "predict":
@@ -77,14 +72,17 @@ class UDTube(pl.LightningModule):
             xpos_out_label_size: int = 2,
             lemma_out_label_size: int = 2,
             feats_out_label_size: int = 2,
-            deprel_out_label_size: int = 2,
             udtube_dropout: float = 0.3,
             encoder_dropout: float = 0.5,
             udtube_learning_rate: float = 5e-3,
             encoder_model_learning_rate: float = 2e-5,
             pooling_layers: int = 4,
             reverse_edits: bool = False,
-            checkpoint: str = None
+            checkpoint: str = None,
+            pos_toggle: bool = True,
+            xpos_toggle: bool = True,
+            lemma_toggle: bool = True,
+            feats_toggle: bool = True
     ):
         """Initializes the instance based on user input.
 
@@ -99,6 +97,10 @@ class UDTube(pl.LightningModule):
             encoder_model_learning_rate: The learning rate of only the encoder
             pooling_layers: The amount of layers used for embedding calculation
             checkpoint: The model checkpoint file
+            pos_toggle: Whether the model will do POS tagging or not
+            xpos_toggle: Whether not the model will do XPOS tagging or not
+            lemma_toggle: Whether the model will do lemmatization or not
+            feats_toggle: Whether the model will do Ufeats tagging or not
         """
         super().__init__()
         self._validate_input(
@@ -111,22 +113,32 @@ class UDTube(pl.LightningModule):
         self.pooling_layers = pooling_layers
 
         self.encoder_model = self._load_model(model_name)
-        self.pos_head = nn.Sequential(
-            nn.Linear(self.encoder_model.config.hidden_size, pos_out_label_size),
-            nn.LeakyReLU()
-        )
-        self.xpos_head = nn.Sequential(
-            nn.Linear(self.encoder_model.config.hidden_size, xpos_out_label_size),
-            nn.LeakyReLU()
-        )
-        self.lemma_head = nn.Sequential(
-            nn.Linear(self.encoder_model.config.hidden_size, lemma_out_label_size),
-            nn.LeakyReLU()
-        )
-        self.feats_head = nn.Sequential(
-            nn.Linear(self.encoder_model.config.hidden_size, feats_out_label_size),
-            nn.LeakyReLU()
-        )
+        if pos_toggle:
+            self.pos_head = nn.Sequential(
+                nn.Linear(self.encoder_model.config.hidden_size, pos_out_label_size),
+                nn.LeakyReLU()
+            )
+        if xpos_toggle:
+            self.xpos_head = nn.Sequential(
+                nn.Linear(self.encoder_model.config.hidden_size, xpos_out_label_size),
+                nn.LeakyReLU()
+            )
+        if lemma_toggle:
+            self.lemma_head = nn.Sequential(
+                nn.Linear(self.encoder_model.config.hidden_size, lemma_out_label_size),
+                nn.LeakyReLU()
+            )
+        if feats_toggle:
+            self.feats_head = nn.Sequential(
+                nn.Linear(self.encoder_model.config.hidden_size, feats_out_label_size),
+                nn.LeakyReLU()
+            )
+
+        self.pos_toggle = pos_toggle
+        self.xpos_toggle = xpos_toggle
+        self.lemma_toggle = lemma_toggle
+        self.feats_toggle = feats_toggle
+
         # TODO add support back
         # self.deps_head = BiaffineParser(
         #     self.encoder_model.config.hidden_size, udtube_dropout, deprel_out_label_size
@@ -134,10 +146,9 @@ class UDTube(pl.LightningModule):
 
         # retrieving the LabelEncoders set up by the Dataset
         self.lemma_encoder = joblib.load(f"{self.path_name}/lemma_encoder.joblib")
-        self.ufeats_encoder = joblib.load(f"{self.path_name}/ufeats_encoder.joblib")
-        self.upos_encoder = joblib.load(f"{self.path_name}/upos_encoder.joblib")
+        self.feats_encoder = joblib.load(f"{self.path_name}/ufeats_encoder.joblib")
+        self.pos_encoder = joblib.load(f"{self.path_name}/upos_encoder.joblib")
         self.xpos_encoder = joblib.load(f"{self.path_name}/xpos_encoder.joblib")
-        self.deprel_encoder = joblib.load(f"{self.path_name}/deprel_encoder.joblib")
 
         self.e_script = (
             edit_scripts.ReverseEditScript
@@ -269,9 +280,10 @@ class UDTube(pl.LightningModule):
             batch_size: int,
             task_name: str,
             subset: str = "train",
+            ignore_index: int = 0
     ):
         num_classes = y_pred.shape[1]
-        ignore_index = num_classes - 1
+        # getting the pad
         acc = multiclass_accuracy(y_pred.permute(2, 1, 0), y_true.T, num_classes=num_classes,
                                   ignore_index=ignore_index, average="micro")
         self.log(
@@ -284,16 +296,19 @@ class UDTube(pl.LightningModule):
             batch_size=batch_size,
         )
 
-    def _get_loss_from_head(
+    def _call_head(
             self,
             y_gold,
             logits,
             task_name="pos",
             subset="train",
+            return_loss=True,
     ):
         batch_size, longest_seq, num_classes = logits.shape
         # ignore_idx is used for padding!
-        ignore_idx = num_classes - 1
+        lencoder = getattr(self, f"{task_name}_encoder")
+        ignore_idx = int(lencoder.transform(["[PAD]"])[0]) # TODO better way?
+
         pad = tensor(ignore_idx, device=self.device)
         y_gold_tensor = self.pad_seq(
             y_gold, pad, longest_seq, return_long=True
@@ -303,11 +318,13 @@ class UDTube(pl.LightningModule):
         # but CE & metrics want ( minibatch X Classes X sequence_len ); (minibatch, C, d0...dk) & (N, C, ..) in the docs
         logits = logits.permute(0, 2, 1)
 
-        loss = nn.functional.cross_entropy(logits, y_gold_tensor, ignore_index=num_classes - 1)
         self.log_metrics(
-            logits, y_gold_tensor, batch_size, task_name, subset=subset
+            logits, y_gold_tensor, batch_size, task_name, subset=subset, ignore_index=ignore_idx
         )
-        return loss
+
+        if return_loss:
+            loss = nn.functional.cross_entropy(logits, y_gold_tensor, ignore_index=ignore_idx)
+            return loss
 
     def _get_loss_from_deps_head(self, S_arc, S_lab, batch, attn_masks, subset="train"):
         batch_size = len(batch)
@@ -315,7 +332,8 @@ class UDTube(pl.LightningModule):
         # Removing root
         S_arc = S_arc[:, 1:, 1:]
         S_lab = S_lab[:, :, 1:, 1:]
-        S_lab_ignore_idx = S_lab.shape[1] - 1
+        # S_lab_ignore_idx = S_lab.shape[1] - 1
+        S_lab_ignore_idx = None
         attn_masks = attn_masks[:, 1:]
         longest_seq = S_arc.shape[1]
 
@@ -355,10 +373,14 @@ class UDTube(pl.LightningModule):
 
     def _decode_to_str(self, sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits):
         # argmaxing
-        y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
-        y_xpos_hat = torch.argmax(y_xpos_logits, dim=-1)
-        y_lemma_hat = torch.argmax(y_lemma_logits, dim=-1)
-        y_feats_hat = torch.argmax(y_feats_logits, dim=-1)
+        if self.pos_toggle:
+            y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
+        if self.xpos_toggle:
+            y_xpos_hat = torch.argmax(y_xpos_logits, dim=-1)
+        if self.lemma_toggle:
+            y_lemma_hat = torch.argmax(y_lemma_logits, dim=-1)
+        if self.feats_toggle:
+            y_feats_hat = torch.argmax(y_feats_logits, dim=-1)
 
         # transforming to str
         y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch = [], [], [], []
@@ -366,17 +388,21 @@ class UDTube(pl.LightningModule):
             lemmas_i = []
             seq_len = len(w_i)  # used to get rid of padding
 
-            y_pos_str_batch.append(self.upos_encoder.inverse_transform(y_pos_hat[batch_idx][:seq_len].cpu()))
-            y_xpos_str_batch.append(self.xpos_encoder.inverse_transform(y_xpos_hat[batch_idx][:seq_len].cpu()))
-            y_feats_hat_batch.append(self.ufeats_encoder.inverse_transform(y_feats_hat[batch_idx][:seq_len].cpu()))
+            if self.pos_toggle:
+                y_pos_str_batch.append(self.pos_encoder.inverse_transform(y_pos_hat[batch_idx][:seq_len].cpu()))
+            if self.xpos_toggle:
+                y_xpos_str_batch.append(self.xpos_encoder.inverse_transform(y_xpos_hat[batch_idx][:seq_len].cpu()))
+            if self.feats_toggle:
+                y_feats_hat_batch.append(self.feats_encoder.inverse_transform(y_feats_hat[batch_idx][:seq_len].cpu()))
 
-            # lemmas work through rule classification, so we have to also apply the rules.
-            lemma_rules = self.lemma_encoder.inverse_transform(y_lemma_hat[batch_idx][:seq_len].cpu())
-            for i, rule in enumerate(lemma_rules):
-                rscript = self.e_script.fromtag(rule)
-                lemma = rscript.apply(words[batch_idx][i])
-                lemmas_i.append(lemma)
-            y_lemma_str_batch.append(lemmas_i)
+            if self.lemma_toggle:
+                # lemmas work through rule classification, so we have to also apply the rules.
+                lemma_rules = self.lemma_encoder.inverse_transform(y_lemma_hat[batch_idx][:seq_len].cpu())
+                for i, rule in enumerate(lemma_rules):
+                    rscript = self.e_script.fromtag(rule)
+                    lemma = rscript.apply(words[batch_idx][i])
+                    lemmas_i.append(lemma)
+                y_lemma_str_batch.append(lemmas_i)
 
         return sentences, words, y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch
 
@@ -406,10 +432,10 @@ class UDTube(pl.LightningModule):
         x_with_root = x.detach().clone()
         x = x[:, 1:, :]  # dropping the root token embedding for every task but dependency
 
-        y_pos_logits = self.pos_head(x)
-        y_xpos_logits = self.xpos_head(x)
-        y_lemma_logits = self.lemma_head(x)
-        y_feats_logits = self.feats_head(x)
+        y_pos_logits = self.pos_head(x) if self.pos_toggle else None
+        y_xpos_logits = self.xpos_head(x) if self.xpos_toggle else None
+        y_lemma_logits = self.lemma_head(x) if self.lemma_toggle else None
+        y_feats_logits = self.feats_head(x) if self.feats_toggle else None
         # S_arc, S_lab = self.deps_head(x_with_root)
 
         return batch.sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, masks
@@ -421,37 +447,41 @@ class UDTube(pl.LightningModule):
         batch_size = len(batch)
         sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, masks = self(batch)
 
-        pos_loss = self._get_loss_from_head(
-            batch.pos,
-            y_pos_logits,
-            task_name="pos",
-            subset=subset,
-        )
-        response["pos_loss"] = pos_loss
+        if self.pos_toggle:
+            pos_loss = self._call_head(
+                batch.pos,
+                y_pos_logits,
+                task_name="pos",
+                subset=subset,
+            )
+            response["pos_loss"] = pos_loss
 
-        xpos_loss = self._get_loss_from_head(
-            batch.xpos,
-            y_xpos_logits,
-            task_name="xpos",
-            subset=subset
-        )
-        response["xpos_loss"] = xpos_loss
+        if self.xpos_toggle:
+            xpos_loss = self._call_head(
+                batch.xpos,
+                y_xpos_logits,
+                task_name="xpos",
+                subset=subset
+            )
+            response["xpos_loss"] = xpos_loss
 
-        lemma_loss = self._get_loss_from_head(
-            batch.lemmas,
-            y_lemma_logits,
-            task_name="lemma",
-            subset=subset,
-        )
-        response["lemma_loss"] = lemma_loss
+        if self.lemma_toggle:
+            lemma_loss = self._call_head(
+                batch.lemmas,
+                y_lemma_logits,
+                task_name="lemma",
+                subset=subset,
+            )
+            response["lemma_loss"] = lemma_loss
 
-        feats_loss = self._get_loss_from_head(
-            batch.feats,
-            y_feats_logits,
-            task_name="feats",
-            subset=subset,
-        )
-        response["feats_loss"] = feats_loss
+        if self.feats_toggle:
+            feats_loss = self._call_head(
+                batch.feats,
+                y_feats_logits,
+                task_name="feats",
+                subset=subset,
+            )
+            response["feats_loss"] = feats_loss
 
         # TODO add back
         # getting loss from dep head, it's different from the rest
@@ -463,8 +493,8 @@ class UDTube(pl.LightningModule):
         # response["arc_loss"] = arc_loss
         # response["rel_loss"] = rel_loss
 
-        # combining the loss of the heads
-        loss = torch.mean(torch.stack([pos_loss, xpos_loss, lemma_loss, feats_loss]))
+        # combining the loss of the active heads
+        loss = torch.mean(torch.stack([l for l in response.values()]))
         response["loss"] = loss
 
         self.log(
@@ -489,8 +519,15 @@ class UDTube(pl.LightningModule):
         return self.training_step(batch, batch_idx, subset="val")
 
     def test_step(self, batch: ConlluBatch, batch_idx: int):
-        *res, _ = self(batch)
-        return self._decode_to_str(*res)
+        sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, masks = self(batch)
+
+        # these calls log accuracy
+        self._call_head(batch.pos, y_pos_logits, task_name="pos", subset="test", return_loss=False)
+        self._call_head(batch.xpos, y_xpos_logits, task_name="xpos", subset="test", return_loss=False)
+        self._call_head(batch.lemmas, y_lemma_logits, task_name="lemma", subset="test", return_loss=False)
+        self._call_head(batch.feats, y_feats_logits, task_name="feats", subset="test", return_loss=False)
+
+        return self._decode_to_str(sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits)
 
     def predict_step(self, batch: TextBatch, batch_idx: int):
         *res, _ = self(batch)

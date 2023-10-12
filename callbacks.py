@@ -32,10 +32,10 @@ class CustomWriter(BasePredictionWriter):
                         space_after = "SpaceAfter=No" if words[batch_idx][item_idx + 1] in string.punctuation else "_"
                     print(item_idx + 1, # 1-indexing, not 0-indexing
                           words[batch_idx][item_idx],
-                          lemmas[batch_idx][item_idx],
-                          poses[batch_idx][item_idx],
-                          xposes[batch_idx][item_idx],
-                          feats[batch_idx][item_idx],
+                          lemmas[batch_idx][item_idx] if lemmas else "_",
+                          poses[batch_idx][item_idx] if poses else "_",
+                          xposes[batch_idx][item_idx] if xposes else "_",
+                          feats[batch_idx][item_idx] if feats else "_",
                           "_",
                           "_",
                           "_",  # doing nothing with this for now

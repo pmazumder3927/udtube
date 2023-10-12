@@ -74,7 +74,7 @@ class ConlluDataModule(pl.LightningDataModule):
         self.val_dataset = ConlluMapDataset(val_dataset, reverse_edits=self.reverse_edits, path_name=path_name,
                                             convert_to_um=convert_to_um, train=False)
         self.predict_dataset = TextIterDataset(predict_dataset)
-        self.test_dataset = ConlluMapDataset(test_dataset, path_name=path_name,
+        self.test_dataset = ConlluMapDataset(test_dataset, reverse_edits=self.reverse_edits, path_name=path_name,
                                              convert_to_um=convert_to_um, train=False)
         with open(f"{path_name}/multiword_dict.json", "r") as mw_tb:
             self.multiword_table = json.load(mw_tb)
@@ -83,12 +83,11 @@ class ConlluDataModule(pl.LightningDataModule):
         self.checkpoint = checkpoint
         if self.train_dataset:
             # this is a bit hacky, but not sure how to do this with setup & CLI
-            # + 2 is the padding & unk tok
-            self.pos_classes_cnt = len(self.train_dataset.UPOS_CLASSES) + 2
-            self.xpos_classes_cnt = len(self.train_dataset.xpos_classes) + 2
-            self.lemma_classes_cnt = len(self.train_dataset.lemma_classes) + 2
-            self.feats_classes_cnt = len(self.train_dataset.feats_classes) + 2
-            self.deprel_classes_cnt = len(self.train_dataset.deprel_classes) + 2
+            # + 3 is the padding & unk tok & _
+            self.pos_classes_cnt = len(self.train_dataset.UPOS_CLASSES) + 3
+            self.xpos_classes_cnt = len(self.train_dataset.xpos_classes) + 3
+            self.lemma_classes_cnt = len(self.train_dataset.lemma_classes) + 3
+            self.feats_classes_cnt = len(self.train_dataset.feats_classes) + 3
         else:
             self._set_values_from_path_name()
 
@@ -99,7 +98,6 @@ class ConlluDataModule(pl.LightningDataModule):
         self.xpos_classes_cnt = hps.get("xpos_out_label_size", 0)
         self.lemma_classes_cnt = hps.get("lemma_out_label_size", 0)
         self.feats_classes_cnt = hps.get("feats_out_label_size", 0)
-        self.deprel_classes_cnt = hps.get("deprel_out_label_size", 0)
 
     def _adjust_sentence(self, sentences, lang_with_space=True):
         delimiter = " " if lang_with_space else ""  # TODO does this actually make sense? Will find out when I try zh

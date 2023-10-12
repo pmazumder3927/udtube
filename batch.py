@@ -19,8 +19,6 @@ class ConlluBatch(nn.Module):
         xpos: Iterable[List[int]],
         lemma: Iterable[List[int]],
         feats: Iterable[List[int]],
-        head: Iterable[List[int]],
-        deprel: Iterable[List[int]]
     ):
         """Initializes the instance based on what's passed to it by the Trainer collate_fn.
 
@@ -44,8 +42,6 @@ class ConlluBatch(nn.Module):
         self.xpos = xpos
         self.lemmas = lemma
         self.feats = feats
-        self.heads = head
-        self.deprels = deprel
 
     def __len__(self):
         return len(self.sentences)

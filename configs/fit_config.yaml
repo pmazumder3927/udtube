@@ -28,6 +28,6 @@ data:
   train_dataset: el_gdt-ud-train.conllu
   val_dataset: el_gdt-ud-dev.conllu
   batch_size: 8
-  convert_to_um: true
+  convert_to_um: false
   reverse_edits: true
   language: el
