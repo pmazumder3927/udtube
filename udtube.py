@@ -371,7 +371,8 @@ class UDTube(pl.LightningModule):
 
         return arc_loss, rel_loss
 
-    def _decode_to_str(self, sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits):
+    def _decode_to_str(self, sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits,
+                       y_feats_logits, replacements=None):
         # argmaxing
         if self.pos_toggle:
             y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
@@ -404,7 +405,7 @@ class UDTube(pl.LightningModule):
                     lemmas_i.append(lemma)
                 y_lemma_str_batch.append(lemmas_i)
 
-        return sentences, words, y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch
+        return sentences, words, y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch, replacements
 
     def forward(self, batch: Union[TextBatch, ConlluBatch]):
         # getting raw embeddings
@@ -527,11 +528,12 @@ class UDTube(pl.LightningModule):
         self._call_head(batch.lemmas, y_lemma_logits, task_name="lemma", subset="test", return_loss=False)
         self._call_head(batch.feats, y_feats_logits, task_name="feats", subset="test", return_loss=False)
 
-        return self._decode_to_str(sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits)
+        return self._decode_to_str(sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits,
+                                   y_feats_logits, replacements=batch.replacements)
 
     def predict_step(self, batch: TextBatch, batch_idx: int):
         *res, _ = self(batch)
-        return self._decode_to_str(*res)
+        return self._decode_to_str(*res, replacements=batch.replacements)
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ class CustomWriter(BasePredictionWriter):
         super().__init__("batch") # We only want to write at batch intervals, not epoch
         self.output_file = output_file
 
-    def _write_to_conllu(self, sentences, words, poses, xposes, lemmas, feats):
+    def _write_to_conllu(self, sentences, words, poses, xposes, lemmas, feats, replacements):
         # writing the output file
         with open(self.output_file, 'a') as sink:
             for batch_idx in range(len(words)):
@@ -24,7 +24,19 @@ class CustomWriter(BasePredictionWriter):
                     f"# text = {sentences[batch_idx]}",
                     sep='\t', file=sink
                 )
+                repl = replacements[batch_idx]
                 for item_idx in range(len(words[batch_idx])):
+                    if repl:
+                        # this handling is to write multword tokens
+                        mws, parts = zip(*repl)
+                        for i, parts in enumerate(parts):
+                            p_ = parts.split()
+                            if p_[0] == words[batch_idx][item_idx] and item_idx < len(words[batch_idx]) - len(p_):
+                                if p_ == [w for w in words[batch_idx][item_idx:item_idx + len(p_)]]:
+                                    # writing multiword tok
+                                    print(f"{item_idx + 1}-{item_idx + len(p_) + 1}",  # 1-indexing, not 0-indexing
+                                          mws[i], "_", "_", "_", "_", "_", "_", "_", "_", sep='\t', file=sink)
+
                     space_after = "_"
                     if words[batch_idx][item_idx] == ConlluMapDataset.PAD_TAG:
                         continue

@@ -1,4 +1,4 @@
-"""An evaluation script to confirm the performance of a model"""
+"""An very simple evaluation script to confirm the performance of a model"""
 
 import conllu
 import argparse
@@ -22,28 +22,53 @@ def set_up_parser():
 if __name__ == "__main__":
     parser = set_up_parser()
     args = parser.parse_args()
+
+    gf = open(args.gold_file)
     gold_data = conllu.parse_incr(
-        args.gold_file, field_parsers=OVERRIDDEN_FIELD_PARSERS
+        gf, field_parsers=OVERRIDDEN_FIELD_PARSERS
     )
+
+    pf = open(args.pred_file)
     pred_data = conllu.parse_incr(
-        args.pred_file, field_parsers=OVERRIDDEN_FIELD_PARSERS
+        pf, field_parsers=OVERRIDDEN_FIELD_PARSERS
     )
 
     correct_pos = 0
+    correct_xpos = 0
     correct_lemma = 0
     correct_feats = 0
     total = 0
 
     for gold_list, pred_list in zip(gold_data, pred_data):
-        assert (
-            gold_list == pred_list
-        ), "There's likely an issue with tokenization / file writing"
-        for gold_tok, pred_tok in zip(gold_data, pred_data):
+        shorter_seq = min(len(gold_list), len(pred_list))
+        gold_idx = 0
+        pred_idx = 0
+        for _ in range(shorter_seq):
+            gold_tok = gold_list[gold_idx]
+            pred_tok = pred_list[pred_idx]
+            if gold_tok["form"] != pred_tok["form"] and "[UNK]" not in pred_tok["form"]:
+                # trying to fix alignment, but only looking within +/- 1 (only if not an [UNK] word)
+                if len(pred_list) > pred_idx + 1 and gold_tok["form"] == pred_list[pred_idx + 1]["form"]:
+                    pred_idx += 1
+                    pred_tok = pred_list[pred_idx]
+                if len(gold_list) > gold_idx + 1 and gold_list[gold_idx + 1] == pred_tok["form"]:
+                    gold_idx += 1
+                    gold_tok = gold_list[gold_idx]
+            if isinstance(gold_tok["id"], tuple) and isinstance(pred_tok["id"], tuple):
+                # not checking acc of multiword tokens, since they arent' annotated
+                continue
             correct_pos += gold_tok["upos"] == pred_tok["upos"]
+            correct_xpos += gold_tok["xpos"] == pred_tok["xpos"]
             correct_lemma += gold_tok["lemma"] == pred_tok["lemma"]
-            correct_feats += gold_tok["ufeats"] == pred_tok["ufeats"]
+            correct_feats += gold_tok["feats"] == pred_tok["feats"]
             total += 1
+            gold_idx += 1
+            pred_idx += 1
 
-    print("POS WL ACC:", correct_pos / total)
-    print("LEMMA WL ACC:", correct_lemma / total)
-    print("UFEATS WL ACC:", correct_feats / total)
+    print("POS ACC:", correct_pos / total)
+    print("XPOS ACC:", correct_xpos / total)
+    print("LEMMA ACC:", correct_lemma / total)
+    print("UFEATS ACC:", correct_feats / total)
+
+    gf.close()
+    pf.close()
