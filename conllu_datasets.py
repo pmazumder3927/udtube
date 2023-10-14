@@ -55,7 +55,6 @@ class ConlluMapDataset(Dataset):
         "SYM",
         "VERB",
         "X",
-        "_",
     ]
 
     def __init__(self, conllu_file: str, reverse_edits: bool = False, path_name: str = "UDTube",
@@ -79,16 +78,14 @@ class ConlluMapDataset(Dataset):
         )
         # setting up label encoders
         if conllu_file:
-            self.upos_encoder = LabelEncoder()
-            self.xpos_encoder = LabelEncoder()
-            self.ufeats_encoder = LabelEncoder()
-            self.lemma_encoder = LabelEncoder()
-            self.deprel_encoder = LabelEncoder()
             self.xpos_classes = self._get_all_classes("xpos")
             self.feats_classes = self._get_all_classes("feats")
             self.lemma_classes = self._get_all_classes("lemma")
-            self.deprel_classes = self._get_all_classes("deprel")
             if train:
+                self.upos_encoder = LabelEncoder()
+                self.xpos_encoder = LabelEncoder()
+                self.ufeats_encoder = LabelEncoder()
+                self.lemma_encoder = LabelEncoder()
                 self._fit_label_encoders()
                 self.multiword_table = {}
             else:
@@ -114,12 +111,10 @@ class ConlluMapDataset(Dataset):
         return conllu_file
 
     def _fit_label_encoders(self):
-        # this ensures that the PAD ends up last and the UNK ends up at 0
-        self.upos_encoder.fit([self.UNK_TAG] + self.UPOS_CLASSES + [self.PAD_TAG])
-        self.xpos_encoder.fit([self.UNK_TAG] + self.xpos_classes + [self.PAD_TAG])
-        self.ufeats_encoder.fit([self.UNK_TAG] + self.feats_classes + [self.PAD_TAG])
-        self.lemma_encoder.fit([self.UNK_TAG] + self.lemma_classes + [self.PAD_TAG])
-        self.deprel_encoder.fit([self.UNK_TAG] + self.deprel_classes + [self.PAD_TAG])
+        self.upos_encoder.fit(self.UPOS_CLASSES + [self.PAD_TAG, self.UNK_TAG, "_"])
+        self.xpos_encoder.fit(self.xpos_classes + [self.PAD_TAG, self.UNK_TAG, "_"])
+        self.ufeats_encoder.fit(self.feats_classes + [self.PAD_TAG, self.UNK_TAG, "_"])
+        self.lemma_encoder.fit(self.lemma_classes + [self.PAD_TAG, self.UNK_TAG, "_"])
         # saving all the encoders
         if not os.path.exists(self.path_name):
             os.mkdir(self.path_name)
@@ -128,14 +123,12 @@ class ConlluMapDataset(Dataset):
         joblib.dump(self.xpos_encoder, f'{self.path_name}/xpos_encoder.joblib')
         joblib.dump(self.ufeats_encoder, f'{self.path_name}/ufeats_encoder.joblib')
         joblib.dump(self.lemma_encoder, f'{self.path_name}/lemma_encoder.joblib')
-        joblib.dump(self.deprel_encoder, f'{self.path_name}/deprel_encoder.joblib')
 
     def _load_label_encoders(self):
         self.lemma_encoder = joblib.load(f"{self.path_name}/lemma_encoder.joblib")
         self.ufeats_encoder = joblib.load(f"{self.path_name}/ufeats_encoder.joblib")
         self.upos_encoder = joblib.load(f"{self.path_name}/upos_encoder.joblib")
         self.xpos_encoder = joblib.load(f"{self.path_name}/xpos_encoder.joblib")
-        self.deprel_encoder = joblib.load(f"{self.path_name}/deprel_encoder.joblib")
 
     def _get_all_classes(self, lname: str):
         """helper function to get all the classes observed in the training set"""
@@ -163,16 +156,11 @@ class ConlluMapDataset(Dataset):
         with open(self.conllu_file) as f:
             dt = conllu.parse_incr(f, field_parsers=OVERRIDDEN_FIELD_PARSERS)
             for tk_list in dt:
-                if len(tk_list) == 1:
-                    # this is likely a date or meta data
-                    continue
                 sentence = tk_list.metadata["text"]
                 uposes = []
                 xposes = []
                 lemma_rules = []
                 ufeats = []
-                heads = []
-                deprels = []
                 for i, tok in enumerate(tk_list):
                     if isinstance(tok["id"], tuple):
                         if train:
@@ -196,25 +184,18 @@ class ConlluMapDataset(Dataset):
                     upos_ = tok["upos"] if tok["upos"] in self.upos_encoder.classes_ else self.UNK_TAG
                     xpos_ = tok["xpos"] if tok["xpos"] in self.xpos_encoder.classes_ else self.UNK_TAG
                     ufeat_ = tok["feats"] if tok["feats"] in self.ufeats_encoder.classes_ else self.UNK_TAG
-                    deprel_ = tok["deprel"] if tok['deprel'] in self.deprel_encoder.classes_ else self.UNK_TAG
-                    # heads is a little different
-                    head_ = tok["head"] if isinstance(tok["head"], int) else len(tk_list) # the sequence length is the unknown tag
                     if l_rule not in self.lemma_encoder.classes_:
                         l_rule = self.UNK_TAG
                     uposes.append(upos_)
                     xposes.append(xpos_)
                     lemma_rules.append(l_rule)
                     ufeats.append(ufeat_)
-                    heads.append(head_)
-                    deprels.append(deprel_)
                 uposes = self.upos_encoder.transform(uposes)
                 xposes = self.xpos_encoder.transform(xposes)
                 lemma_rules = self.lemma_encoder.transform(lemma_rules)
                 ufeats = self.ufeats_encoder.transform(ufeats)
-                deprels = self.deprel_encoder.transform(deprels)
                 # heads do not need to be encoded, they are already numerical. Encoding them here causes problems later
-                heads = np.array(heads).T
-                data.append((sentence, uposes, xposes, lemma_rules, ufeats, heads, deprels))
+                data.append((sentence, uposes, xposes, lemma_rules, ufeats))
             if train:
                 with open(f'{self.path_name}/multiword_dict.json', 'w') as mw_tb:
                     json.dump(self.multiword_table, mw_tb, ensure_ascii=False)

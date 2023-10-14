@@ -7,10 +7,29 @@ import spacy_udpipe
 
 import lightning.pytorch as pl
 from torch.utils.data import DataLoader
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, T5TokenizerFast
+from tokenizers import Encoding
 
 from batch import ConlluBatch, TextBatch
 from conllu_datasets import ConlluMapDataset, TextIterDataset
+
+ROOT_TOKEN = "ROOT"
+
+class CustomEncoding():
+    def __init__(self, word_ids, tokens):
+        self.word_ids = word_ids
+        self.tokens = tokens
+
+    def word_to_tokens(self, word_id):
+        # TODO: less naive approach
+        start = self.word_ids.index(word_id)
+        stop = start + 1
+        for i, idx in enumerate(self.word_ids[start + 1:]):
+            if idx == word_id:
+                stop += 1
+            else:
+                break
+        return start, stop
 
 
 class ConlluDataModule(pl.LightningDataModule):
@@ -55,7 +74,8 @@ class ConlluDataModule(pl.LightningDataModule):
         self.val_dataset = ConlluMapDataset(val_dataset, reverse_edits=self.reverse_edits, path_name=path_name,
                                             convert_to_um=convert_to_um, train=False)
         self.predict_dataset = TextIterDataset(predict_dataset)
-        self.test_dataset = ConlluMapDataset(test_dataset, convert_to_um=convert_to_um)
+        self.test_dataset = ConlluMapDataset(test_dataset, reverse_edits=self.reverse_edits, path_name=path_name,
+                                             convert_to_um=convert_to_um, train=False)
         with open(f"{path_name}/multiword_dict.json", "r") as mw_tb:
             self.multiword_table = json.load(mw_tb)
         self.batch_size = batch_size
@@ -63,12 +83,11 @@ class ConlluDataModule(pl.LightningDataModule):
         self.checkpoint = checkpoint
         if self.train_dataset:
             # this is a bit hacky, but not sure how to do this with setup & CLI
-            # + 2 is the padding & unk tok
-            self.pos_classes_cnt = len(self.train_dataset.UPOS_CLASSES) + 2
-            self.xpos_classes_cnt = len(self.train_dataset.xpos_classes) + 2
-            self.lemma_classes_cnt = len(self.train_dataset.lemma_classes) + 2
-            self.feats_classes_cnt = len(self.train_dataset.feats_classes) + 2
-            self.deprel_classes_cnt = len(self.train_dataset.deprel_classes) + 2
+            # + 3 is the padding & unk tok & _
+            self.pos_classes_cnt = len(self.train_dataset.UPOS_CLASSES) + 3
+            self.xpos_classes_cnt = len(self.train_dataset.xpos_classes) + 3
+            self.lemma_classes_cnt = len(self.train_dataset.lemma_classes) + 3
+            self.feats_classes_cnt = len(self.train_dataset.feats_classes) + 3
         else:
             self._set_values_from_path_name()
 
@@ -76,9 +95,9 @@ class ConlluDataModule(pl.LightningDataModule):
         assert self.checkpoint, "model checkpoint must not be none"
         hps = torch.load(self.checkpoint)["hyper_parameters"]
         self.pos_classes_cnt = hps.get("pos_out_label_size", 0)
+        self.xpos_classes_cnt = hps.get("xpos_out_label_size", 0)
         self.lemma_classes_cnt = hps.get("lemma_out_label_size", 0)
         self.feats_classes_cnt = hps.get("feats_out_label_size", 0)
-        self.deprel_classes_cnt = hps.get("deprel_out_label_size", 0)
 
     def _adjust_sentence(self, sentences, lang_with_space=True):
         delimiter = " " if lang_with_space else ""  # TODO does this actually make sense? Will find out when I try zh
@@ -100,6 +119,7 @@ class ConlluDataModule(pl.LightningDataModule):
         batch_toks = []
         for s in sentences:
             toks = [t.text for t in self.pretokenizer(s)]
+            toks = [ROOT_TOKEN] + toks # root token is needed for dependency parsing
             batch_toks.append(toks)
         return batch_toks
 
@@ -112,6 +132,22 @@ class ConlluDataModule(pl.LightningDataModule):
         tokenized_x = tokenizer(
             pretoks, padding="longest", return_tensors="pt", is_split_into_words=True
         ).to("cuda" if torch.cuda.is_available() else "cpu")
+        if not tokenized_x.encodings:
+            # for Byt5, which doesn't seem to have a fast tokenizer
+            encodings_ = []
+            for sent in pretoks:
+                idxs = []
+                toks = []
+                for i, word in enumerate(sent):
+                    # number of toks
+                    toks_ = list(word.encode("utf-8"))
+                    num_toks = len(toks_)
+                    idxs.extend([i] * num_toks)
+                    toks.extend(toks_)
+                # this is not the prettiest, but Encoding does not have an __init__(), so this is set manually
+                encodings_.append(CustomEncoding(word_ids=idxs, tokens=toks))
+            tokenized_x.custom_encodings = encodings_
+
         return ConlluBatch(tokenized_x, sentences, replacements, *args)
 
     def train_dataloader(self):
