@@ -113,6 +113,7 @@ class UDTube(pl.LightningModule):
         self.pooling_layers = pooling_layers
 
         self.encoder_model = self._load_model(model_name)
+        self.dropout_layer = nn.Dropout(udtube_dropout)
         if pos_toggle:
             self.pos_head = nn.Sequential(
                 nn.Linear(self.encoder_model.config.hidden_size, pos_out_label_size),
@@ -418,6 +419,8 @@ class UDTube(pl.LightningModule):
         )
         # averages n layers into one embedding layer
         x = torch.mean(x, keepdim=True, dim=0).squeeze()
+
+        x = self.dropout_layer(x)
 
         # this is used for padding, when present
         if isinstance(batch, TextBatch):
