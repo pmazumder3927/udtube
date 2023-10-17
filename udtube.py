@@ -420,6 +420,10 @@ class UDTube(pl.LightningModule):
         # averages n layers into one embedding layer
         x = torch.mean(x, keepdim=True, dim=0).squeeze()
 
+        if len(x.shape) == 2:
+            # batch of size one
+            x = x.unsqueeze(dim=0)
+
         x = self.dropout_layer(x)
 
         # this is used for padding, when present
