@@ -64,7 +64,7 @@ if __name__ == "__main__":
                 continue
             correct_pos += gold_tok["upos"] == pred_tok["upos"]
             correct_xpos += gold_tok["xpos"] == pred_tok["xpos"]
-            correct_lemma += gold_tok["lemma"] == pred_tok["lemma"]
+            correct_lemma += gold_tok["lemma"].casefold() == pred_tok["lemma"].casefold()
             correct_feats += gold_tok["feats"] == pred_tok["feats"]
             total += 1
             gold_idx += 1
