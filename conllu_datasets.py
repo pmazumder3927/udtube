@@ -166,10 +166,12 @@ class ConlluMapDataset(Dataset):
                         if train:
                             # This is a multi-word token, id looks like (1, '-', 3)
                             # creating a look-up table to be used when loading in sentences
-                            start, _, end = tok["id"] # these are not perfect indices because of the multiword token stuff
-                            x = (end - start) + i
-                            # below, i + 1 is because we want the next token, not the current.
-                            self.multiword_table[tok["form"]] = [t["form"] for t in tk_list[i + 1: x + 2]]
+                            start, sep, end = tok["id"] # these are not perfect indices because of the multiword token stuff
+                            if not sep == '.':
+                                # when sep is ., this is an ellided token, not a multiword token
+                                x = (end - start) + i
+                                # below, i + 1 is because we want the next token, not the current.
+                                self.multiword_table[tok["form"]] = [t["form"] for t in tk_list[i + 1: x + 2]]
                         continue  # we don't want to add it to the dataset!
                     l_rule = str(
                         self.e_script(
