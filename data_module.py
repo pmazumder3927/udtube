@@ -50,6 +50,7 @@ class ConlluDataModule(pl.LightningDataModule):
         batch_size: int = 32,
         convert_to_um: bool = True,
         reverse_edits: bool = False,
+        lang_with_space: bool = True,
         checkpoint: str = None
     ):
         """Initializes the instance based on user input. Some attributes will not be set if train dataset is None.
@@ -69,6 +70,7 @@ class ConlluDataModule(pl.LightningDataModule):
         spacy_udpipe.download(language)
         self.pretokenizer = spacy_udpipe.load(language)
         self.reverse_edits = reverse_edits
+        self.lang_with_space = lang_with_space
         self.train_dataset = ConlluMapDataset(train_dataset, reverse_edits=self.reverse_edits, path_name=path_name,
                                               convert_to_um=convert_to_um, train=True)
         self.val_dataset = ConlluMapDataset(val_dataset, reverse_edits=self.reverse_edits, path_name=path_name,
@@ -155,7 +157,7 @@ class ConlluDataModule(pl.LightningDataModule):
             self.train_dataset,
             batch_size=self.batch_size,
             collate_fn=partial(
-                self.conllu_preprocessing, tokenizer=self.tokenizer
+                self.conllu_preprocessing, tokenizer=self.tokenizer, lang_with_space=self.lang_with_space
             ),
         )
 
@@ -164,7 +166,7 @@ class ConlluDataModule(pl.LightningDataModule):
             self.val_dataset,
             batch_size=self.batch_size,
             collate_fn=partial(
-                self.conllu_preprocessing, tokenizer=self.tokenizer
+                self.conllu_preprocessing, tokenizer=self.tokenizer, lang_with_space=self.lang_with_space
             ),
         )
 
@@ -173,7 +175,7 @@ class ConlluDataModule(pl.LightningDataModule):
             self.test_dataset,
             batch_size=self.batch_size,
             collate_fn=partial(
-                self.conllu_preprocessing, tokenizer=self.tokenizer
+                self.conllu_preprocessing, tokenizer=self.tokenizer, lang_with_space=self.lang_with_space
             ),
         )
 
@@ -191,7 +193,7 @@ class ConlluDataModule(pl.LightningDataModule):
             self.predict_dataset,
             batch_size=self.batch_size,
             collate_fn=partial(
-                self.txt_file_preprocessing, tokenizer=self.tokenizer
+                self.txt_file_preprocessing, tokenizer=self.tokenizer, lang_with_space=self.lang_with_space
             ),
         )
 
