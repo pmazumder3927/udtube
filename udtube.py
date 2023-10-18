@@ -264,12 +264,17 @@ class UDTube(pl.LightningModule):
         """Prepare optimizer and schedule (linear warmup and decay)"""
         grouped_params = [
             # {'params': self.deps_head.parameters(), 'lr': self.udtube_learning_rate},
-            {'params': self.lemma_head.parameters(), 'lr': self.udtube_learning_rate},
-            {'params': self.pos_head.parameters(), 'lr': self.udtube_learning_rate},
-            {'params': self.xpos_head.parameters(), 'lr': self.udtube_learning_rate},
-            {'params': self.feats_head.parameters(), 'lr': self.udtube_learning_rate},
             {'params': self.encoder_model.parameters(), 'lr': self.encoder_model_learning_rate, "weight_decay": 0.01}
         ]
+        if self.lemma_toggle:
+            grouped_params.append({'params': self.lemma_head.parameters(), 'lr': self.udtube_learning_rate})
+        if self.pos_toggle:
+            grouped_params.append({'params': self.pos_head.parameters(), 'lr': self.udtube_learning_rate})
+        if self.xpos_toggle:
+            grouped_params.append({'params': self.xpos_head.parameters(), 'lr': self.udtube_learning_rate})
+        if self.feats_toggle:
+            grouped_params.append({'params': self.feats_head.parameters(), 'lr': self.udtube_learning_rate})
+
         optimizer = torch.optim.AdamW(grouped_params)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 80)
         return [optimizer], [{"scheduler": scheduler, "interval": "epoch"}]
