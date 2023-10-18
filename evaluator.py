@@ -44,8 +44,13 @@ if __name__ == "__main__":
         gold_idx = 0
         pred_idx = 0
         for _ in range(shorter_seq):
-            gold_tok = gold_list[gold_idx]
-            pred_tok = pred_list[pred_idx]
+            try:
+                gold_tok = gold_list[gold_idx]
+                pred_tok = pred_list[pred_idx]
+            except:
+                print("Sequence mismatch for:", gold_list, '\n', pred_list)
+                total += 1
+                continue
             if gold_tok["form"] != pred_tok["form"] and "[UNK]" not in pred_tok["form"]:
                 # trying to fix alignment, but only looking within +/- 1 (only if not an [UNK] word)
                 if len(pred_list) > pred_idx + 1 and gold_tok["form"] == pred_list[pred_idx + 1]["form"]:
