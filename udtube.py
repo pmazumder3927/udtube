@@ -414,6 +414,11 @@ class UDTube(pl.LightningModule):
         return sentences, words, y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch, replacements
 
     def forward(self, batch: Union[TextBatch, ConlluBatch]):
+        # if something is longer than an allowed sequence, we have to trim it down
+        if batch.tokens.input_ids.shape[1] >= self.encoder_model.config.max_position_embeddings:
+            print(f"trimmed sequence down to maximum seq_len allowed: {self.encoder_model.config.max_position_embeddings}")
+            batch.tokens.input_ids = batch.tokens.input_ids[:self.encoder_model.config.max_position_embeddings]
+            batch.tokens.attention_mask = batch.tokens.attention_mask[:self.encoder_model.config.max_position_embeddings]
         # getting raw embeddings
         x = self.encoder_model(
             batch.tokens.input_ids, batch.tokens.attention_mask
