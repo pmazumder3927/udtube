@@ -164,18 +164,24 @@ class UDTube(pl.LightningModule):
             self.load_state_dict(checkpoint['state_dict'])
 
     def _load_model(self, model_name):
-        if 'bert' in model_name:
+        if model_name == "flaubert":
             model = transformers.AutoModel.from_pretrained(
-                model_name, output_hidden_states=True,
-                hidden_dropout_prob=self.encoder_dropout
+                model_name,
+                output_hidden_states=True,
+                dropout=self.encoder_dropout
             )
-        if 't5' in model_name:
+        elif 't5' in model_name:
             model = transformers.AutoModel.from_pretrained(
                 model_name,
                 output_hidden_states=True,
                 dropout_rate=self.encoder_dropout
             )
             model = model.encoder
+        else:
+            model = transformers.AutoModel.from_pretrained(
+                model_name, output_hidden_states=True,
+                hidden_dropout_prob=self.encoder_dropout
+            )
 
         # freezing params for first epoch
         for p in model.parameters():
