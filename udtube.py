@@ -249,7 +249,7 @@ class UDTube(pl.LightningModule):
                     ).squeeze()
                     embs_i.append(word_emb_pooled)
                     try:
-                        words_i.append("".join(encoding.tokens[word_idxs]).replace('##', ''))
+                        words_i.append("".join(encoding.tokens[word_idxs]).replace('##', '').replace("▁", ""))
                     except TypeError:
                         words_i.append(bytes(encoding.tokens[word_idxs]).decode())
                     mask_i.append(1)
