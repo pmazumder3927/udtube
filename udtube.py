@@ -164,7 +164,7 @@ class UDTube(pl.LightningModule):
             self.load_state_dict(checkpoint['state_dict'])
 
     def _load_model(self, model_name):
-        if model_name == "flaubert":
+        if 'flaubert' in model_name.lower():
             model = transformers.AutoModel.from_pretrained(
                 model_name,
                 output_hidden_states=True,
