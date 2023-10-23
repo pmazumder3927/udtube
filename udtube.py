@@ -1,9 +1,12 @@
-from typing import Iterable
+from typing import Iterable, Optional, Callable, Any
 
 import lightning.pytorch as pl
 import torch
 import transformers
 import joblib
+from lightning.pytorch.core.optimizer import LightningOptimizer
+from torch.optim import Optimizer
+
 from mst import mst
 
 import edit_scripts
@@ -282,8 +285,25 @@ class UDTube(pl.LightningModule):
             grouped_params.append({'params': self.feats_head.parameters(), 'lr': self.udtube_learning_rate})
 
         optimizer = torch.optim.AdamW(grouped_params)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 80)
-        return [optimizer], [{"scheduler": scheduler, "interval": "epoch"}]
+        return [optimizer]
+
+    def optimizer_step(
+        self,
+        epoch: int,
+        batch_idx: int,
+        optimizer: Union[Optimizer, LightningOptimizer],
+        optimizer_closure: Optional[Callable[[], Any]] = None,
+    ) -> None:
+        optimizer.step(closure=optimizer_closure)
+        if self.trainer.global_step < 8000:
+           # warming up LR from 0 to LR (ENCODER ONLY), starts before the encoder is unfrozen so LR is not at 0 during meaningful steps
+            lr_scale = min(self.encoder_model_learning_rate, 0 + float(self.trainer.global_step) / 8000.0)
+        else:
+            # decaying weight
+            lr_scale = 1 / (self.trainer.global_step ** 0.5)
+
+        pg = optimizer.param_groups[0]
+        pg["lr"] = lr_scale * self.encoder_model_learning_rate
 
     def log_metrics(
             self,
@@ -545,11 +565,6 @@ class UDTube(pl.LightningModule):
     def test_step(self, batch: ConlluBatch, batch_idx: int):
         sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, masks = self(batch)
 
-        # these calls log accuracy
-        self._call_head(batch.pos, y_pos_logits, task_name="pos", subset="test", return_loss=False)
-        self._call_head(batch.xpos, y_xpos_logits, task_name="xpos", subset="test", return_loss=False)
-        self._call_head(batch.lemmas, y_lemma_logits, task_name="lemma", subset="test", return_loss=False)
-        self._call_head(batch.feats, y_feats_logits, task_name="feats", subset="test", return_loss=False)
 
         return self._decode_to_str(sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits,
                                    y_feats_logits, replacements=batch.replacements)
