@@ -77,6 +77,7 @@ class UDTube(pl.LightningModule):
             feats_out_label_size: int = 2,
             udtube_dropout: float = 0.3,
             encoder_dropout: float = 0.5,
+            warmup_steps: int = 500,
             udtube_learning_rate: float = 5e-3,
             encoder_model_learning_rate: float = 2e-5,
             pooling_layers: int = 4,
@@ -113,6 +114,8 @@ class UDTube(pl.LightningModule):
         self.udtube_learning_rate = udtube_learning_rate
         self.encoder_model_learning_rate = encoder_model_learning_rate
         self.encoder_dropout = encoder_dropout
+        self.warmup_steps = warmup_steps
+        self.step_adjustment = None
         self.pooling_layers = pooling_layers
 
         self.encoder_model = self._load_model(model_name)
@@ -295,15 +298,18 @@ class UDTube(pl.LightningModule):
         optimizer_closure: Optional[Callable[[], Any]] = None,
     ) -> None:
         optimizer.step(closure=optimizer_closure)
-        if self.trainer.global_step < 8000:
-           # warming up LR from 0 to LR (ENCODER ONLY), starts before the encoder is unfrozen so LR is not at 0 during meaningful steps
-            lr_scale = min(self.encoder_model_learning_rate, 0 + float(self.trainer.global_step) / 8000.0)
-        else:
-            # decaying weight
-            lr_scale = 1 / (self.trainer.global_step ** 0.5)
+        if epoch > 0:
+            # this only happens once params are unfrozen
+            unfrozen_steps = self.trainer.global_step - self.step_adjustment
+            if unfrozen_steps < self.warmup_steps:
+               # warming up LR from 0 to LR (ENCODER ONLY), starts before the encoder is unfrozen so LR is not at 0 during meaningful steps
+                lr_scale = min(self.encoder_model_learning_rate, 0 + float(unfrozen_steps) / self.warmup_steps)
+            else:
+                # decaying weight
+                lr_scale = 1 / (unfrozen_steps ** 0.5)
 
-        pg = optimizer.param_groups[0]
-        pg["lr"] = lr_scale * self.encoder_model_learning_rate
+            pg = optimizer.param_groups[0]
+            pg["lr"] = lr_scale * self.encoder_model_learning_rate
 
     def log_metrics(
             self,
@@ -555,6 +561,8 @@ class UDTube(pl.LightningModule):
 
     def on_train_epoch_end(self):
         if self.current_epoch == 0:
+            # how many steps are in an epoch
+            self.step_adjustment = self.trainer.global_step
             for p in self.encoder_model.parameters():
                 p.requires_grad = True
             print("Encoder Parameters unfrozen")
