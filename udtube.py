@@ -21,6 +21,7 @@ from biaffine_parser import BiaffineParser
 from typing import Union
 
 
+
 class UDTubeCLI(LightningCLI):
     """A customized version of the Lightning CLI
 
@@ -303,13 +304,12 @@ class UDTube(pl.LightningModule):
             unfrozen_steps = self.trainer.global_step - self.step_adjustment
             if unfrozen_steps < self.warmup_steps:
                # warming up LR from 0 to LR (ENCODER ONLY), starts before the encoder is unfrozen so LR is not at 0 during meaningful steps
-                lr_scale = min(self.encoder_model_learning_rate, 0 + float(unfrozen_steps) / self.warmup_steps)
+                lr_scale = 0 + float(unfrozen_steps) / self.warmup_steps
             else:
                 # decaying weight
                 lr_scale = 1 / (unfrozen_steps ** 0.5)
 
-            pg = optimizer.param_groups[0]
-            pg["lr"] = lr_scale * self.encoder_model_learning_rate
+            optimizer.param_groups[0]["lr"] = lr_scale * self.encoder_model_learning_rate
 
     def log_metrics(
             self,
