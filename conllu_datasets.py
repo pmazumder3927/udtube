@@ -1,7 +1,7 @@
 import json
 import os
 import re
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 import conllu
 import joblib
@@ -70,6 +70,7 @@ class ConlluMapDataset(Dataset):
         """
         super().__init__()
         self.path_name = path_name
+        self.all_words = []
         self.conllu_file = self._convert_to_um(conllu_file, convert_to_um)
         self.e_script = (
             edit_scripts.ReverseEditScript
@@ -170,8 +171,12 @@ class ConlluMapDataset(Dataset):
                             if not sep == '.':
                                 # when sep is ., this is an ellided token, not a multiword token
                                 x = (end - start) + i
-                                # below, i + 1 is because we want the next token, not the current.
-                                self.multiword_table[tok["form"]] = [t["form"] for t in tk_list[i + 1: x + 2]]
+                                # below, i + 1 is because we want the next token, not the current
+                                words = [t["form"] for t in tk_list[i + 1: x + 2]]
+                                if tok["form"] in self.multiword_table:
+                                    self.multiword_table[tok["form"]]["frequency"] += 1
+                                else:
+                                    self.multiword_table[tok["form"]] = {"frequency": 1, "words": words}
                         continue  # we don't want to add it to the dataset!
                     l_rule = str(
                         self.e_script(
@@ -192,6 +197,7 @@ class ConlluMapDataset(Dataset):
                     xposes.append(xpos_)
                     lemma_rules.append(l_rule)
                     ufeats.append(ufeat_)
+                    self.all_words.append(tok["form"].lower())
                 uposes = self.upos_encoder.transform(uposes)
                 xposes = self.xpos_encoder.transform(xposes)
                 lemma_rules = self.lemma_encoder.transform(lemma_rules)
@@ -199,9 +205,23 @@ class ConlluMapDataset(Dataset):
                 # heads do not need to be encoded, they are already numerical. Encoding them here causes problems later
                 data.append((sentence, uposes, xposes, lemma_rules, ufeats))
             if train:
+                self.check_multiword_table()
                 with open(f'{self.path_name}/multiword_dict.json', 'w') as mw_tb:
                     json.dump(self.multiword_table, mw_tb, ensure_ascii=False)
         return data
+
+    def check_multiword_table(self):
+        """Make sure all items are valid. Some entries could be typos or annotator mistakes,
+        if it is more frequent as a single word, it is assumed to be a typo/annotator mistake."""
+        single_cnt = Counter(self.all_words)
+        keep = {}
+        for w, record in self.multiword_table.items():
+            w = w.lower()
+            if w in single_cnt and single_cnt[w] > record["frequency"]:
+                continue
+            keep[w] = record
+        self.multiword_table = keep
+
 
     def get_special_words(self):
         """Special words are ones that are not handled well by tokenizers, i.e. 2000-2004 or K., which are considered

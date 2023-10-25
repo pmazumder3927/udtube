@@ -110,9 +110,9 @@ class ConlluDataModule(pl.LightningDataModule):
             ns = s
             rep_i = []
             for k, v in self.multiword_table.items():
-                if re.search(fr"\b{k}\b", s):
-                    ns = re.sub(fr"\b{k}\b", delimiter.join(v), ns)
-                    rep_i.append((k, delimiter.join(v)))
+                if re.search(fr"\b{k}\b", s) and v["frequency"] > 2:
+                    ns = re.sub(fr"\b{k}\b", delimiter.join(v["words"]), ns)
+                    rep_i.append((k, delimiter.join(v["words"])))
             new_sents.append(ns)
             replacements.append(rep_i)
         return new_sents, replacements
