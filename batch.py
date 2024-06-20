@@ -63,7 +63,7 @@ class TextBatch(nn.Module):
        """
         super().__init__()
         self.tokens = tokens
-        self.sentences = [s.strip("\n") for s in sentences]
+        self.sentences = [s.rstrip("\n") for s in sentences]
         self.replacements = replacements
 
     def __len__(self):

@@ -1,33 +1,22 @@
 import json
 import os
 import re
-from collections import defaultdict, Counter
+from collections import Counter, defaultdict
+from pathlib import Path
+import logging
+
+from typing import List, Dict, Tuple
 
 import conllu
 import joblib
+import numpy as np
 from sklearn.preprocessing import LabelEncoder
 from torch import tensor
 from torch.utils.data import Dataset, IterableDataset
-from pathlib import Path
-from ud_compatibility import marry, languages
-import numpy as np
+from ud_compatibility import languages, marry
 
 import edit_scripts
-
-# Overriding the parser for the conllu reader. This is needed so that feats can be read in as a str instead of a dict
-OVERRIDDEN_FIELD_PARSERS = {
-    "id": lambda line, i: conllu.parser.parse_id_value(line[i]),
-    "xpos": lambda line, i: conllu.parser.parse_nullable_value(line[i]),
-    "feats": lambda line, i: conllu.parser.parse_nullable_value(
-        line[i]
-    ),
-    "head": lambda line, i: conllu.parser.parse_int_value(line[i]),
-    "deps": lambda line, i: conllu.parser.parse_paired_list_value(line[i]),
-    "misc": lambda line, i: conllu.parser.parse_dict_value(line[i]),
-}
-
-
-# TODO https://universaldependencies.org/u/feat/index.html if I need the full enumerable possibilities of ufeats.
+from __init__ import OVERRIDDEN_FIELD_PARSERS
 
 
 class ConlluMapDataset(Dataset):
@@ -96,7 +85,7 @@ class ConlluMapDataset(Dataset):
             # Instantiation of empty class, happens in prediction
             self.data_set = []
 
-    def _convert_to_um(self, conllu_file, convert_to_um):
+    def _convert_to_um(self, conllu_file: str, convert_to_um: bool) -> str:
         if not conllu_file:
             return
         # hopefully, as the marry.py repo stabilizes this will look less like an abomination
@@ -109,9 +98,10 @@ class ConlluMapDataset(Dataset):
             if not language_match:
                 raise Exception("File does not follow the naming convention for conllu files: <language>_<treebank>-<ud>-<split>.conllu")
             return conllu_file.replace('-ud-', '-um-')
-        return conllu_file
+        else:
+            return conllu_file
 
-    def _fit_label_encoders(self):
+    def _fit_label_encoders(self) -> None:
         self.upos_encoder.fit(self.UPOS_CLASSES + [self.PAD_TAG, self.UNK_TAG, "_"])
         self.xpos_encoder.fit(self.xpos_classes + [self.PAD_TAG, self.UNK_TAG, "_"])
         self.ufeats_encoder.fit(self.feats_classes + [self.PAD_TAG, self.UNK_TAG, "_"])
@@ -119,7 +109,7 @@ class ConlluMapDataset(Dataset):
         # saving all the encoders
         if not os.path.exists(self.path_name):
             os.mkdir(self.path_name)
-        print(f"Now saving label encoders for {self.conllu_file}")
+        logging.info(f"Now saving label encoders for {self.conllu_file}")
         joblib.dump(self.upos_encoder, f'{self.path_name}/upos_encoder.joblib')
         joblib.dump(self.xpos_encoder, f'{self.path_name}/xpos_encoder.joblib')
         joblib.dump(self.ufeats_encoder, f'{self.path_name}/ufeats_encoder.joblib')
@@ -131,7 +121,7 @@ class ConlluMapDataset(Dataset):
         self.upos_encoder = joblib.load(f"{self.path_name}/upos_encoder.joblib")
         self.xpos_encoder = joblib.load(f"{self.path_name}/xpos_encoder.joblib")
 
-    def _get_all_classes(self, lname: str):
+    def _get_all_classes(self, lname: str) -> List[str, None, int, List[int], Dict[str, str]]:
         """helper function to get all the classes observed in the training set"""
         classes = []
         with open(self.conllu_file) as f:
@@ -151,7 +141,7 @@ class ConlluMapDataset(Dataset):
                             classes.append(lrule)
         return classes
 
-    def _get_data(self, train):
+    def _get_data(self, train: bool) -> List[Tuple[int]]:
         """Loads in the conllu data and prepares it as a list dataset so that it can be indexed for __getitem__"""
         data = []
         with open(self.conllu_file) as f:
@@ -187,7 +177,7 @@ class ConlluMapDataset(Dataset):
                     if tok["feats"] is None:
                         tok["feats"] = "_"
 
-                    # Here we have to check if the thing is unknown
+                    # Here we have to check if the label in the dataset is unknown
                     upos_ = tok["upos"] if tok["upos"] in self.upos_encoder.classes_ else self.UNK_TAG
                     xpos_ = tok["xpos"] if tok["xpos"] in self.xpos_encoder.classes_ else self.UNK_TAG
                     ufeat_ = tok["feats"] if tok["feats"] in self.ufeats_encoder.classes_ else self.UNK_TAG
@@ -210,20 +200,19 @@ class ConlluMapDataset(Dataset):
                     json.dump(self.multiword_table, mw_tb, ensure_ascii=False)
         return data
 
-    def check_multiword_table(self):
+    def check_multiword_table(self) -> None:
         """Make sure all items are valid. Some entries could be typos or annotator mistakes,
         if it is more frequent as a single word, it is assumed to be a typo/annotator mistake."""
         single_cnt = Counter(self.all_words)
         keep = {}
         for w, record in self.multiword_table.items():
-            w = w.lower()
             if w in single_cnt and single_cnt[w] > record["frequency"]:
                 continue
             keep[w] = record
         self.multiword_table = keep
 
 
-    def get_special_words(self):
+    def get_special_words(self) -> List[str]:
         """Special words are ones that are not handled well by tokenizers, i.e. 2000-2004 or K., which are considered
         single tokens in some conllu files."""
         special_words = []
@@ -247,19 +236,28 @@ class TextIterDataset(IterableDataset):
 
     This class is used when the data for inference is large and we do not want to load it entirely into memory.
     """
-    def __init__(self, text_file: str):
+    def __init__(self, text_file: str, conllu_file: bool = True):
         """Initializes the instance based on user input.
 
         Args:
             text_file: The path to the textfile to incrementally read from.
         """
         super().__init__()
+        self.conllu_file = conllu_file
         if text_file:
             self.tf = open(text_file)
 
-    def __iter__(self):
-        return self.tf
+    def __iter__(self) -> str:
+        if self.conllu_file:
+            def get_sentences():
+                for line in self.tf:
+                    if line.startswith('# text'):
+                        yield line.lstrip('# text = ').rstrip('\n')
+            return get_sentences()
+        else:
+            # assuming file is line by line where each line is a sentence
+            return self.tf
 
-    def __del__(self):
+    def __del__(self) -> None:
         if hasattr(self, "tf"):
             self.tf.close()  # want to make sure we close the file during garbage collection

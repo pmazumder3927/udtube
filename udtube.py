@@ -1,4 +1,4 @@
-from typing import Iterable, Optional, Callable, Any
+from typing import Iterable, Optional, Callable, Any, Dict, Tuple, List
 
 import lightning.pytorch as pl
 import torch
@@ -11,7 +11,7 @@ from mst import mst
 
 import edit_scripts
 from lightning.pytorch.cli import LightningCLI
-from torch import nn, tensor
+from torch import nn, tensor, Tensor
 from torchmetrics.functional.classification import multiclass_accuracy
 
 from batch import ConlluBatch, TextBatch
@@ -21,15 +21,14 @@ from biaffine_parser import BiaffineParser
 from typing import Union
 
 
-
 class UDTubeCLI(LightningCLI):
     """A customized version of the Lightning CLI
 
-    This class manages all processes behind the scenes, to find out what it can do, run python udtube.py --help
+    This class manages all processes behind the scenes, to find out what it can do, run python udtube_package.py --help
     """
 
     def add_arguments_to_parser(self, parser):
-        parser.add_argument("--output_file")
+        parser.add_argument("--output_file", help="The file to output to, can be set to stdout.")
         parser.link_arguments("model.path_name", "data.path_name")
         parser.link_arguments("model.path_name", "trainer.default_root_dir")
         parser.link_arguments("model.model_name", "data.model_name")
@@ -238,7 +237,7 @@ class UDTube(pl.LightningModule):
         offset = 1
         if not encodings:
             encodings = tokenized.custom_encodings
-            offset = 0 # no offset here, this is the Byt5 case
+            offset = 0  # no offset here, this is the Byt5 case
         for encoding, x_emb_i in zip(encodings, x_embs):
             embs_i, words_i, mask_i = [], [], []
             last_word_idx = slice(0, 0)
@@ -261,11 +260,11 @@ class UDTube(pl.LightningModule):
                         words_i.append(bytes(encoding.tokens[word_idxs]).decode())
                     mask_i.append(1)
             new_embs.append(torch.stack(embs_i))
-            words.append(words_i[1:]) # ROOT is always first, dropping it here.
+            words.append(words_i[1:])  # ROOT is always first, dropping it here.
             new_masks.append(tensor(mask_i, device=self.device))
         if gold_label_ex:
             longest_seq = max(max(len(m) for m in words),
-                            max(len(l) for l in gold_label_ex))
+                              max(len(l) for l in gold_label_ex))
         else:
             longest_seq = max(len(m) for m in words)
         # longest_seq + 1 is the ROOT adjustment
@@ -292,24 +291,32 @@ class UDTube(pl.LightningModule):
         return [optimizer]
 
     def optimizer_step(
-        self,
-        epoch: int,
-        batch_idx: int,
-        optimizer: Union[Optimizer, LightningOptimizer],
-        optimizer_closure: Optional[Callable[[], Any]] = None,
+            self,
+            epoch: int,
+            batch_idx: int,
+            optimizer: Union[Optimizer, LightningOptimizer],
+            optimizer_closure: Optional[Callable[[], Any]] = None,
     ) -> None:
         optimizer.step(closure=optimizer_closure)
         if epoch > 0:
             # this only happens once params are unfrozen
             unfrozen_steps = self.trainer.global_step - self.step_adjustment
             if unfrozen_steps < self.warmup_steps:
-               # warming up LR from 0 to LR (ENCODER ONLY), starts before the encoder is unfrozen so LR is not at 0 during meaningful steps
+                # warming up LR from 0 to LR (ENCODER ONLY), starts before the encoder is unfrozen so LR is not at 0 during meaningful steps
                 lr_scale = 0 + float(unfrozen_steps) / self.warmup_steps
             else:
                 # decaying weight
                 lr_scale = 1 / (unfrozen_steps ** 0.5)
 
             optimizer.param_groups[0]["lr"] = lr_scale * self.encoder_model_learning_rate
+            self.log("encoder_lr",
+                     optimizer.param_groups[0]["lr"],
+                     on_step=True,
+                     on_epoch=False,
+                     prog_bar=False,
+                     logger=True,
+                     batch_size=32,  # TODO pass this instead
+                     )
 
     def log_metrics(
             self,
@@ -319,7 +326,7 @@ class UDTube(pl.LightningModule):
             task_name: str,
             subset: str = "train",
             ignore_index: int = 0
-    ):
+    ) -> None:
         num_classes = y_pred.shape[1]
         # getting the pad
         acc = multiclass_accuracy(y_pred.permute(2, 1, 0), y_true.T, num_classes=num_classes,
@@ -345,7 +352,7 @@ class UDTube(pl.LightningModule):
         batch_size, longest_seq, num_classes = logits.shape
         # ignore_idx is used for padding!
         lencoder = getattr(self, f"{task_name}_encoder")
-        ignore_idx = int(lencoder.transform(["[PAD]"])[0]) # TODO better way?
+        ignore_idx = int(lencoder.transform(["[PAD]"])[0])  # TODO better way?
 
         pad = tensor(ignore_idx, device=self.device)
         y_gold_tensor = self.pad_seq(
@@ -392,7 +399,8 @@ class UDTube(pl.LightningModule):
         S_lab = S_lab.contiguous().view(-1, S_lab.size(-1))  # [batch*sent_len, n_labels]
         labels = gold_deprels.view(-1)  # [batch*sent_len]
 
-        srel_acc = multiclass_accuracy(S_lab, labels, num_classes=S_lab.shape[1], ignore_index=S_lab_ignore_idx, average="micro")
+        srel_acc = multiclass_accuracy(S_lab, labels, num_classes=S_lab.shape[1], ignore_index=S_lab_ignore_idx,
+                                       average="micro")
         self.log(
             f"{subset}_deprel_acc",
             srel_acc,
@@ -410,7 +418,7 @@ class UDTube(pl.LightningModule):
         return arc_loss, rel_loss
 
     def _decode_to_str(self, sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits,
-                       y_feats_logits, replacements=None):
+                       y_feats_logits, replacements=None) -> Tuple[str]:
         # argmaxing
         if self.pos_toggle:
             y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
@@ -445,12 +453,15 @@ class UDTube(pl.LightningModule):
 
         return sentences, words, y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch, replacements
 
-    def forward(self, batch: Union[TextBatch, ConlluBatch]):
+    def forward(self, batch: Union[TextBatch, ConlluBatch]) -> \
+            Tuple[str, list[list[str]], Tensor]:
         # if something is longer than an allowed sequence, we have to trim it down
         if batch.tokens.input_ids.shape[1] >= self.encoder_model.config.max_position_embeddings:
-            print(f"trimmed sequence down to maximum seq_len allowed: {self.encoder_model.config.max_position_embeddings}")
+            print(
+                f"trimmed sequence down to maximum seq_len allowed: {self.encoder_model.config.max_position_embeddings}")
             batch.tokens.input_ids = batch.tokens.input_ids[:self.encoder_model.config.max_position_embeddings]
-            batch.tokens.attention_mask = batch.tokens.attention_mask[:self.encoder_model.config.max_position_embeddings]
+            batch.tokens.attention_mask = batch.tokens.attention_mask[
+                                          :self.encoder_model.config.max_position_embeddings]
         # getting raw embeddings
         x = self.encoder_model(
             batch.tokens.input_ids, batch.tokens.attention_mask
@@ -492,7 +503,7 @@ class UDTube(pl.LightningModule):
 
     def training_step(
             self, batch: ConlluBatch, batch_idx: int, subset: str = "train"
-    ):
+    ) -> Dict[str, float]:
         response = {}
         batch_size = len(batch)
         sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, masks = self(batch)
@@ -559,7 +570,7 @@ class UDTube(pl.LightningModule):
 
         return response
 
-    def on_train_epoch_end(self):
+    def on_train_epoch_end(self) -> None:
         if self.current_epoch == 0:
             # how many steps are in an epoch
             self.step_adjustment = self.trainer.global_step
@@ -567,17 +578,16 @@ class UDTube(pl.LightningModule):
                 p.requires_grad = True
             print("Encoder Parameters unfrozen")
 
-    def validation_step(self, batch: ConlluBatch, batch_idx: int):
+    def validation_step(self, batch: ConlluBatch, batch_idx: int) -> Dict[str, float]:
         return self.training_step(batch, batch_idx, subset="val")
 
-    def test_step(self, batch: ConlluBatch, batch_idx: int):
+    def test_step(self, batch: ConlluBatch, batch_idx: int) -> Tuple[str]:
         sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, masks = self(batch)
-
 
         return self._decode_to_str(sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits,
                                    y_feats_logits, replacements=batch.replacements)
 
-    def predict_step(self, batch: TextBatch, batch_idx: int):
+    def predict_step(self, batch: TextBatch, batch_idx: int) -> Tuple[str]:
         *res, _ = self(batch)
         return self._decode_to_str(*res, replacements=batch.replacements)
 

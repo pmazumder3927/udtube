@@ -102,7 +102,7 @@ class ConlluDataModule(pl.LightningDataModule):
         self.feats_classes_cnt = hps.get("feats_out_label_size", 0)
 
     def _adjust_sentence(self, sentences, lang_with_space=True):
-        delimiter = " " if lang_with_space else ""  # TODO does this actually make sense? Will find out when I try zh
+        delimiter = " " if lang_with_space else ""
         new_sents = []
         replacements = []  # will need to keep track of these to write out multiword tokens
         # preprocessing sentences. The table is usually small so this is not too expensive

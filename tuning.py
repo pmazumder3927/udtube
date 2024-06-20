@@ -31,7 +31,7 @@ def get_args():
         with open('temp.yaml', 'w') as file:
             yaml.dump(orig_config, file)
         print("Running!")
-        os.system("python3 udtube.py fit --config temp.yaml")
+        os.system("python3 udtube_package.py fit --config temp.yaml")
 
 
 def main() -> None:

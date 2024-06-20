@@ -30,7 +30,7 @@ class Biaffine(nn.Module):
     """
     Credit to
     https://github.com/Unipisa/diaparser/blob/94902d84021256ea010fee1db2de9fed9bad1d76/diaparser/modules/affine.py#L7
-    An implementation of a Biaffine layer based on Deep Biaffine Parsing (Duzat & Manning 2017)
+    An implementation of a Biaffine layer based on Deep Biaffine Parsing (Dozat & Manning 2017)
     https://arxiv.org/abs/1611.01734.
     """
 

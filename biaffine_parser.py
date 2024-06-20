@@ -7,7 +7,7 @@ from layers.models import MLP, Biaffine
 
 
 class BiaffineParser(pl.LightningModule):
-    """Biaffine Dependency Parser based on  Deep Biaffine Parsing (Duzat & Manning 2017)
+    """Biaffine Dependency Parser based on  Deep Biaffine Parsing (Dozat & Manning 2017)
     https://arxiv.org/abs/1611.01734..
     Credit https://github.com/daandouwe/biaffine-dependency-parser/tree/9338c6fde6de5393ac1bbdd6a8bb152c2a015a6c
     """
