@@ -14,7 +14,7 @@ from lightning.pytorch.cli import LightningCLI
 from torch import nn, tensor, Tensor
 from torchmetrics.functional.classification import multiclass_accuracy
 
-from batch import ConlluBatch, TextBatch
+from batch import ConlluBatch, TextBatch, CustomBatch
 from callbacks import CustomWriter
 from data_module import ConlluDataModule
 from biaffine_parser import BiaffineParser
@@ -453,7 +453,7 @@ class UDTube(pl.LightningModule):
 
         return sentences, words, y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch, replacements
 
-    def forward(self, batch: Union[TextBatch, ConlluBatch]) -> \
+    def forward(self, batch: CustomBatch) -> \
             Tuple[str, list[list[str]], Tensor]:
         # if something is longer than an allowed sequence, we have to trim it down
         if batch.tokens.input_ids.shape[1] >= self.encoder_model.config.max_position_embeddings:
