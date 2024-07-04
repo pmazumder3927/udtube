@@ -16,7 +16,7 @@ from torch.utils.data import Dataset, IterableDataset
 from ud_compatibility import languages, marry
 
 import edit_scripts
-from defaults import OVERRIDDEN_FIELD_PARSERS
+from defaults import OVERRIDDEN_FIELD_PARSERS, UNK_TAG, PAD_TAG
 
 
 class FileNameError(Exception):
@@ -28,8 +28,6 @@ class ConlluMapDataset(Dataset):
 
     This class loads the entire dataset into memory and is therefore only suitable for smaller datasets
     """
-    UNK_TAG = "[UNKNOWN]"
-    PAD_TAG = "[PAD]"
     UPOS_CLASSES = [
         "ADJ",
         "ADP",
@@ -107,10 +105,10 @@ class ConlluMapDataset(Dataset):
             return conllu_file
 
     def _fit_label_encoders(self) -> None:
-        self.upos_encoder.fit(self.UPOS_CLASSES + [self.PAD_TAG, self.UNK_TAG, "_"])
-        self.xpos_encoder.fit(self.xpos_classes + [self.PAD_TAG, self.UNK_TAG, "_"])
-        self.ufeats_encoder.fit(self.feats_classes + [self.PAD_TAG, self.UNK_TAG, "_"])
-        self.lemma_encoder.fit(self.lemma_classes + [self.PAD_TAG, self.UNK_TAG, "_"])
+        self.upos_encoder.fit(self.UPOS_CLASSES + [PAD_TAG, UNK_TAG, "_"])
+        self.xpos_encoder.fit(self.xpos_classes + [PAD_TAG, UNK_TAG, "_"])
+        self.ufeats_encoder.fit(self.feats_classes + [PAD_TAG, UNK_TAG, "_"])
+        self.lemma_encoder.fit(self.lemma_classes + [PAD_TAG, UNK_TAG, "_"])
         # saving all the encoders
         try:
             os.mkdir(self.path_name)
@@ -186,11 +184,11 @@ class ConlluMapDataset(Dataset):
                         tok["feats"] = "_"
 
                     # Here we have to check if the label in the dataset is unknown
-                    upos_ = tok["upos"] if tok["upos"] in self.upos_encoder.classes_ else self.UNK_TAG
-                    xpos_ = tok["xpos"] if tok["xpos"] in self.xpos_encoder.classes_ else self.UNK_TAG
-                    ufeat_ = tok["feats"] if tok["feats"] in self.ufeats_encoder.classes_ else self.UNK_TAG
+                    upos_ = tok["upos"] if tok["upos"] in self.upos_encoder.classes_ else UNK_TAG
+                    xpos_ = tok["xpos"] if tok["xpos"] in self.xpos_encoder.classes_ else UNK_TAG
+                    ufeat_ = tok["feats"] if tok["feats"] in self.ufeats_encoder.classes_ else UNK_TAG
                     if l_rule not in self.lemma_encoder.classes_:
-                        l_rule = self.UNK_TAG
+                        l_rule = UNK_TAG
                     uposes.append(upos_)
                     xposes.append(xpos_)
                     lemma_rules.append(l_rule)

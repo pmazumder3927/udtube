@@ -6,3 +6,7 @@ OVERRIDDEN_FIELD_PARSERS = {
         line[i]
     )
 }
+UNK_TAG = "[UNKNOWN]"
+PAD_TAG = "[PAD]"
+BLANK_TAG = "_"
+SPECIAL_TOKENS = [UNK_TAG, PAD_TAG, BLANK_TAG]
