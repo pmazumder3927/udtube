@@ -15,7 +15,8 @@ def set_up_parser():
     )
     parser.add_argument(
         "--lang",
-        help="the language (including the treebank tag, such as en-ewt)"
+        help="the language (including the treebank tag, such as en-ewt). Full list of supported languages: "
+             "https://github.com/TakeLab/spacy-udpipe/blob/master/spacy_udpipe/resources/languages.json"
     )
     return parser
 
