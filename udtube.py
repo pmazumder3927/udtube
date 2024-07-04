@@ -454,7 +454,7 @@ class UDTube(pl.LightningModule):
         return sentences, words, y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch, replacements
 
     def forward(self, batch: CustomBatch) -> \
-            Tuple[str, list[list[str]], Tensor]:
+            Tuple[Iterable[str], list[list[str]], Tensor]:
         # if something is longer than an allowed sequence, we have to trim it down
         if batch.tokens.input_ids.shape[1] >= self.encoder_model.config.max_position_embeddings:
             print(
