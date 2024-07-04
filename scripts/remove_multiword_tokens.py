@@ -5,7 +5,7 @@ import argparse
 import conllu
 import glob
 
-from udtube_package.__init__ import OVERRIDDEN_FIELD_PARSERS
+from udtube_package.defaults import OVERRIDDEN_FIELD_PARSERS
 
 
 def set_up_parser():

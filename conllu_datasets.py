@@ -5,7 +5,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 import logging
 
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Union, TextIO, Iterator
 
 import conllu
 import joblib
@@ -16,7 +16,11 @@ from torch.utils.data import Dataset, IterableDataset
 from ud_compatibility import languages, marry
 
 import edit_scripts
-from __init__ import OVERRIDDEN_FIELD_PARSERS
+from defaults import OVERRIDDEN_FIELD_PARSERS
+
+
+class FileNameError(Exception):
+    pass
 
 
 class ConlluMapDataset(Dataset):
@@ -96,7 +100,8 @@ class ConlluMapDataset(Dataset):
                 fc = marry.FileConverter(Path(conllu_file), language=language, clever=False)
                 fc.convert() # writes a file
             if not language_match:
-                raise Exception("File does not follow the naming convention for conllu files: <language>_<treebank>-<ud>-<split>.conllu")
+                raise FileNameError("File does not follow the naming convention for conllu files: "
+                                    "<language>_<treebank>-<ud>-<split>.conllu")
             return conllu_file.replace('-ud-', '-um-')
         else:
             return conllu_file
@@ -107,8 +112,11 @@ class ConlluMapDataset(Dataset):
         self.ufeats_encoder.fit(self.feats_classes + [self.PAD_TAG, self.UNK_TAG, "_"])
         self.lemma_encoder.fit(self.lemma_classes + [self.PAD_TAG, self.UNK_TAG, "_"])
         # saving all the encoders
-        if not os.path.exists(self.path_name):
+        try:
             os.mkdir(self.path_name)
+        except FileExistsError:
+            # dir already exists
+            pass
         logging.info(f"Now saving label encoders for {self.conllu_file}")
         joblib.dump(self.upos_encoder, f'{self.path_name}/upos_encoder.joblib')
         joblib.dump(self.xpos_encoder, f'{self.path_name}/xpos_encoder.joblib')
@@ -121,7 +129,7 @@ class ConlluMapDataset(Dataset):
         self.upos_encoder = joblib.load(f"{self.path_name}/upos_encoder.joblib")
         self.xpos_encoder = joblib.load(f"{self.path_name}/xpos_encoder.joblib")
 
-    def _get_all_classes(self, lname: str) -> List[str, None, int, List[int], Dict[str, str]]:
+    def _get_all_classes(self, lname: str) -> List[Union[str, None, int, List[int], Dict[str, str]]]:
         """helper function to get all the classes observed in the training set"""
         classes = []
         with open(self.conllu_file) as f:
@@ -232,32 +240,37 @@ class ConlluMapDataset(Dataset):
 
 
 class TextIterDataset(IterableDataset):
-    """Iterable dataset, used for inference when labels are unknown
+    """Iterable dataset for non-conllu files, used for inference when labels are unknown
 
-    This class is used when the data for inference is large and we do not want to load it entirely into memory.
+    This class is used when the data for inference is large, and we do not want to load it entirely into memory.
     """
-    def __init__(self, text_file: str, conllu_file: bool = True):
+    def __init__(self, text_file: str):
         """Initializes the instance based on user input.
 
         Args:
-            text_file: The path to the textfile to incrementally read from.
+            text_file: The path to the non-conllu textfile to incrementally read from.
         """
         super().__init__()
-        self.conllu_file = conllu_file
-        if text_file:
-            self.tf = open(text_file)
+        self.tf = text_file
 
-    def __iter__(self) -> str:
-        if self.conllu_file:
-            def get_sentences():
-                for line in self.tf:
-                    if line.startswith('# text'):
-                        yield line.lstrip('# text = ').rstrip('\n')
-            return get_sentences()
-        else:
-            # assuming file is line by line where each line is a sentence
-            return self.tf
+    def __iter__(self) -> TextIO:
+        return open(self.tf)
 
     def __del__(self) -> None:
         if hasattr(self, "tf"):
             self.tf.close()  # want to make sure we close the file during garbage collection
+
+
+class ConlluIterDataset(IterableDataset):
+    def __init__(self, conllu_file: str):
+        """Initializes the instance based on user input.
+
+        Args:
+            conllu_file: The path to the conllu textfile to incrementally read from.
+        """
+        super().__init__()
+        self.conllu_file = conllu_file
+
+    def __iter__(self) -> Iterator[str]:
+        parsed_conllu_generator = conllu.parse_incr(self.conllu_file, field_parsers=OVERRIDDEN_FIELD_PARSERS)
+        yield (token_list.metadata['text'] for token_list in parsed_conllu_generator)

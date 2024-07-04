@@ -11,7 +11,7 @@ from torch import Tensor
 from lightning.pytorch.callbacks import BasePredictionWriter
 
 from conllu_datasets import ConlluMapDataset
-from udtube_package.batch import CustomBatch
+from batch import CustomBatch
 
 
 class CustomWriter(BasePredictionWriter):

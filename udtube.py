@@ -499,6 +499,7 @@ class UDTube(pl.LightningModule):
         y_feats_logits = self.feats_head(x) if self.feats_toggle else None
         # S_arc, S_lab = self.deps_head(x_with_root)
 
+        # TODO make the model response an object (and change type hints accordingly)
         return batch.sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, masks
 
     def training_step(

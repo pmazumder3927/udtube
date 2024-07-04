@@ -11,7 +11,7 @@ from transformers import AutoTokenizer, T5TokenizerFast
 from tokenizers import Encoding
 
 from batch import ConlluBatch, TextBatch
-from conllu_datasets import ConlluMapDataset, TextIterDataset
+from conllu_datasets import ConlluMapDataset, TextIterDataset, ConlluIterDataset
 
 ROOT_TOKEN = "ROOT"
 
@@ -75,7 +75,10 @@ class ConlluDataModule(pl.LightningDataModule):
                                               convert_to_um=convert_to_um, train=True)
         self.val_dataset = ConlluMapDataset(val_dataset, reverse_edits=self.reverse_edits, path_name=path_name,
                                             convert_to_um=convert_to_um, train=False)
-        self.predict_dataset = TextIterDataset(predict_dataset)
+        if predict_dataset.endswith('.conllu'):
+            self.predict_dataset = ConlluIterDataset(predict_dataset)
+        else:
+            self.predict_dataset = TextIterDataset(predict_dataset)
         self.test_dataset = ConlluMapDataset(test_dataset, reverse_edits=self.reverse_edits, path_name=path_name,
                                              convert_to_um=convert_to_um, train=False)
         with open(f"{path_name}/multiword_dict.json", "r") as mw_tb:

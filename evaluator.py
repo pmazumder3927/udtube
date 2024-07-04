@@ -3,7 +3,7 @@
 import conllu
 import argparse
 
-from __init__ import OVERRIDDEN_FIELD_PARSERS
+from defaults import OVERRIDDEN_FIELD_PARSERS
 
 
 def set_up_parser():
