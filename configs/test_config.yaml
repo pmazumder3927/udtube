@@ -42,9 +42,9 @@ trainer:
 model:
   path_name: UDTube
   model_name: bert-base-multilingual-cased
-  udtube_dropout: 0.3
+  overall_dropout: 0.3
   encoder_dropout: 0.5
-  udtube_learning_rate: 0.005
+  overall_learning_rate: 0.005
   encoder_model_learning_rate: 2.0e-05
   pooling_layers: 4
   checkpoint: lightning_logs/hnnkb8cr/checkpoints/epoch=1-step=52.ckpt

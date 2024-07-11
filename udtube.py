@@ -1,3 +1,4 @@
+import logging
 from typing import Iterable, Optional, Callable, Any, Dict, Tuple, List
 
 import lightning.pytorch as pl
@@ -21,10 +22,14 @@ from biaffine_parser import BiaffineParser
 from typing import Union
 
 
+class LabelZeroException(Exception):
+    pass
+
+
 class UDTubeCLI(LightningCLI):
     """A customized version of the Lightning CLI
 
-    This class manages all processes behind the scenes, to find out what it can do, run python udtube_package.py --help
+    This class manages all processes behind the scenes, to find out what it can do, run python udtube.py --help
     """
 
     def add_arguments_to_parser(self, parser):
@@ -64,7 +69,7 @@ class UDTubeCLI(LightningCLI):
 class UDTube(pl.LightningModule):
     """The main model file
 
-    UDTube is a BERT based model that handles 3 tasks at once, pos tagging, lemmatization, and feature classification.
+    UDTube is a BERT based model that handles 3 tasks at once, POS tagging, lemmatization, and feature classification.
     """
 
     def __init__(
@@ -75,18 +80,18 @@ class UDTube(pl.LightningModule):
             xpos_out_label_size: int = 2,
             lemma_out_label_size: int = 2,
             feats_out_label_size: int = 2,
-            udtube_dropout: float = 0.3,
+            overall_dropout: float = 0.3,
             encoder_dropout: float = 0.5,
             warmup_steps: int = 500,
-            udtube_learning_rate: float = 5e-3,
+            overall_learning_rate: float = 5e-3,
             encoder_model_learning_rate: float = 2e-5,
             pooling_layers: int = 4,
             reverse_edits: bool = False,
             checkpoint: str = None,
-            pos_toggle: bool = True,
-            xpos_toggle: bool = True,
-            lemma_toggle: bool = True,
-            feats_toggle: bool = True
+            use_pos: bool = True,
+            use_xpos: bool = True,
+            use_lemma: bool = True,
+            use_feats: bool = True
     ):
         """Initializes the instance based on user input.
 
@@ -97,21 +102,21 @@ class UDTube(pl.LightningModule):
             xpos_out_label_size: The amount of language specific POS labels. This is usually passed by the dataset.
             lemma_out_label_size: The amount of lemma rule labels in the dataset. This is usually passed by the dataset.
             feats_out_label_size: The amount of feature labels in the dataset. This is usually passed by the dataset.
-            udtube_learning_rate: The learning rate of the full model
+            overall_learning_rate: The learning rate of the full model
             encoder_model_learning_rate: The learning rate of only the encoder
             pooling_layers: The amount of layers used for embedding calculation
             checkpoint: The model checkpoint file
-            pos_toggle: Whether the model will do POS tagging or not
-            xpos_toggle: Whether not the model will do XPOS tagging or not
-            lemma_toggle: Whether the model will do lemmatization or not
-            feats_toggle: Whether the model will do Ufeats tagging or not
+            use_pos: Whether the model will do POS tagging or not
+            use_xpos: Whether not the model will do XPOS tagging or not
+            use_lemma: Whether the model will do lemmatization or not
+            use_feats: Whether the model will do Ufeats tagging or not
         """
         super().__init__()
         self._validate_input(
             pos_out_label_size, lemma_out_label_size, feats_out_label_size
         )
         self.path_name = path_name
-        self.udtube_learning_rate = udtube_learning_rate
+        self.overall_learning_rate = overall_learning_rate
         self.encoder_model_learning_rate = encoder_model_learning_rate
         self.encoder_dropout = encoder_dropout
         self.warmup_steps = warmup_steps
@@ -119,36 +124,37 @@ class UDTube(pl.LightningModule):
         self.pooling_layers = pooling_layers
 
         self.encoder_model = self._load_model(model_name)
-        self.dropout_layer = nn.Dropout(udtube_dropout)
-        if pos_toggle:
+        self.dropout_layer = nn.Dropout(overall_dropout)
+        # TODO make heads nullable
+        if use_pos:
             self.pos_head = nn.Sequential(
                 nn.Linear(self.encoder_model.config.hidden_size, pos_out_label_size),
                 nn.LeakyReLU()
             )
-        if xpos_toggle:
+        if use_xpos:
             self.xpos_head = nn.Sequential(
                 nn.Linear(self.encoder_model.config.hidden_size, xpos_out_label_size),
                 nn.LeakyReLU()
             )
-        if lemma_toggle:
+        if use_lemma:
             self.lemma_head = nn.Sequential(
                 nn.Linear(self.encoder_model.config.hidden_size, lemma_out_label_size),
                 nn.LeakyReLU()
             )
-        if feats_toggle:
+        if use_feats:
             self.feats_head = nn.Sequential(
                 nn.Linear(self.encoder_model.config.hidden_size, feats_out_label_size),
                 nn.LeakyReLU()
             )
 
-        self.pos_toggle = pos_toggle
-        self.xpos_toggle = xpos_toggle
-        self.lemma_toggle = lemma_toggle
-        self.feats_toggle = feats_toggle
+        self.use_pos = use_pos
+        self.use_xpos = use_xpos
+        self.use_lemma = use_lemma
+        self.use_feats = use_feats
 
         # TODO add support back
         # self.deps_head = BiaffineParser(
-        #     self.encoder_model.config.hidden_size, udtube_dropout, deprel_out_label_size
+        #     self.encoder_model.config.hidden_size, overall_dropout, deprel_out_label_size
         # )
 
         # retrieving the LabelEncoders set up by the Dataset
@@ -170,6 +176,7 @@ class UDTube(pl.LightningModule):
             self.load_state_dict(checkpoint['state_dict'])
 
     def _load_model(self, model_name):
+        # There's a difference in the naming of the dropout kwarg, so this control flow is needed.
         if 'flaubert' in model_name.lower():
             model = transformers.AutoModel.from_pretrained(
                 model_name,
@@ -192,7 +199,7 @@ class UDTube(pl.LightningModule):
         # freezing params for first epoch
         for p in model.parameters():
             p.requires_grad = False
-        print("Encoder Parameters frozen for the first Epoch")
+        logging.info("Encoder Parameters frozen for the first Epoch")
         return model
 
     def _validate_input(
@@ -203,7 +210,7 @@ class UDTube(pl.LightningModule):
                 or lemma_out_label_size == 0
                 or feats_out_label_size == 0
         ):
-            raise ValueError(
+            raise LabelZeroException(
                 "One of the label sizes given to the model was zero"
             )
 
@@ -213,7 +220,8 @@ class UDTube(pl.LightningModule):
             pad: Iterable,
             max_len: int,
             return_long: bool = False,
-    ):
+    ) -> torch.tensor:
+        # TODO find a way to keep this on GPU
         padded_seq = []
         for s in sequence:
             if not torch.is_tensor(s):
@@ -231,15 +239,19 @@ class UDTube(pl.LightningModule):
 
     def pool_embeddings(
             self, x_embs: torch.tensor, tokenized: transformers.BatchEncoding, gold_label_ex=None
-    ):
-        new_embs, new_masks, words = [], [], []
+    ) -> Tuple[torch.tensor, List[str], torch.tensor, int]:
+        new_embs = []
+        new_masks = []
+        words = []
         encodings = tokenized.encodings
         offset = 1
         if not encodings:
             encodings = tokenized.custom_encodings
             offset = 0  # no offset here, this is the Byt5 case
         for encoding, x_emb_i in zip(encodings, x_embs):
-            embs_i, words_i, mask_i = [], [], []
+            embs_i = []
+            words_i = []
+            mask_i = []
             last_word_idx = slice(0, 0)
             # skipping over the first padding token ([CLS])
             for word_id, x_emb_j in zip(encoding.word_ids[offset:], x_emb_i[offset:]):
@@ -275,17 +287,17 @@ class UDTube(pl.LightningModule):
     def configure_optimizers(self):
         """Prepare optimizer and schedule (linear warmup and decay)"""
         grouped_params = [
-            # {'params': self.deps_head.parameters(), 'lr': self.udtube_learning_rate},
+            # {'params': self.deps_head.parameters(), 'lr': self.overall_learning_rate},
             {'params': self.encoder_model.parameters(), 'lr': self.encoder_model_learning_rate, "weight_decay": 0.01}
         ]
-        if self.lemma_toggle:
-            grouped_params.append({'params': self.lemma_head.parameters(), 'lr': self.udtube_learning_rate})
-        if self.pos_toggle:
-            grouped_params.append({'params': self.pos_head.parameters(), 'lr': self.udtube_learning_rate})
-        if self.xpos_toggle:
-            grouped_params.append({'params': self.xpos_head.parameters(), 'lr': self.udtube_learning_rate})
-        if self.feats_toggle:
-            grouped_params.append({'params': self.feats_head.parameters(), 'lr': self.udtube_learning_rate})
+        if self.use_lemma:
+            grouped_params.append({'params': self.lemma_head.parameters(), 'lr': self.overall_learning_rate})
+        if self.use_pos:
+            grouped_params.append({'params': self.pos_head.parameters(), 'lr': self.overall_learning_rate})
+        if self.use_xpos:
+            grouped_params.append({'params': self.xpos_head.parameters(), 'lr': self.overall_learning_rate})
+        if self.use_feats:
+            grouped_params.append({'params': self.feats_head.parameters(), 'lr': self.overall_learning_rate})
 
         optimizer = torch.optim.AdamW(grouped_params)
         return [optimizer]
@@ -420,13 +432,13 @@ class UDTube(pl.LightningModule):
     def _decode_to_str(self, sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits,
                        y_feats_logits, replacements=None) -> Tuple[str]:
         # argmaxing
-        if self.pos_toggle:
+        if self.use_pos:
             y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
-        if self.xpos_toggle:
+        if self.use_xpos:
             y_xpos_hat = torch.argmax(y_xpos_logits, dim=-1)
-        if self.lemma_toggle:
+        if self.use_lemma:
             y_lemma_hat = torch.argmax(y_lemma_logits, dim=-1)
-        if self.feats_toggle:
+        if self.use_feats:
             y_feats_hat = torch.argmax(y_feats_logits, dim=-1)
 
         # transforming to str
@@ -435,14 +447,14 @@ class UDTube(pl.LightningModule):
             lemmas_i = []
             seq_len = len(w_i)  # used to get rid of padding
 
-            if self.pos_toggle:
+            if self.use_pos:
                 y_pos_str_batch.append(self.pos_encoder.inverse_transform(y_pos_hat[batch_idx][:seq_len].cpu()))
-            if self.xpos_toggle:
+            if self.use_xpos:
                 y_xpos_str_batch.append(self.xpos_encoder.inverse_transform(y_xpos_hat[batch_idx][:seq_len].cpu()))
-            if self.feats_toggle:
+            if self.use_feats:
                 y_feats_hat_batch.append(self.feats_encoder.inverse_transform(y_feats_hat[batch_idx][:seq_len].cpu()))
 
-            if self.lemma_toggle:
+            if self.use_lemma:
                 # lemmas work through rule classification, so we have to also apply the rules.
                 lemma_rules = self.lemma_encoder.inverse_transform(y_lemma_hat[batch_idx][:seq_len].cpu())
                 for i, rule in enumerate(lemma_rules):
@@ -457,7 +469,7 @@ class UDTube(pl.LightningModule):
             Tuple[Iterable[str], list[list[str]], Tensor]:
         # if something is longer than an allowed sequence, we have to trim it down
         if batch.tokens.input_ids.shape[1] >= self.encoder_model.config.max_position_embeddings:
-            print(
+            logging.warning(
                 f"trimmed sequence down to maximum seq_len allowed: {self.encoder_model.config.max_position_embeddings}")
             batch.tokens.input_ids = batch.tokens.input_ids[:self.encoder_model.config.max_position_embeddings]
             batch.tokens.attention_mask = batch.tokens.attention_mask[
@@ -493,10 +505,10 @@ class UDTube(pl.LightningModule):
         x_with_root = x.detach().clone()
         x = x[:, 1:, :]  # dropping the root token embedding for every task but dependency
 
-        y_pos_logits = self.pos_head(x) if self.pos_toggle else None
-        y_xpos_logits = self.xpos_head(x) if self.xpos_toggle else None
-        y_lemma_logits = self.lemma_head(x) if self.lemma_toggle else None
-        y_feats_logits = self.feats_head(x) if self.feats_toggle else None
+        y_pos_logits = self.pos_head(x) if self.use_pos else None
+        y_xpos_logits = self.xpos_head(x) if self.use_xpos else None
+        y_lemma_logits = self.lemma_head(x) if self.use_lemma else None
+        y_feats_logits = self.feats_head(x) if self.use_feats else None
         # S_arc, S_lab = self.deps_head(x_with_root)
 
         # TODO make the model response an object (and change type hints accordingly)
@@ -509,7 +521,8 @@ class UDTube(pl.LightningModule):
         batch_size = len(batch)
         sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, masks = self(batch)
 
-        if self.pos_toggle:
+
+        if self.use_pos:
             pos_loss = self._call_head(
                 batch.pos,
                 y_pos_logits,
@@ -518,7 +531,7 @@ class UDTube(pl.LightningModule):
             )
             response["pos_loss"] = pos_loss
 
-        if self.xpos_toggle:
+        if self.use_xpos:
             xpos_loss = self._call_head(
                 batch.xpos,
                 y_xpos_logits,
@@ -527,7 +540,7 @@ class UDTube(pl.LightningModule):
             )
             response["xpos_loss"] = xpos_loss
 
-        if self.lemma_toggle:
+        if self.use_lemma:
             lemma_loss = self._call_head(
                 batch.lemmas,
                 y_lemma_logits,
@@ -536,7 +549,7 @@ class UDTube(pl.LightningModule):
             )
             response["lemma_loss"] = lemma_loss
 
-        if self.feats_toggle:
+        if self.use_feats:
             feats_loss = self._call_head(
                 batch.feats,
                 y_feats_logits,
@@ -594,4 +607,5 @@ class UDTube(pl.LightningModule):
 
 
 if __name__ == "__main__":
+    # the ConlluDataModule can handle both labelled and unlabelled data in prediction.
     UDTubeCLI(UDTube, ConlluDataModule, save_config_callback=None)
