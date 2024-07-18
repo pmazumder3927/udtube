@@ -1,0 +1,11 @@
+torch==2.0.1
+transformers==4.27.3
+pytorch-lightning==2.0.0
+lightning==2.0.5
+torchmetrics==0.11.4
+conllu==4.5.2
+scikit-learn==1.2.1
+wandb==0.15.8
+ud-compatibility==0.1.2
+spacy-udpipe==1.0.0
+jsonargparse==4.22.1

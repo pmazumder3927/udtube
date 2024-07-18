@@ -1,0 +1,6 @@
+*.conllu
+*.pyc
+*.ipynb
+
+# log stuff
+wandb/
