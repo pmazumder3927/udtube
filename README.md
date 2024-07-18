@@ -1,18 +1,18 @@
-== UDTube (beta) ==
+# UDTube (beta)
 
 UDtube is a trainable neural morphological analyzer built on Pytorch Lightning. 
 
 
-=== Philosophy ===
+## Philosophy
 
 Named in homage to the tried-and-true UDPipe, UDTube is built with inference-at-scale in mind. The software avoids loading large amounts of data at any time and instead favors an incremental loading approach to prediction. 
 While originally built for the purposes of investigating the linguistic problem of defectivity, UDTube is released for both replication and to enable new and exciting research in morphology.
 
-=== Authors ===
+## Authors
 
 Daniel Yakubov & Kyle Gorman
 
-# Installation
+## Installation
 
 UDTube is built on Python 3.10 and not extensively tested on other Python verisons.
 
