@@ -6,7 +6,7 @@ UDtube is a trainable neural morphological analyzer built on Pytorch Lightning.
 ## Philosophy
 
 Named in homage to the tried-and-true UDPipe, UDTube is built with inference-at-scale in mind. The software avoids loading large amounts of data at any time and instead favors an incremental loading approach to prediction. 
-While originally built for the purposes of investigating the linguistic problem of defectivity, UDTube is released for both replication and to enable new and exciting research in morphology.
+While originally built to investigate the linguistic problem of defectivity, UDTube is released for both replication and to enable new and exciting research in morphology.
 
 ## Authors
 
@@ -98,6 +98,10 @@ To learn more about the params for prediction:
 ```
 python udtube.py predict --help
 ```
+
+## Research Done with UDTube
+- Yakubov, Daniel, "How Do We Learn What We Cannot Say?" (2024). CUNY Academic Works.
+https://academicworks.cuny.edu/gc_etds/5622
 
 ## Contributing
 Fork and Pull! 
