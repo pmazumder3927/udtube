@@ -47,7 +47,7 @@ if __name__ == "__main__":
                         gold_tok = gold_list[gold_idx]
                         pred_tok = pred_list[pred_idx]
                     except:
-                        print("Sequence mismatch for:", gold_list, '\n', pred_list)
+                        logger.warning("Sequence mismatch for:", gold_list, '\n', pred_list)
                         total += 1
                         continue
                     if gold_tok["form"] != pred_tok["form"] and "[UNK]" not in pred_tok["form"]:

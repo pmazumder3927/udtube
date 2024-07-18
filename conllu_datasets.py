@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 import logging
@@ -13,7 +14,11 @@ import numpy as np
 from sklearn.preprocessing import LabelEncoder
 from torch import tensor
 from torch.utils.data import Dataset, IterableDataset
+
+# This is to mute a message that comes up EVERY TIME that these scripts are imported. It's a known issue for the pkg.
+sys.stdout = open(os.devnull, 'w')
 from ud_compatibility import languages, marry
+sys.stdout = sys.__stdout__
 
 import edit_scripts
 from defaults import OVERRIDDEN_FIELD_PARSERS, UNK_TAG, PAD_TAG
@@ -252,10 +257,12 @@ class TextIterDataset(IterableDataset):
         self.tf = text_file
 
     def __iter__(self) -> TextIO:
-        return open(self.tf)
+        if isinstance(self.tf, str):
+            self.tf = open(self.tf)
+        return self.tf
 
     def __del__(self) -> None:
-        if hasattr(self, "tf"):
+        if hasattr(self, "tf") and self.tf:
             self.tf.close()  # want to make sure we close the file during garbage collection
 
 
@@ -270,5 +277,11 @@ class ConlluIterDataset(IterableDataset):
         self.conllu_file = conllu_file
 
     def __iter__(self) -> Iterator[str]:
+        if isinstance(self.conllu_file, str):
+            self.conllu_file = open(self.conllu_file)
         parsed_conllu_generator = conllu.parse_incr(self.conllu_file, field_parsers=OVERRIDDEN_FIELD_PARSERS)
-        yield (token_list.metadata['text'] for token_list in parsed_conllu_generator)
+        return (token_list.metadata['text'] for token_list in parsed_conllu_generator)
+
+    def __del__(self) -> None:
+        if not isinstance(self.conllu_file, str):
+            self.conllu_file.close()

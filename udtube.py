@@ -172,7 +172,7 @@ class UDTube(pl.LightningModule):
         self.dummy_tensor = torch.zeros(self.encoder_model.config.hidden_size, device=self.device)
         if checkpoint:
             checkpoint = torch.load(checkpoint)
-            print("Loading from checkpoint")
+            logging.info("Loading from checkpoint")
             self.load_state_dict(checkpoint['state_dict'])
 
     def _load_model(self, model_name):
@@ -590,7 +590,7 @@ class UDTube(pl.LightningModule):
             self.step_adjustment = self.trainer.global_step
             for p in self.encoder_model.parameters():
                 p.requires_grad = True
-            print("Encoder Parameters unfrozen")
+            logging.info("Encoder Parameters unfrozen")
 
     def validation_step(self, batch: ConlluBatch, batch_idx: int) -> Dict[str, float]:
         return self.training_step(batch, batch_idx, subset="val")
@@ -607,5 +607,10 @@ class UDTube(pl.LightningModule):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        format="%(filename)s %(levelname)s: %(asctime)s - %(message)s",
+        datefmt="%d-%b-%y %H:%M:%S",
+        level="INFO",
+    )
     # the ConlluDataModule can handle both labelled and unlabelled data in prediction.
     UDTubeCLI(UDTube, ConlluDataModule, save_config_callback=None)

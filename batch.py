@@ -22,7 +22,7 @@ class CustomBatch(nn.Module):
         sentences: Iterable[str],
         replacements: Iterable[Tuple[str, str]],
     ):
-        super.__init__()
+        super().__init__()
         self.tokens = tokens
         self.sentences = [s.rstrip("\n") for s in sentences]
         self.replacements = replacements

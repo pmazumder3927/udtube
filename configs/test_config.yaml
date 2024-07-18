@@ -1,12 +1,11 @@
-# lightning.pytorch==2.0.5
-seed_everything: 42
+seed_everything: true
 trainer:
   accelerator: auto
   strategy: auto
   devices: auto
   num_nodes: 1
-  logger: WandbLogger
   precision: 32-true
+  logger: null
   callbacks: null
   fast_dev_run: false
   max_epochs: null
@@ -26,7 +25,7 @@ trainer:
   enable_checkpointing: null
   enable_progress_bar: null
   enable_model_summary: null
-  accumulate_grad_batches: 8
+  accumulate_grad_batches: 1
   gradient_clip_val: null
   gradient_clip_algorithm: null
   deterministic: null
@@ -44,19 +43,26 @@ model:
   model_name: bert-base-multilingual-cased
   overall_dropout: 0.3
   encoder_dropout: 0.5
+  warmup_steps: 500
   overall_learning_rate: 0.005
   encoder_model_learning_rate: 2.0e-05
   pooling_layers: 4
-  checkpoint: lightning_logs/hnnkb8cr/checkpoints/epoch=1-step=52.ckpt
+  checkpoint: null
+  use_pos: true
+  use_xpos: true
+  use_lemma: true
+  use_feats: true
 data:
-  language: el
+  language: en
   train_dataset: null
   val_dataset: null
   predict_dataset: null
-  test_dataset: el_gdt-ud-dev.conllu
-  batch_size: 8
-  convert_to_um: false
-  reverse_edits: true
-  checkpoint: lightning_logs/hnnkb8cr/checkpoints/epoch=1-step=52.ckpt
-output_file: el_gdt-ud-dev-pred.conllu
+  test_dataset: null
+  batch_size: 32
+  convert_to_um: true
+  reverse_edits: false
+  lang_with_space: true
+  checkpoint: null
+output_file: null
+ckpt_path: null
 verbose: true

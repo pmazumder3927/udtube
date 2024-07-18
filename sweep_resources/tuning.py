@@ -1,3 +1,4 @@
+import logging
 import os
 import subprocess
 import sys
@@ -50,14 +51,14 @@ def setup_run_params(train_config='../configs/fit_config.yaml'):
                 sub_key = "trainer"
                 key = key[len("trainer."):]
             if key in orig_config or sub_key and key in orig_config[sub_key]:
-                print(f"Overriding YAML argument: {key}")
+                logging.info(f"Overriding YAML argument: {key}")
                 if sub_key:
                     orig_config[sub_key][key] = value
                 else:
                     orig_config[key] = value
         with open('temp.yaml', 'w') as file:
             yaml.dump(orig_config, file)
-        print("Running!")
+        logging.info("Running!")
         os.system("python3 udtube_package.py fit --config temp.yaml")
 
 
@@ -74,7 +75,7 @@ def main() -> None:
             function=functools.partial(setup_run_params, train_config=args.fit_config),
         )
     except Exception as e:
-        print(e, file=sys.stderr)
+        logging.error(e, file=sys.stderr)
         # Exits gracefully, so wandb logs the error.
         exit(1)
     finally:
