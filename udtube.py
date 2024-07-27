@@ -15,7 +15,7 @@ from torchmetrics.functional.classification import multiclass_accuracy
 
 from batch import ConlluBatch, TextBatch, CustomBatch
 from callbacks import CustomWriter
-from data_module import ConlluDataModule
+from datamodules import ConlluDataModule
 from typing import Union
 
 
