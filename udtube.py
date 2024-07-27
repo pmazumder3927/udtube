@@ -294,6 +294,7 @@ class UDTube(pl.LightningModule):
                             bytes(encoding.tokens[word_idxs]).decode()
                         )
                     mask_i.append(1)
+            words.append(words_i)
             new_embs.append(torch.stack(embs_i))
             new_masks.append(tensor(mask_i, device=self.device))
         if gold_label_ex:
@@ -303,7 +304,9 @@ class UDTube(pl.LightningModule):
         else:
             longest_seq = max(len(m) for m in words)
         new_embs = self.pad_seq(new_embs, self.dummy_tensor, longest_seq)
-        new_masks = self.pad_seq(new_masks, tensor(0, device=self.device), longest_seq)
+        new_masks = self.pad_seq(
+            new_masks, tensor(0, device=self.device), longest_seq
+        )
         return new_embs, words, new_masks, longest_seq
 
     def configure_optimizers(self):
