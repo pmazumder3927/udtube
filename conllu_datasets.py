@@ -16,8 +16,9 @@ from torch import tensor
 from torch.utils.data import Dataset, IterableDataset
 
 # This is to mute a message that comes up EVERY TIME that these scripts are imported. It's a known issue for the pkg.
-sys.stdout = open(os.devnull, 'w')
+sys.stdout = open(os.devnull, "w")
 from ud_compatibility import languages, marry
+
 sys.stdout = sys.__stdout__
 
 import edit_scripts
@@ -33,6 +34,7 @@ class ConlluMapDataset(Dataset):
 
     This class loads the entire dataset into memory and is therefore only suitable for smaller datasets
     """
+
     UPOS_CLASSES = [
         "ADJ",
         "ADP",
@@ -53,8 +55,14 @@ class ConlluMapDataset(Dataset):
         "X",
     ]
 
-    def __init__(self, conllu_file: str, reverse_edits: bool = False, path_name: str = "UDTube",
-                 convert_to_um: bool = True, train: bool = False):
+    def __init__(
+        self,
+        conllu_file: str,
+        reverse_edits: bool = False,
+        path_name: str = "UDTube",
+        convert_to_um: bool = True,
+        train: bool = False,
+    ):
         """Initializes the instance based on user input.
 
         Args:
@@ -97,15 +105,19 @@ class ConlluMapDataset(Dataset):
             return
         # hopefully, as the marry.py repo stabilizes this will look less like an abomination
         if convert_to_um:
-            language_match = re.search(r'^[a-zA-Z]+', conllu_file)
+            language_match = re.search(r"^[a-zA-Z]+", conllu_file)
             if language_match:
                 language = languages.get_lang(language_match.group(0))
-                fc = marry.FileConverter(Path(conllu_file), language=language, clever=False)
-                fc.convert() # writes a file
+                fc = marry.FileConverter(
+                    Path(conllu_file), language=language, clever=False
+                )
+                fc.convert()  # writes a file
             if not language_match:
-                raise FileNameError("File does not follow the naming convention for conllu files: "
-                                    "<language>_<treebank>-<ud>-<split>.conllu")
-            return conllu_file.replace('-ud-', '-um-')
+                raise FileNameError(
+                    "File does not follow the naming convention for conllu files: "
+                    "<language>_<treebank>-<ud>-<split>.conllu"
+                )
+            return conllu_file.replace("-ud-", "-um-")
         else:
             return conllu_file
 
@@ -121,32 +133,44 @@ class ConlluMapDataset(Dataset):
             # dir already exists
             pass
         logging.info(f"Now saving label encoders for {self.conllu_file}")
-        joblib.dump(self.upos_encoder, f'{self.path_name}/upos_encoder.joblib')
-        joblib.dump(self.xpos_encoder, f'{self.path_name}/xpos_encoder.joblib')
-        joblib.dump(self.ufeats_encoder, f'{self.path_name}/ufeats_encoder.joblib')
-        joblib.dump(self.lemma_encoder, f'{self.path_name}/lemma_encoder.joblib')
+        joblib.dump(self.upos_encoder, f"{self.path_name}/upos_encoder.joblib")
+        joblib.dump(self.xpos_encoder, f"{self.path_name}/xpos_encoder.joblib")
+        joblib.dump(
+            self.ufeats_encoder, f"{self.path_name}/ufeats_encoder.joblib"
+        )
+        joblib.dump(
+            self.lemma_encoder, f"{self.path_name}/lemma_encoder.joblib"
+        )
 
     def _load_label_encoders(self):
-        self.lemma_encoder = joblib.load(f"{self.path_name}/lemma_encoder.joblib")
-        self.ufeats_encoder = joblib.load(f"{self.path_name}/ufeats_encoder.joblib")
-        self.upos_encoder = joblib.load(f"{self.path_name}/upos_encoder.joblib")
-        self.xpos_encoder = joblib.load(f"{self.path_name}/xpos_encoder.joblib")
+        self.lemma_encoder = joblib.load(
+            f"{self.path_name}/lemma_encoder.joblib"
+        )
+        self.ufeats_encoder = joblib.load(
+            f"{self.path_name}/ufeats_encoder.joblib"
+        )
+        self.upos_encoder = joblib.load(
+            f"{self.path_name}/upos_encoder.joblib"
+        )
+        self.xpos_encoder = joblib.load(
+            f"{self.path_name}/xpos_encoder.joblib"
+        )
 
-    def _get_all_classes(self, lname: str) -> List[Union[str, None, int, List[int], Dict[str, str]]]:
+    def _get_all_classes(
+        self, lname: str
+    ) -> List[Union[str, None, int, List[int], Dict[str, str]]]:
         """helper function to get all the classes observed in the training set"""
         classes = []
         with open(self.conllu_file) as f:
             dt = conllu.parse_incr(f, field_parsers=OVERRIDDEN_FIELD_PARSERS)
             for tk_list in dt:
                 for tok in tk_list:
-                    item = tok[lname] if tok[lname] else '_'
+                    item = tok[lname] if tok[lname] else "_"
                     if lname != "lemma" and item not in classes:
                         classes.append(item)
                     elif lname == "lemma":
                         lrule = str(
-                            self.e_script(
-                                tok["form"].lower(), item.lower()
-                            )
+                            self.e_script(tok["form"].lower(), item.lower())
                         )
                         if lrule not in classes:
                             classes.append(lrule)
@@ -168,16 +192,25 @@ class ConlluMapDataset(Dataset):
                         if train:
                             # This is a multi-word token, id looks like (1, '-', 3)
                             # creating a look-up table to be used when loading in sentences
-                            start, sep, end = tok["id"] # these are not perfect indices because of the multiword token stuff
-                            if not sep == '.':
+                            start, sep, end = tok[
+                                "id"
+                            ]  # these are not perfect indices because of the multiword token stuff
+                            if not sep == ".":
                                 # when sep is ., this is an ellided token, not a multiword token
                                 x = (end - start) + i
                                 # below, i + 1 is because we want the next token, not the current
-                                words = [t["form"] for t in tk_list[i + 1: x + 2]]
+                                words = [
+                                    t["form"] for t in tk_list[i + 1 : x + 2]
+                                ]
                                 if tok["form"] in self.multiword_table:
-                                    self.multiword_table[tok["form"]]["frequency"] += 1
+                                    self.multiword_table[tok["form"]][
+                                        "frequency"
+                                    ] += 1
                                 else:
-                                    self.multiword_table[tok["form"]] = {"frequency": 1, "words": words}
+                                    self.multiword_table[tok["form"]] = {
+                                        "frequency": 1,
+                                        "words": words,
+                                    }
                         continue  # we don't want to add it to the dataset!
                     l_rule = str(
                         self.e_script(
@@ -189,9 +222,21 @@ class ConlluMapDataset(Dataset):
                         tok["feats"] = "_"
 
                     # Here we have to check if the label in the dataset is unknown
-                    upos_ = tok["upos"] if tok["upos"] in self.upos_encoder.classes_ else UNK_TAG
-                    xpos_ = tok["xpos"] if tok["xpos"] in self.xpos_encoder.classes_ else UNK_TAG
-                    ufeat_ = tok["feats"] if tok["feats"] in self.ufeats_encoder.classes_ else UNK_TAG
+                    upos_ = (
+                        tok["upos"]
+                        if tok["upos"] in self.upos_encoder.classes_
+                        else UNK_TAG
+                    )
+                    xpos_ = (
+                        tok["xpos"]
+                        if tok["xpos"] in self.xpos_encoder.classes_
+                        else UNK_TAG
+                    )
+                    ufeat_ = (
+                        tok["feats"]
+                        if tok["feats"] in self.ufeats_encoder.classes_
+                        else UNK_TAG
+                    )
                     if l_rule not in self.lemma_encoder.classes_:
                         l_rule = UNK_TAG
                     uposes.append(upos_)
@@ -207,13 +252,16 @@ class ConlluMapDataset(Dataset):
                 data.append((sentence, uposes, xposes, lemma_rules, ufeats))
             if train:
                 self.check_multiword_table()
-                with open(f'{self.path_name}/multiword_dict.json', 'w') as mw_tb:
+                with open(
+                    f"{self.path_name}/multiword_dict.json", "w"
+                ) as mw_tb:
                     json.dump(self.multiword_table, mw_tb, ensure_ascii=False)
         return data
 
     def check_multiword_table(self) -> None:
         """Make sure all items are valid. Some entries could be typos or annotator mistakes,
-        if it is more frequent as a single word, it is assumed to be a typo/annotator mistake."""
+        if it is more frequent as a single word, it is assumed to be a typo/annotator mistake.
+        """
         single_cnt = Counter(self.all_words)
         keep = {}
         for w, record in self.multiword_table.items():
@@ -221,7 +269,6 @@ class ConlluMapDataset(Dataset):
                 continue
             keep[w] = record
         self.multiword_table = keep
-
 
     def get_special_words(self) -> List[str]:
         """Special words are ones that are not handled well by tokenizers, i.e. 2000-2004 or K., which are considered
@@ -231,7 +278,9 @@ class ConlluMapDataset(Dataset):
             dt = conllu.parse_incr(f, field_parsers=OVERRIDDEN_FIELD_PARSERS)
             for tk_list in dt:
                 for tk in tk_list:
-                    if isinstance(tk["id"], int) and re.search(r"\w+[.'-\\/%]|[.'-\\/%]\w+", tk["form"]):
+                    if isinstance(tk["id"], int) and re.search(
+                        r"\w+[.'-\\/%]|[.'-\\/%]\w+", tk["form"]
+                    ):
                         special_words.append(tk["form"])
         return special_words
 
@@ -247,6 +296,7 @@ class TextIterDataset(IterableDataset):
 
     This class is used when the data for inference is large, and we do not want to load it entirely into memory.
     """
+
     def __init__(self, text_file: str):
         """Initializes the instance based on user input.
 
@@ -279,8 +329,13 @@ class ConlluIterDataset(IterableDataset):
     def __iter__(self) -> Iterator[str]:
         if isinstance(self.conllu_file, str):
             self.conllu_file = open(self.conllu_file)
-        parsed_conllu_generator = conllu.parse_incr(self.conllu_file, field_parsers=OVERRIDDEN_FIELD_PARSERS)
-        return (token_list.metadata['text'] for token_list in parsed_conllu_generator)
+        parsed_conllu_generator = conllu.parse_incr(
+            self.conllu_file, field_parsers=OVERRIDDEN_FIELD_PARSERS
+        )
+        return (
+            token_list.metadata["text"]
+            for token_list in parsed_conllu_generator
+        )
 
     def __del__(self) -> None:
         if not isinstance(self.conllu_file, str):

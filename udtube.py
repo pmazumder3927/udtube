@@ -30,7 +30,10 @@ class UDTubeCLI(LightningCLI):
     """
 
     def add_arguments_to_parser(self, parser):
-        parser.add_argument("--output_file", help="The file to output to, can be set to stdout.")
+        parser.add_argument(
+            "--output_file",
+            help="The file to output to, can be set to stdout.",
+        )
         parser.link_arguments("model.path_name", "data.path_name")
         parser.link_arguments("model.path_name", "trainer.default_root_dir")
         parser.link_arguments("model.model_name", "data.model_name")
@@ -58,9 +61,13 @@ class UDTubeCLI(LightningCLI):
 
     def before_instantiate_classes(self) -> None:
         if self.subcommand == "predict":
-            self.trainer_defaults["callbacks"] = [CustomWriter(self.config.predict.output_file)]
+            self.trainer_defaults["callbacks"] = [
+                CustomWriter(self.config.predict.output_file)
+            ]
         elif self.subcommand == "test":
-            self.trainer_defaults["callbacks"] = [CustomWriter(self.config.test.output_file)]
+            self.trainer_defaults["callbacks"] = [
+                CustomWriter(self.config.test.output_file)
+            ]
 
 
 class UDTube(pl.LightningModule):
@@ -70,25 +77,25 @@ class UDTube(pl.LightningModule):
     """
 
     def __init__(
-            self,
-            path_name: str = "UDTube",
-            model_name: str = "bert-base-multilingual-cased",
-            pos_out_label_size: int = 2,
-            xpos_out_label_size: int = 2,
-            lemma_out_label_size: int = 2,
-            feats_out_label_size: int = 2,
-            overall_dropout: float = 0.3,
-            encoder_dropout: float = 0.5,
-            warmup_steps: int = 500,
-            overall_learning_rate: float = 5e-3,
-            encoder_model_learning_rate: float = 2e-5,
-            pooling_layers: int = 4,
-            reverse_edits: bool = False,
-            checkpoint: str = None,
-            use_pos: bool = True,
-            use_xpos: bool = True,
-            use_lemma: bool = True,
-            use_feats: bool = True
+        self,
+        path_name: str = "UDTube",
+        model_name: str = "bert-base-multilingual-cased",
+        pos_out_label_size: int = 2,
+        xpos_out_label_size: int = 2,
+        lemma_out_label_size: int = 2,
+        feats_out_label_size: int = 2,
+        overall_dropout: float = 0.3,
+        encoder_dropout: float = 0.5,
+        warmup_steps: int = 500,
+        overall_learning_rate: float = 5e-3,
+        encoder_model_learning_rate: float = 2e-5,
+        pooling_layers: int = 4,
+        reverse_edits: bool = False,
+        checkpoint: str = None,
+        use_pos: bool = True,
+        use_xpos: bool = True,
+        use_lemma: bool = True,
+        use_feats: bool = True,
     ):
         """Initializes the instance based on user input.
 
@@ -125,69 +132,82 @@ class UDTube(pl.LightningModule):
         # TODO make heads nullable
         if use_pos:
             self.pos_head = nn.Sequential(
-                nn.Linear(self.encoder_model.config.hidden_size, pos_out_label_size),
-                nn.LeakyReLU()
+                nn.Linear(
+                    self.encoder_model.config.hidden_size, pos_out_label_size
+                ),
+                nn.LeakyReLU(),
             )
         if use_xpos:
             self.xpos_head = nn.Sequential(
-                nn.Linear(self.encoder_model.config.hidden_size, xpos_out_label_size),
-                nn.LeakyReLU()
+                nn.Linear(
+                    self.encoder_model.config.hidden_size, xpos_out_label_size
+                ),
+                nn.LeakyReLU(),
             )
         if use_lemma:
             self.lemma_head = nn.Sequential(
-                nn.Linear(self.encoder_model.config.hidden_size, lemma_out_label_size),
-                nn.LeakyReLU()
+                nn.Linear(
+                    self.encoder_model.config.hidden_size, lemma_out_label_size
+                ),
+                nn.LeakyReLU(),
             )
         if use_feats:
             self.feats_head = nn.Sequential(
-                nn.Linear(self.encoder_model.config.hidden_size, feats_out_label_size),
-                nn.LeakyReLU()
+                nn.Linear(
+                    self.encoder_model.config.hidden_size, feats_out_label_size
+                ),
+                nn.LeakyReLU(),
             )
-
         self.use_pos = use_pos
         self.use_xpos = use_xpos
         self.use_lemma = use_lemma
         self.use_feats = use_feats
-
         # retrieving the LabelEncoders set up by the Dataset
-        self.lemma_encoder = joblib.load(f"{self.path_name}/lemma_encoder.joblib")
-        self.feats_encoder = joblib.load(f"{self.path_name}/ufeats_encoder.joblib")
+        self.lemma_encoder = joblib.load(
+            f"{self.path_name}/lemma_encoder.joblib"
+        )
+        self.feats_encoder = joblib.load(
+            f"{self.path_name}/ufeats_encoder.joblib"
+        )
         self.pos_encoder = joblib.load(f"{self.path_name}/upos_encoder.joblib")
-        self.xpos_encoder = joblib.load(f"{self.path_name}/xpos_encoder.joblib")
-
+        self.xpos_encoder = joblib.load(
+            f"{self.path_name}/xpos_encoder.joblib"
+        )
         self.e_script = (
             edit_scripts.ReverseEditScript
             if reverse_edits
             else edit_scripts.EditScript
         )
         self.save_hyperparameters()
-        self.dummy_tensor = torch.zeros(self.encoder_model.config.hidden_size, device=self.device)
+        self.dummy_tensor = torch.zeros(
+            self.encoder_model.config.hidden_size, device=self.device
+        )
         if checkpoint:
             checkpoint = torch.load(checkpoint)
             logging.info("Loading from checkpoint")
-            self.load_state_dict(checkpoint['state_dict'])
+            self.load_state_dict(checkpoint["state_dict"])
 
     def _load_model(self, model_name):
         # There's a difference in the naming of the dropout kwarg, so this control flow is needed.
-        if 'flaubert' in model_name.lower():
+        if "flaubert" in model_name.lower():
             model = transformers.AutoModel.from_pretrained(
                 model_name,
                 output_hidden_states=True,
-                dropout=self.encoder_dropout
+                dropout=self.encoder_dropout,
             )
-        elif 't5' in model_name:
+        elif "t5" in model_name:
             model = transformers.AutoModel.from_pretrained(
                 model_name,
                 output_hidden_states=True,
-                dropout_rate=self.encoder_dropout
+                dropout_rate=self.encoder_dropout,
             )
             model = model.encoder
         else:
             model = transformers.AutoModel.from_pretrained(
-                model_name, output_hidden_states=True,
-                hidden_dropout_prob=self.encoder_dropout
+                model_name,
+                output_hidden_states=True,
+                hidden_dropout_prob=self.encoder_dropout,
             )
-
         # freezing params for first epoch
         for p in model.parameters():
             p.requires_grad = False
@@ -195,23 +215,23 @@ class UDTube(pl.LightningModule):
         return model
 
     def _validate_input(
-            self, pos_out_label_size, lemma_out_label_size, feats_out_label_size
+        self, pos_out_label_size, lemma_out_label_size, feats_out_label_size
     ):
         if (
-                pos_out_label_size == 0
-                or lemma_out_label_size == 0
-                or feats_out_label_size == 0
+            pos_out_label_size == 0
+            or lemma_out_label_size == 0
+            or feats_out_label_size == 0
         ):
             raise LabelZeroException(
                 "One of the label sizes given to the model was zero"
             )
 
     def pad_seq(
-            self,
-            sequence: Iterable,
-            pad: Iterable,
-            max_len: int,
-            return_long: bool = False,
+        self,
+        sequence: Iterable,
+        pad: Iterable,
+        max_len: int,
+        return_long: bool = False,
     ) -> torch.tensor:
         # TODO find a way to keep this on GPU
         padded_seq = []
@@ -230,7 +250,10 @@ class UDTube(pl.LightningModule):
         return torch.stack(padded_seq)
 
     def pool_embeddings(
-            self, x_embs: torch.tensor, tokenized: transformers.BatchEncoding, gold_label_ex=None
+        self,
+        x_embs: torch.tensor,
+        tokenized: transformers.BatchEncoding,
+        gold_label_ex=None,
     ) -> Tuple[torch.tensor, List[str], torch.tensor, int]:
         new_embs = []
         new_masks = []
@@ -246,7 +269,9 @@ class UDTube(pl.LightningModule):
             mask_i = []
             last_word_idx = slice(0, 0)
             # skipping over the first padding token ([CLS])
-            for word_id, x_emb_j in zip(encoding.word_ids[offset:], x_emb_i[offset:]):
+            for word_id, x_emb_j in zip(
+                encoding.word_ids[offset:], x_emb_i[offset:]
+            ):
                 if word_id is None:
                     # emb padding
                     break
@@ -259,44 +284,75 @@ class UDTube(pl.LightningModule):
                     ).squeeze()
                     embs_i.append(word_emb_pooled)
                     try:
-                        words_i.append("".join(encoding.tokens[word_idxs]).replace('##', '').replace("▁", ""))
+                        words_i.append(
+                            "".join(encoding.tokens[word_idxs])
+                            .replace("##", "")
+                            .replace("▁", "")
+                        )
                     except TypeError:
-                        words_i.append(bytes(encoding.tokens[word_idxs]).decode())
+                        words_i.append(
+                            bytes(encoding.tokens[word_idxs]).decode()
+                        )
                     mask_i.append(1)
             new_embs.append(torch.stack(embs_i))
             new_masks.append(tensor(mask_i, device=self.device))
         if gold_label_ex:
-            longest_seq = max(max(len(m) for m in words),
-                              max(len(l) for l in gold_label_ex))
+            longest_seq = max(
+                max(len(m) for m in words), max(len(l) for l in gold_label_ex)
+            )
         else:
             longest_seq = max(len(m) for m in words)
         new_embs = self.pad_seq(new_embs, self.dummy_tensor, longest_seq)
-        new_masks = self.pad_seq(new_masks, tensor(0, device=self.device), longest_seq + 1)
+        new_masks = self.pad_seq(new_masks, tensor(0, device=self.device), longest_seq)
         return new_embs, words, new_masks, longest_seq
 
     def configure_optimizers(self):
         """Prepare optimizer and schedule (linear warmup and decay)"""
         grouped_params = [
-            {'params': self.encoder_model.parameters(), 'lr': self.encoder_model_learning_rate, "weight_decay": 0.01}
+            {
+                "params": self.encoder_model.parameters(),
+                "lr": self.encoder_model_learning_rate,
+                "weight_decay": 0.01,
+            }
         ]
         if self.use_lemma:
-            grouped_params.append({'params': self.lemma_head.parameters(), 'lr': self.overall_learning_rate})
+            grouped_params.append(
+                {
+                    "params": self.lemma_head.parameters(),
+                    "lr": self.overall_learning_rate,
+                }
+            )
         if self.use_pos:
-            grouped_params.append({'params': self.pos_head.parameters(), 'lr': self.overall_learning_rate})
+            grouped_params.append(
+                {
+                    "params": self.pos_head.parameters(),
+                    "lr": self.overall_learning_rate,
+                }
+            )
         if self.use_xpos:
-            grouped_params.append({'params': self.xpos_head.parameters(), 'lr': self.overall_learning_rate})
+            grouped_params.append(
+                {
+                    "params": self.xpos_head.parameters(),
+                    "lr": self.overall_learning_rate,
+                }
+            )
         if self.use_feats:
-            grouped_params.append({'params': self.feats_head.parameters(), 'lr': self.overall_learning_rate})
+            grouped_params.append(
+                {
+                    "params": self.feats_head.parameters(),
+                    "lr": self.overall_learning_rate,
+                }
+            )
 
         optimizer = torch.optim.AdamW(grouped_params)
         return [optimizer]
 
     def optimizer_step(
-            self,
-            epoch: int,
-            batch_idx: int,
-            optimizer: Union[Optimizer, LightningOptimizer],
-            optimizer_closure: Optional[Callable[[], Any]] = None,
+        self,
+        epoch: int,
+        batch_idx: int,
+        optimizer: Union[Optimizer, LightningOptimizer],
+        optimizer_closure: Optional[Callable[[], Any]] = None,
     ) -> None:
         optimizer.step(closure=optimizer_closure)
         if epoch > 0:
@@ -307,31 +363,38 @@ class UDTube(pl.LightningModule):
                 lr_scale = 0 + float(unfrozen_steps) / self.warmup_steps
             else:
                 # decaying weight
-                lr_scale = 1 / (unfrozen_steps ** 0.5)
-
-            optimizer.param_groups[0]["lr"] = lr_scale * self.encoder_model_learning_rate
-            self.log("encoder_lr",
-                     optimizer.param_groups[0]["lr"],
-                     on_step=True,
-                     on_epoch=False,
-                     prog_bar=False,
-                     logger=True,
-                     batch_size=32,  # TODO pass this instead
-                     )
+                lr_scale = 1 / (unfrozen_steps**0.5)
+            optimizer.param_groups[0]["lr"] = (
+                lr_scale * self.encoder_model_learning_rate
+            )
+            self.log(
+                "encoder_lr",
+                optimizer.param_groups[0]["lr"],
+                on_step=True,
+                on_epoch=False,
+                prog_bar=False,
+                logger=True,
+                batch_size=32,  # TODO pass this instead
+            )
 
     def log_metrics(
-            self,
-            y_pred: torch.tensor,
-            y_true: torch.tensor,
-            batch_size: int,
-            task_name: str,
-            subset: str = "train",
-            ignore_index: int = 0
+        self,
+        y_pred: torch.tensor,
+        y_true: torch.tensor,
+        batch_size: int,
+        task_name: str,
+        subset: str = "train",
+        ignore_index: int = 0,
     ) -> None:
         num_classes = y_pred.shape[1]
         # getting the pad
-        acc = multiclass_accuracy(y_pred.permute(2, 1, 0), y_true.T, num_classes=num_classes,
-                                  ignore_index=ignore_index, average="micro")
+        acc = multiclass_accuracy(
+            y_pred.permute(2, 1, 0),
+            y_true.T,
+            num_classes=num_classes,
+            ignore_index=ignore_index,
+            average="micro",
+        )
         self.log(
             f"{subset}_{task_name}_acc",
             acc,
@@ -343,18 +406,17 @@ class UDTube(pl.LightningModule):
         )
 
     def _call_head(
-            self,
-            y_gold,
-            logits,
-            task_name="pos",
-            subset="train",
-            return_loss=True,
+        self,
+        y_gold,
+        logits,
+        task_name="pos",
+        subset="train",
+        return_loss=True,
     ):
         batch_size, longest_seq, num_classes = logits.shape
         # ignore_idx is used for padding!
         lencoder = getattr(self, f"{task_name}_encoder")
         ignore_idx = int(lencoder.transform(["[PAD]"])[0])  # TODO better way?
-
         pad = tensor(ignore_idx, device=self.device)
         y_gold_tensor = self.pad_seq(
             y_gold, pad, longest_seq, return_long=True
@@ -363,17 +425,30 @@ class UDTube(pl.LightningModule):
         # Each head returns ( batch X sequence_len X classes )
         # but CE & metrics want ( minibatch X Classes X sequence_len ); (minibatch, C, d0...dk) & (N, C, ..) in the docs
         logits = logits.permute(0, 2, 1)
-
         self.log_metrics(
-            logits, y_gold_tensor, batch_size, task_name, subset=subset, ignore_index=ignore_idx
+            logits,
+            y_gold_tensor,
+            batch_size,
+            task_name,
+            subset=subset,
+            ignore_index=ignore_idx,
         )
-
         if return_loss:
-            loss = nn.functional.cross_entropy(logits, y_gold_tensor, ignore_index=ignore_idx)
+            loss = nn.functional.cross_entropy(
+                logits, y_gold_tensor, ignore_index=ignore_idx
+            )
             return loss
 
-    def _decode_to_str(self, sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits,
-                       y_feats_logits, replacements=None) -> Tuple[str]:
+    def _decode_to_str(
+        self,
+        sentences,
+        words,
+        y_pos_logits,
+        y_xpos_logits,
+        y_lemma_logits,
+        y_feats_logits,
+        replacements=None,
+    ) -> Tuple[str]:
         # argmaxing
         if self.use_pos:
             y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
@@ -383,84 +458,123 @@ class UDTube(pl.LightningModule):
             y_lemma_hat = torch.argmax(y_lemma_logits, dim=-1)
         if self.use_feats:
             y_feats_hat = torch.argmax(y_feats_logits, dim=-1)
-
         # transforming to str
-        y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch = [], [], [], []
+        (
+            y_pos_str_batch,
+            y_xpos_str_batch,
+            y_lemma_str_batch,
+            y_feats_hat_batch,
+        ) = ([], [], [], [])
         for batch_idx, w_i in enumerate(words):
             lemmas_i = []
             seq_len = len(w_i)  # used to get rid of padding
-
             if self.use_pos:
-                y_pos_str_batch.append(self.pos_encoder.inverse_transform(y_pos_hat[batch_idx][:seq_len].cpu()))
+                y_pos_str_batch.append(
+                    self.pos_encoder.inverse_transform(
+                        y_pos_hat[batch_idx][:seq_len].cpu()
+                    )
+                )
             if self.use_xpos:
-                y_xpos_str_batch.append(self.xpos_encoder.inverse_transform(y_xpos_hat[batch_idx][:seq_len].cpu()))
+                y_xpos_str_batch.append(
+                    self.xpos_encoder.inverse_transform(
+                        y_xpos_hat[batch_idx][:seq_len].cpu()
+                    )
+                )
             if self.use_feats:
-                y_feats_hat_batch.append(self.feats_encoder.inverse_transform(y_feats_hat[batch_idx][:seq_len].cpu()))
+                y_feats_hat_batch.append(
+                    self.feats_encoder.inverse_transform(
+                        y_feats_hat[batch_idx][:seq_len].cpu()
+                    )
+                )
 
             if self.use_lemma:
                 # lemmas work through rule classification, so we have to also apply the rules.
-                lemma_rules = self.lemma_encoder.inverse_transform(y_lemma_hat[batch_idx][:seq_len].cpu())
+                lemma_rules = self.lemma_encoder.inverse_transform(
+                    y_lemma_hat[batch_idx][:seq_len].cpu()
+                )
                 for i, rule in enumerate(lemma_rules):
                     rscript = self.e_script.fromtag(rule)
                     lemma = rscript.apply(words[batch_idx][i])
                     lemmas_i.append(lemma)
                 y_lemma_str_batch.append(lemmas_i)
 
-        return sentences, words, y_pos_str_batch, y_xpos_str_batch, y_lemma_str_batch, y_feats_hat_batch, replacements
+        return (
+            sentences,
+            words,
+            y_pos_str_batch,
+            y_xpos_str_batch,
+            y_lemma_str_batch,
+            y_feats_hat_batch,
+            replacements,
+        )
 
-    def forward(self, batch: CustomBatch) -> \
-            Tuple[Iterable[str], list[list[str]], Tensor]:
+    def forward(
+        self, batch: CustomBatch
+    ) -> Tuple[Iterable[str], list[list[str]], Tensor]:
         # if something is longer than an allowed sequence, we have to trim it down
-        if batch.tokens.input_ids.shape[1] >= self.encoder_model.config.max_position_embeddings:
+        if (
+            batch.tokens.input_ids.shape[1]
+            >= self.encoder_model.config.max_position_embeddings
+        ):
             logging.warning(
-                f"trimmed sequence down to maximum seq_len allowed: {self.encoder_model.config.max_position_embeddings}")
-            batch.tokens.input_ids = batch.tokens.input_ids[:self.encoder_model.config.max_position_embeddings]
+                f"trimmed sequence down to maximum seq_len allowed: {self.encoder_model.config.max_position_embeddings}"
+            )
+            batch.tokens.input_ids = batch.tokens.input_ids[
+                : self.encoder_model.config.max_position_embeddings
+            ]
             batch.tokens.attention_mask = batch.tokens.attention_mask[
-                                          :self.encoder_model.config.max_position_embeddings]
+                : self.encoder_model.config.max_position_embeddings
+            ]
         # getting raw embeddings
         x = self.encoder_model(
             batch.tokens.input_ids, batch.tokens.attention_mask
         )
         # stacking n (self.pooling_layer) embedding layers
-        x = torch.stack(
-            x.hidden_states[-self.pooling_layers:]
-        )
+        x = torch.stack(x.hidden_states[-self.pooling_layers :])
         # averages n layers into one embedding layer
         x = torch.mean(x, keepdim=True, dim=0).squeeze()
-
         if len(x.shape) == 2:
             # batch of size one
             x = x.unsqueeze(dim=0)
-
         x = self.dropout_layer(x)
-
         # this is used for padding, when present
         if isinstance(batch, TextBatch):
             gold_label_ex = None
         else:
             gold_label_ex = batch.pos
-
         # converting x embeddings to the word level
         x, words, masks, longest_seq = self.pool_embeddings(
             x, batch.tokens, gold_label_ex=gold_label_ex
         )
-
         y_pos_logits = self.pos_head(x) if self.use_pos else None
         y_xpos_logits = self.xpos_head(x) if self.use_xpos else None
         y_lemma_logits = self.lemma_head(x) if self.use_lemma else None
         y_feats_logits = self.feats_head(x) if self.use_feats else None
-
         # TODO make the model response an object (and change type hints accordingly)
-        return batch.sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, masks
+        return (
+            batch.sentences,
+            words,
+            y_pos_logits,
+            y_xpos_logits,
+            y_lemma_logits,
+            y_feats_logits,
+            masks,
+        )
 
     def training_step(
-            self, batch: ConlluBatch, batch_idx: int, subset: str = "train"
+        self, batch: ConlluBatch, batch_idx: int, subset: str = "train"
     ) -> Dict[str, float]:
         response = {}
         batch_size = len(batch)
-        sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, masks = self(batch)
-
-
+        (
+            sentences,
+            words,
+            y_pos_logits,
+            y_xpos_logits,
+            y_lemma_logits,
+            y_feats_logits,
+            masks,
+        ) = self(batch)
         if self.use_pos:
             pos_loss = self._call_head(
                 batch.pos,
@@ -469,16 +583,11 @@ class UDTube(pl.LightningModule):
                 subset=subset,
             )
             response["pos_loss"] = pos_loss
-
         if self.use_xpos:
             xpos_loss = self._call_head(
-                batch.xpos,
-                y_xpos_logits,
-                task_name="xpos",
-                subset=subset
+                batch.xpos, y_xpos_logits, task_name="xpos", subset=subset
             )
             response["xpos_loss"] = xpos_loss
-
         if self.use_lemma:
             lemma_loss = self._call_head(
                 batch.lemmas,
@@ -487,7 +596,6 @@ class UDTube(pl.LightningModule):
                 subset=subset,
             )
             response["lemma_loss"] = lemma_loss
-
         if self.use_feats:
             feats_loss = self._call_head(
                 batch.feats,
@@ -496,11 +604,9 @@ class UDTube(pl.LightningModule):
                 subset=subset,
             )
             response["feats_loss"] = feats_loss
-
         # combining the loss of the active heads
         loss = torch.mean(torch.stack([l for l in response.values()]))
         response["loss"] = loss
-
         self.log(
             f"{subset}_loss",
             loss,
@@ -510,7 +616,6 @@ class UDTube(pl.LightningModule):
             logger=True,
             batch_size=batch_size,
         )
-
         return response
 
     def on_train_epoch_end(self) -> None:
@@ -521,14 +626,30 @@ class UDTube(pl.LightningModule):
                 p.requires_grad = True
             logging.info("Encoder Parameters unfrozen")
 
-    def validation_step(self, batch: ConlluBatch, batch_idx: int) -> Dict[str, float]:
+    def validation_step(
+        self, batch: ConlluBatch, batch_idx: int
+    ) -> Dict[str, float]:
         return self.training_step(batch, batch_idx, subset="val")
 
     def test_step(self, batch: ConlluBatch, batch_idx: int) -> Tuple[str]:
-        sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, masks = self(batch)
-
-        return self._decode_to_str(sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits,
-                                   y_feats_logits, replacements=batch.replacements)
+        (
+            sentences,
+            words,
+            y_pos_logits,
+            y_xpos_logits,
+            y_lemma_logits,
+            y_feats_logits,
+            masks,
+        ) = self(batch)
+        return self._decode_to_str(
+            sentences,
+            words,
+            y_pos_logits,
+            y_xpos_logits,
+            y_lemma_logits,
+            y_feats_logits,
+            replacements=batch.replacements,
+        )
 
     def predict_step(self, batch: TextBatch, batch_idx: int) -> Tuple[str]:
         *res, _ = self(batch)
