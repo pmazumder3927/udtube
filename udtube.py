@@ -294,10 +294,8 @@ class UDTube(pl.LightningModule):
                             bytes(encoding.tokens[word_idxs]).decode()
                         )
                     mask_i.append(1)
+            words.append(words_i)
             new_embs.append(torch.stack(embs_i))
-            words.append(
-                words_i[1:]
-            )  # ROOT is always first, dropping it here.
             new_masks.append(tensor(mask_i, device=self.device))
         if gold_label_ex:
             longest_seq = max(
@@ -305,10 +303,9 @@ class UDTube(pl.LightningModule):
             )
         else:
             longest_seq = max(len(m) for m in words)
-        # longest_seq + 1 is the ROOT adjustment
-        new_embs = self.pad_seq(new_embs, self.dummy_tensor, longest_seq + 1)
+        new_embs = self.pad_seq(new_embs, self.dummy_tensor, longest_seq)
         new_masks = self.pad_seq(
-            new_masks, tensor(0, device=self.device), longest_seq + 1
+            new_masks, tensor(0, device=self.device), longest_seq
         )
         return new_embs, words, new_masks, longest_seq
 
@@ -552,7 +549,6 @@ class UDTube(pl.LightningModule):
         x, words, masks, longest_seq = self.pool_embeddings(
             x, batch.tokens, gold_label_ex=gold_label_ex
         )
-        x = x[:, 1:, :]  # dropping the root token embedding.
         y_pos_logits = self.pos_head(x) if self.use_pos else None
         y_xpos_logits = self.xpos_head(x) if self.use_xpos else None
         y_lemma_logits = self.lemma_head(x) if self.use_lemma else None
