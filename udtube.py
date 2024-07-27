@@ -8,8 +8,6 @@ import joblib
 from lightning.pytorch.core.optimizer import LightningOptimizer
 from torch.optim import Optimizer
 
-from mst import mst
-
 import edit_scripts
 from lightning.pytorch.cli import LightningCLI
 from torch import nn, tensor, Tensor
@@ -18,7 +16,6 @@ from torchmetrics.functional.classification import multiclass_accuracy
 from batch import ConlluBatch, TextBatch, CustomBatch
 from callbacks import CustomWriter
 from data_module import ConlluDataModule
-from biaffine_parser import BiaffineParser
 from typing import Union
 
 
@@ -152,11 +149,6 @@ class UDTube(pl.LightningModule):
         self.use_lemma = use_lemma
         self.use_feats = use_feats
 
-        # TODO add support back
-        # self.deps_head = BiaffineParser(
-        #     self.encoder_model.config.hidden_size, overall_dropout, deprel_out_label_size
-        # )
-
         # retrieving the LabelEncoders set up by the Dataset
         self.lemma_encoder = joblib.load(f"{self.path_name}/lemma_encoder.joblib")
         self.feats_encoder = joblib.load(f"{self.path_name}/ufeats_encoder.joblib")
@@ -287,7 +279,6 @@ class UDTube(pl.LightningModule):
     def configure_optimizers(self):
         """Prepare optimizer and schedule (linear warmup and decay)"""
         grouped_params = [
-            # {'params': self.deps_head.parameters(), 'lr': self.overall_learning_rate},
             {'params': self.encoder_model.parameters(), 'lr': self.encoder_model_learning_rate, "weight_decay": 0.01}
         ]
         if self.use_lemma:
@@ -383,52 +374,6 @@ class UDTube(pl.LightningModule):
             loss = nn.functional.cross_entropy(logits, y_gold_tensor, ignore_index=ignore_idx)
             return loss
 
-    def _get_loss_from_deps_head(self, S_arc, S_lab, batch, attn_masks, subset="train"):
-        batch_size = len(batch)
-
-        # Removing root
-        S_arc = S_arc[:, 1:, 1:]
-        S_lab = S_lab[:, :, 1:, 1:]
-        # S_lab_ignore_idx = S_lab.shape[1] - 1
-        S_lab_ignore_idx = None
-        attn_masks = attn_masks[:, 1:]
-        longest_seq = S_arc.shape[1]
-
-        # for head prediction, the padding is the length of the sequence, since num classes changes per sentence.
-        gold_heads = self.pad_seq(
-            batch.heads, tensor(longest_seq, device=self.device), longest_seq, return_long=True
-        )
-        gold_deprels = self.pad_seq(
-            batch.deprels, tensor(S_lab_ignore_idx, device=self.device), longest_seq, return_long=True
-        )
-        # A lot of tensor manipulation goes into making the S_lab tenable.
-        # Credit: https://github.com/daandouwe/biaffine-dependency-parser/tree/9338c6fde6de5393ac1bbdd6a8bb152c2a015a6c
-        heads = gold_heads.unsqueeze(1).unsqueeze(2)  # [batch, 1, 1, sent_len]
-        heads = heads.expand(-1, S_lab.size(1), -1, -1)  # [batch, n_labels, 1, sent_len]
-        heads = torch.where(heads != longest_seq, heads, 0)  # Replacing padding due to index error
-        S_lab = torch.gather(S_lab, 2, heads).squeeze(2)  # [batch, n_labels, sent_len]
-        S_lab = S_lab.transpose(-1, -2)  # [batch, sent_len, n_labels]
-        S_lab = S_lab.contiguous().view(-1, S_lab.size(-1))  # [batch*sent_len, n_labels]
-        labels = gold_deprels.view(-1)  # [batch*sent_len]
-
-        srel_acc = multiclass_accuracy(S_lab, labels, num_classes=S_lab.shape[1], ignore_index=S_lab_ignore_idx,
-                                       average="micro")
-        self.log(
-            f"{subset}_deprel_acc",
-            srel_acc,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True,
-            logger=True,
-            batch_size=batch_size
-        )
-        # getting losses
-        S_arc = S_arc * attn_masks.unsqueeze(dim=1)
-        arc_loss = nn.functional.cross_entropy(S_arc, gold_heads, ignore_index=longest_seq)
-        rel_loss = nn.functional.cross_entropy(S_lab, labels, ignore_index=S_lab_ignore_idx)
-
-        return arc_loss, rel_loss
-
     def _decode_to_str(self, sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits,
                        y_feats_logits, replacements=None) -> Tuple[str]:
         # argmaxing
@@ -502,14 +447,12 @@ class UDTube(pl.LightningModule):
             x, batch.tokens, gold_label_ex=gold_label_ex
         )
 
-        x_with_root = x.detach().clone()
-        x = x[:, 1:, :]  # dropping the root token embedding for every task but dependency
+        x = x[:, 1:, :]  # dropping the root token embedding.
 
         y_pos_logits = self.pos_head(x) if self.use_pos else None
         y_xpos_logits = self.xpos_head(x) if self.use_xpos else None
         y_lemma_logits = self.lemma_head(x) if self.use_lemma else None
         y_feats_logits = self.feats_head(x) if self.use_feats else None
-        # S_arc, S_lab = self.deps_head(x_with_root)
 
         # TODO make the model response an object (and change type hints accordingly)
         return batch.sentences, words, y_pos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits, masks
@@ -557,16 +500,6 @@ class UDTube(pl.LightningModule):
                 subset=subset,
             )
             response["feats_loss"] = feats_loss
-
-        # TODO add back
-        # getting loss from dep head, it's different from the rest
-        # arc_loss, rel_loss = self._get_loss_from_deps_head(
-        #     S_arc, S_lab,
-        #     batch,
-        #     masks,
-        #     subset=subset)
-        # response["arc_loss"] = arc_loss
-        # response["rel_loss"] = rel_loss
 
         # combining the loss of the active heads
         loss = torch.mean(torch.stack([l for l in response.values()]))
