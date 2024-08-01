@@ -203,9 +203,7 @@ class ConlluDataModule(pl.LightningDataModule):
             padding="longest",
             return_tensors="pt",
             is_split_into_words=True,
-        ).to(
-            "cuda" if torch.cuda.is_available() else "cpu"
-        )  # TODO this .to might really not be needed.
+        )
         if not tokenized_x.encodings:
             # for Byt5, which doesn't seem to have a fast tokenizer
             encodings_ = []
@@ -257,7 +255,7 @@ class ConlluDataModule(pl.LightningDataModule):
             padding="longest",
             return_tensors="pt",
             is_split_into_words=True,
-        ).to("cuda" if torch.cuda.is_available() else "cpu")
+        )
         return TextBatch(tokenized_x, sentences, replacements)
 
     def predict_dataloader(self):
