@@ -4,13 +4,11 @@ import logging
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union
 
 import joblib
-import lightning.pytorch as pl
+import pytorch_lightning as pl
 import torch
 import transformers
-from lightning.pytorch.core.optimizer import LightningOptimizer
-from torch import Tensor, nn, tensor
-from torch.optim import Optimizer
-from torchmetrics.functional.classification import multiclass_accuracy
+from torch import nn, optim
+from torchmetrics.functional import classification
 
 import edit_scripts
 from batch import ConlluBatch, CustomBatch, TextBatch
@@ -79,7 +77,7 @@ class UDTube(pl.LightningModule):
         self.step_adjustment = None
         self.pooling_layers = pooling_layers
 
-        self.encoder_model = self._load_model(model_name)
+        self.encoder_model = self._load_model(model_name).to(self.device)
         self.dropout_layer = nn.Dropout(overall_dropout)
         # TODO make heads nullable
         if use_pos:
@@ -164,6 +162,7 @@ class UDTube(pl.LightningModule):
         for p in model.parameters():
             p.requires_grad = False
         logging.info("Encoder Parameters frozen for the first Epoch")
+        # Moves model to device.
         return model
 
     def _validate_input(
@@ -184,12 +183,12 @@ class UDTube(pl.LightningModule):
         pad: Iterable,
         max_len: int,
         return_long: bool = False,
-    ) -> torch.tensor:
+    ) -> torch.Tensor:
         # TODO find a way to keep this on GPU
         padded_seq = []
         for s in sequence:
             if not torch.is_tensor(s):
-                s = tensor(s, device=self.device)
+                s = torch.tensor(s, device=self.device)
             if len(s) != max_len:
                 # I think the below operation puts the padding back on CPU, not great
                 r_padding = torch.stack([pad] * (max_len - len(s)))
@@ -203,10 +202,10 @@ class UDTube(pl.LightningModule):
 
     def pool_embeddings(
         self,
-        x_embs: torch.tensor,
+        x_embs: torch.Tensor,
         tokenized: transformers.BatchEncoding,
         gold_label_ex=None,
-    ) -> Tuple[torch.tensor, List[str], torch.tensor, int]:
+    ) -> Tuple[torch.Tensor, List[str], torch.Tensor, int]:
         new_embs = []
         new_masks = []
         words = []
@@ -248,7 +247,7 @@ class UDTube(pl.LightningModule):
                     mask_i.append(1)
             words.append(words_i)
             new_embs.append(torch.stack(embs_i))
-            new_masks.append(tensor(mask_i, device=self.device))
+            new_masks.append(torch.tensor(mask_i, device=self.device))
         if gold_label_ex:
             longest_seq = max(
                 max(len(m) for m in words), max(len(l) for l in gold_label_ex)
@@ -257,7 +256,7 @@ class UDTube(pl.LightningModule):
             longest_seq = max(len(m) for m in words)
         new_embs = self.pad_seq(new_embs, self.dummy_tensor, longest_seq)
         new_masks = self.pad_seq(
-            new_masks, tensor(0, device=self.device), longest_seq
+            new_masks, torch.tensor(0, device=self.device), longest_seq
         )
         return new_embs, words, new_masks, longest_seq
 
@@ -306,7 +305,9 @@ class UDTube(pl.LightningModule):
         self,
         epoch: int,
         batch_idx: int,
-        optimizer: Union[Optimizer, LightningOptimizer],
+        optimizer: Union[
+            optim.Optimizer, pl.core.optimizer.LightningOptimizer
+        ],
         optimizer_closure: Optional[Callable[[], Any]] = None,
     ) -> None:
         optimizer.step(closure=optimizer_closure)
@@ -334,8 +335,8 @@ class UDTube(pl.LightningModule):
 
     def log_metrics(
         self,
-        y_pred: torch.tensor,
-        y_true: torch.tensor,
+        y_pred: torch.Tensor,
+        y_true: torch.Tensor,
         batch_size: int,
         task_name: str,
         subset: str = "train",
@@ -343,7 +344,7 @@ class UDTube(pl.LightningModule):
     ) -> None:
         num_classes = y_pred.shape[1]
         # getting the pad
-        acc = multiclass_accuracy(
+        acc = classification.multiclass_accuracy(
             y_pred.permute(2, 1, 0),
             y_true.T,
             num_classes=num_classes,
@@ -372,7 +373,7 @@ class UDTube(pl.LightningModule):
         # ignore_idx is used for padding!
         lencoder = getattr(self, f"{task_name}_encoder")
         ignore_idx = int(lencoder.transform(["[PAD]"])[0])  # TODO better way?
-        pad = tensor(ignore_idx, device=self.device)
+        pad = torch.tensor(ignore_idx, device=self.device)
         y_gold_tensor = self.pad_seq(
             y_gold, pad, longest_seq, return_long=True
         )
@@ -465,7 +466,7 @@ class UDTube(pl.LightningModule):
 
     def forward(
         self, batch: CustomBatch
-    ) -> Tuple[Iterable[str], list[list[str]], Tensor]:
+    ) -> Tuple[Iterable[str], list[list[str]], torch.Tensor]:
         # if something is longer than an allowed sequence, we have to trim it down
         if (
             batch.tokens.input_ids.shape[1]
@@ -482,7 +483,7 @@ class UDTube(pl.LightningModule):
             ]
         # getting raw embeddings
         x = self.encoder_model(
-            batch.tokens.input_ids, batch.tokens.attention_mask
+            batch.tokens.input_ids.to(self.device), batch.tokens.attention_mask.to(self.device)
         )
         # stacking n (self.pooling_layer) embedding layers
         x = torch.stack(x.hidden_states[-self.pooling_layers :])

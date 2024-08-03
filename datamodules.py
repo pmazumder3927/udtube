@@ -5,7 +5,7 @@ import os
 import torch
 import spacy_udpipe
 
-import lightning.pytorch as pl
+import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, T5TokenizerFast
 from tokenizers import Encoding
