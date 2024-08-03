@@ -15,12 +15,6 @@ from sklearn.preprocessing import LabelEncoder
 from torch import tensor
 from torch.utils.data import Dataset, IterableDataset
 
-# This is to mute a message that comes up EVERY TIME that these scripts are imported. It's a known issue for the pkg.
-sys.stdout = open(os.devnull, "w")
-from ud_compatibility import languages, marry
-
-sys.stdout = sys.__stdout__
-
 import edit_scripts
 from defaults import OVERRIDDEN_FIELD_PARSERS, UNK_TAG, PAD_TAG
 
@@ -60,7 +54,6 @@ class ConlluMapDataset(Dataset):
         conllu_file: str,
         reverse_edits: bool = False,
         path_name: str = "UDTube",
-        convert_to_um: bool = True,
         train: bool = False,
     ):
         """Initializes the instance based on user input.
@@ -69,13 +62,12 @@ class ConlluMapDataset(Dataset):
             conllu_file: The path to the conllu file to make the dataset from
             reverse_edits: Reverse edit script calculation. Recommended for suffixal languages. False by default
             path_name: The dir where everything will get saved
-            convert_to_um: Enable Universal Dependency (UD) file conversion to Universal Morphology (UM) format
             train: Should only be true for the train dataset. Used to decide if to fit encoders
         """
         super().__init__()
         self.path_name = path_name
         self.all_words = []
-        self.conllu_file = self._convert_to_um(conllu_file, convert_to_um)
+        self.conllu_file = conllu_file
         self.e_script = (
             edit_scripts.ReverseEditScript
             if reverse_edits
@@ -99,27 +91,6 @@ class ConlluMapDataset(Dataset):
         else:
             # Instantiation of empty class, happens in prediction
             self.data_set = []
-
-    def _convert_to_um(self, conllu_file: str, convert_to_um: bool) -> str:
-        if not conllu_file:
-            return
-        # hopefully, as the marry.py repo stabilizes this will look less like an abomination
-        if convert_to_um:
-            language_match = re.search(r"^[a-zA-Z]+", conllu_file)
-            if language_match:
-                language = languages.get_lang(language_match.group(0))
-                fc = marry.FileConverter(
-                    Path(conllu_file), language=language, clever=False
-                )
-                fc.convert()  # writes a file
-            if not language_match:
-                raise FileNameError(
-                    "File does not follow the naming convention for conllu files: "
-                    "<language>_<treebank>-<ud>-<split>.conllu"
-                )
-            return conllu_file.replace("-ud-", "-um-")
-        else:
-            return conllu_file
 
     def _fit_label_encoders(self) -> None:
         self.upos_encoder.fit(self.UPOS_CLASSES + [PAD_TAG, UNK_TAG, "_"])
