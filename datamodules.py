@@ -264,7 +264,3 @@ class ConlluDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             collate_fn=self._collator(conllu=False),
         )
-
-    def teardown(self, stage: str) -> None:
-        if stage == "predict":
-            del self.predict_dataset
