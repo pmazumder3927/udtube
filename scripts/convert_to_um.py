@@ -1,5 +1,15 @@
 #!/usr/bin/env python
-"""Converts Universal Dependencies features to UniMorph features."""
+"""Converts Universal Dependencies features to UniMorph features.
+
+Following the practice of the ud_compatibility library, this parses the
+filename of the input CoNLL-U file to figure out what to call the output file,
+and may complain if the file is not in the right format. We hope that a future
+release of ud_compatibility will back off from these strong assumptions.
+
+Sample usage:
+
+    ./convert_to_um.py --language rus 
+"""
 
 import argparse
 import pathlib
