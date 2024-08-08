@@ -5,7 +5,7 @@ import os
 import torch
 import spacy_udpipe
 
-import lightning.pytorch as pl
+import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, T5TokenizerFast
 from tokenizers import Encoding
@@ -259,7 +259,3 @@ class ConlluDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             collate_fn=self._collator(conllu=False),
         )
-
-    def teardown(self, stage: str) -> None:
-        if stage == "predict":
-            del self.predict_dataset
