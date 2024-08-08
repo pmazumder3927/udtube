@@ -64,7 +64,6 @@ class ConlluDataModule(pl.LightningDataModule):
         predict_dataset: Optional[str] = None,
         test_dataset: Optional[str] = None,
         batch_size: int = 32,
-        convert_to_um: bool = True,
         reverse_edits: bool = False,
         lang_with_space: bool = True,
         checkpoint: Optional[str] = None,
@@ -78,7 +77,6 @@ class ConlluDataModule(pl.LightningDataModule):
             val_dataset: The path to the validation conllu file
             predict_dataset: The path to the prediction dataset, can either be text or conllu
             batch_size: The batch_size
-            convert_to_um: enable Universal Dependency (UD) file conversion to Universal Morphology (UM) format
             reverse_edits: Reverse edit script calculation. Recommended for suffixal languages. False by default
             checkpoint: The path to the model checkpoint file
         """
@@ -94,14 +92,12 @@ class ConlluDataModule(pl.LightningDataModule):
             train_dataset,
             reverse_edits=self.reverse_edits,
             path_name=path_name,
-            convert_to_um=convert_to_um,
             train=True,
         )
         self.val_dataset = ConlluMapDataset(
             val_dataset,
             reverse_edits=self.reverse_edits,
             path_name=path_name,
-            convert_to_um=convert_to_um,
             train=False,
         )
         if predict_dataset and predict_dataset.endswith(".conllu"):
@@ -112,7 +108,6 @@ class ConlluDataModule(pl.LightningDataModule):
             test_dataset,
             reverse_edits=self.reverse_edits,
             path_name=path_name,
-            convert_to_um=convert_to_um,
             train=False,
         )
         with open(f"{path_name}/multiword_dict.json", "r") as mw_tb:

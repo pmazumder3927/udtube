@@ -11,7 +11,7 @@ from pytorch_lightning.callbacks import TQDMProgressBar
 from torch import Tensor
 from lightning.pytorch.callbacks import BasePredictionWriter
 
-from conllu_datasets import ConlluMapDataset
+from datasets import ConlluMapDataset
 from batch import CustomBatch
 from defaults import PAD_TAG
 
