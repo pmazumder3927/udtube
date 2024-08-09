@@ -11,6 +11,7 @@ from torch import nn, optim
 from torchmetrics.functional import classification
 
 import edit_scripts
+import encoders
 from batch import ConlluBatch, CustomBatch, TextBatch
 
 
@@ -38,7 +39,7 @@ class UDTube(pl.LightningModule):
         encoder_dropout: float = 0.5,
         warmup_steps: int = 500,
         overall_learning_rate: float = 5e-3,
-        encoder_model_learning_rate: float = 2e-5,
+        encoder_learning_rate: float = 2e-5,
         pooling_layers: int = 4,
         reverse_edits: bool = False,
         checkpoint: str = None,
@@ -57,7 +58,7 @@ class UDTube(pl.LightningModule):
             lemma_out_label_size: The amount of lemma rule labels in the dataset. This is usually passed by the dataset.
             feats_out_label_size: The amount of feature labels in the dataset. This is usually passed by the dataset.
             overall_learning_rate: The learning rate of the full model
-            encoder_model_learning_rate: The learning rate of only the encoder
+            encoder_learning_rate: The learning rate of only the encoder
             pooling_layers: The amount of layers used for embedding calculation
             checkpoint: The model checkpoint file
             use_pos: Whether the model will do POS tagging or not
@@ -71,40 +72,43 @@ class UDTube(pl.LightningModule):
         )
         self.path_name = path_name
         self.overall_learning_rate = overall_learning_rate
-        self.encoder_model_learning_rate = encoder_model_learning_rate
+        self.encoder_learning_rate = encoder_learning_rate
         self.encoder_dropout = encoder_dropout
         self.warmup_steps = warmup_steps
         self.step_adjustment = None
         self.pooling_layers = pooling_layers
-
-        self.encoder_model = self._load_model(model_name).to(self.device)
+        self.encoder_layer = encoders.load(model_name, encoder_dropout)
+        # Freezes encoder layer params for the first epoch.
+        for p in self.encoder_layer.parameters():
+            p.requires_grad = False
+        logging.info("Encoder parameters frozen for the first epoch")
         self.dropout_layer = nn.Dropout(overall_dropout)
         # TODO make heads nullable
         if use_pos:
             self.pos_head = nn.Sequential(
                 nn.Linear(
-                    self.encoder_model.config.hidden_size, pos_out_label_size
+                    self.encoder_layer.config.hidden_size, pos_out_label_size
                 ),
                 nn.LeakyReLU(),
             )
         if use_xpos:
             self.xpos_head = nn.Sequential(
                 nn.Linear(
-                    self.encoder_model.config.hidden_size, xpos_out_label_size
+                    self.encoder_layer.config.hidden_size, xpos_out_label_size
                 ),
                 nn.LeakyReLU(),
             )
         if use_lemma:
             self.lemma_head = nn.Sequential(
                 nn.Linear(
-                    self.encoder_model.config.hidden_size, lemma_out_label_size
+                    self.encoder_layer.config.hidden_size, lemma_out_label_size
                 ),
                 nn.LeakyReLU(),
             )
         if use_feats:
             self.feats_head = nn.Sequential(
                 nn.Linear(
-                    self.encoder_model.config.hidden_size, feats_out_label_size
+                    self.encoder_layer.config.hidden_size, feats_out_label_size
                 ),
                 nn.LeakyReLU(),
             )
@@ -130,7 +134,7 @@ class UDTube(pl.LightningModule):
         )
         self.save_hyperparameters()
         self.dummy_tensor = torch.zeros(
-            self.encoder_model.config.hidden_size, device=self.device
+            self.encoder_layer.config.hidden_size, device=self.device
         )
         if checkpoint:
             checkpoint = torch.load(checkpoint)
@@ -158,10 +162,6 @@ class UDTube(pl.LightningModule):
                 output_hidden_states=True,
                 hidden_dropout_prob=self.encoder_dropout,
             )
-        # freezing params for first epoch
-        for p in model.parameters():
-            p.requires_grad = False
-        logging.info("Encoder Parameters frozen for the first Epoch")
         # Moves model to device.
         return model
 
@@ -264,8 +264,8 @@ class UDTube(pl.LightningModule):
         """Prepare optimizer and schedule (linear warmup and decay)"""
         grouped_params = [
             {
-                "params": self.encoder_model.parameters(),
-                "lr": self.encoder_model_learning_rate,
+                "params": self.encoder.parameters(),
+                "lr": self.encoder_learning_rate,
                 "weight_decay": 0.01,
             }
         ]
@@ -321,7 +321,7 @@ class UDTube(pl.LightningModule):
                 # decaying weight
                 lr_scale = 1 / (unfrozen_steps**0.5)
             optimizer.param_groups[0]["lr"] = (
-                lr_scale * self.encoder_model_learning_rate
+                lr_scale * self.encoder_learning_rate
             )
             self.log(
                 "encoder_lr",
@@ -470,19 +470,19 @@ class UDTube(pl.LightningModule):
         # if something is longer than an allowed sequence, we have to trim it down
         if (
             batch.tokens.input_ids.shape[1]
-            >= self.encoder_model.config.max_position_embeddings
+            >= self.encoder_layer.config.max_position_embeddings
         ):
             logging.warning(
-                f"trimmed sequence down to maximum seq_len allowed: {self.encoder_model.config.max_position_embeddings}"
+                f"trimmed sequence down to maximum seq_len allowed: {self.encoder.config.max_position_embeddings}"
             )
             batch.tokens.input_ids = batch.tokens.input_ids[
-                : self.encoder_model.config.max_position_embeddings
+                : self.encoder_layer.config.max_position_embeddings
             ]
             batch.tokens.attention_mask = batch.tokens.attention_mask[
-                : self.encoder_model.config.max_position_embeddings
+                : self.encoder_layer.config.max_position_embeddings
             ]
         # getting raw embeddings
-        x = self.encoder_model(
+        x = self.encoder_layer(
             batch.tokens.input_ids.to(self.device), batch.tokens.attention_mask.to(self.device)
         )
         # stacking n (self.pooling_layer) embedding layers
@@ -580,7 +580,7 @@ class UDTube(pl.LightningModule):
             self.step_adjustment = self.trainer.global_step
             for p in self.encoder_model.parameters():
                 p.requires_grad = True
-            logging.info("Encoder Parameters unfrozen")
+            logging.info("Encoder parameters unfrozen")
 
     def validation_step(
         self, batch: ConlluBatch, batch_idx: int
