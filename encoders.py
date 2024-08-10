@@ -22,6 +22,7 @@ import transformers
 
 # These are implicitly included in TESTED_ENCODERS.
 # Please keep in lexicographic order.
+# The key is the model prefix, the value is the name of the dropout parameter.
 SPECIAL_CASE_ENCODERS = {
     "flaubert/flaubert": "dropout",
     "google-t5/t5": "dropout_rate",
@@ -72,6 +73,8 @@ def load(model_name: str, dropout: float) -> transformers.AutoModel:
             __file__,
         )
     # Uses this as the default name.
+    # TODO: improve this conditional if kwargs not related to dropout are
+    # also passed to the encoder loader.
     if not kwargs:
         kwargs["hidden_dropout_prob"] = dropout
     return transformers.AutoModel.from_pretrained(

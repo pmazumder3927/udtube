@@ -141,30 +141,6 @@ class UDTube(pl.LightningModule):
             logging.info("Loading from checkpoint")
             self.load_state_dict(checkpoint["state_dict"])
 
-    def _load_model(self, model_name):
-        # There's a difference in the naming of the dropout kwarg, so this control flow is needed.
-        if "flaubert" in model_name.lower():
-            model = transformers.AutoModel.from_pretrained(
-                model_name,
-                output_hidden_states=True,
-                dropout=self.encoder_dropout,
-            )
-        elif "t5" in model_name:
-            model = transformers.AutoModel.from_pretrained(
-                model_name,
-                output_hidden_states=True,
-                dropout_rate=self.encoder_dropout,
-            )
-            model = model.encoder
-        else:
-            model = transformers.AutoModel.from_pretrained(
-                model_name,
-                output_hidden_states=True,
-                hidden_dropout_prob=self.encoder_dropout,
-            )
-        # Moves model to device.
-        return model
-
     def _validate_input(
         self, pos_out_label_size, lemma_out_label_size, feats_out_label_size
     ):
@@ -264,7 +240,7 @@ class UDTube(pl.LightningModule):
         """Prepare optimizer and schedule (linear warmup and decay)"""
         grouped_params = [
             {
-                "params": self.encoder.parameters(),
+                "params": self.encoder_layer.parameters(),
                 "lr": self.encoder_learning_rate,
                 "weight_decay": 0.01,
             }
@@ -297,7 +273,6 @@ class UDTube(pl.LightningModule):
                     "lr": self.overall_learning_rate,
                 }
             )
-
         optimizer = torch.optim.AdamW(grouped_params)
         return [optimizer]
 
@@ -473,7 +448,7 @@ class UDTube(pl.LightningModule):
             >= self.encoder_layer.config.max_position_embeddings
         ):
             logging.warning(
-                f"trimmed sequence down to maximum seq_len allowed: {self.encoder.config.max_position_embeddings}"
+                f"trimmed sequence down to maximum seq_len allowed: {self.encoder_layer.config.max_position_embeddings}"
             )
             batch.tokens.input_ids = batch.tokens.input_ids[
                 : self.encoder_layer.config.max_position_embeddings
@@ -483,7 +458,8 @@ class UDTube(pl.LightningModule):
             ]
         # getting raw embeddings
         x = self.encoder_layer(
-            batch.tokens.input_ids.to(self.device), batch.tokens.attention_mask.to(self.device)
+            batch.tokens.input_ids.to(self.device),
+            batch.tokens.attention_mask.to(self.device),
         )
         # stacking n (self.pooling_layer) embedding layers
         x = torch.stack(x.hidden_states[-self.pooling_layers :])
