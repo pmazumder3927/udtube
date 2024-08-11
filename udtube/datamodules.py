@@ -1,42 +1,38 @@
+"""Data modules."""
+
+import functools
 import json
 import re
-from functools import partial
-import os
-import torch
+
+from typing import Callable, Optional
+
+import pytorch_lightning as pl
 import spacy_udpipe
+import transformers
+import torch
+from torch.utils import data
 
-import lightning.pytorch as pl
-from torch.utils.data import DataLoader
-from transformers import AutoTokenizer, T5TokenizerFast
-from tokenizers import Encoding
-
-from batch import ConlluBatch, TextBatch
-from conllu_datasets import (
-    ConlluMapDataset,
-    TextIterDataset,
-    ConlluIterDataset,
-)
-from typing import Optional
-
-from defaults import SPECIAL_TOKENS
-
-ROOT_TOKEN = "ROOT"
+from . import batches, datasets, defaults
 
 
+# TODO: will it break if we inherit from tokenizers.Encoding?
 class CustomEncoding:
-    # TODO will it break if we inherit from tokenizers.Encoding?
-    """Encoding object that partially emulates tokenizer package encodings object.
+    """Encoding object emulating tokenizer encodings object.
 
-    For models that are not built on rust(like Byt5) this object is needed to not break later code. In particular,
-    the implementation of word_to_tokens.
+    For models that are not built on rust (like ByT5) this object is needed to
+    preserve the implementation of word_to_tokens.
     """
+
+    # TODO: typing.
 
     def __init__(self, word_ids, tokens):
         self.word_ids = word_ids
         self.tokens = tokens
 
+    # TODO: typing.
+
     def word_to_tokens(self, word_id):
-        # TODO: less naive approach
+        # TODO: less naive approach.
         start = self.word_ids.index(word_id)
         stop = start + 1
         for i, idx in enumerate(self.word_ids[start + 1 :]):
@@ -47,57 +43,67 @@ class CustomEncoding:
         return start, stop
 
 
-class ConlluDataModule(pl.LightningDataModule):
-    """Reusable DataModule that manages stages of UDTube
+class DataModule(pl.LightningDataModule):
+    """CoNLL-U data module.
 
-    This class is initialized by the LightningCLI interface. It manages all the data loading steps for UDTube. Train/Val
-    are loaded into memory, but prediction data is loaded in slowly to avoid memory errors when loading in large files.
+    This class is initialized by the LightningCLI interface. It manages all
+    data loading steps for UDTube. Training and validation are loaded into
+    fully into memory; prediction data is loaded incrementally to avoid memory
+    errors with large datasets.
+
+    Args:
+        path_name: directory for model assets.
+        model_name: model name (i.e., from HuggingFace).
+        train_dataset: path to training CoNLL-U file.
+        val_dataset: path to validation CoNLL-U file.
+        predict_dataset: path to the prediction dataset; may either be text
+            or CoNLL-U format (if the path ends with .conllu)
+        batch_size: batch size.
+        convert_to_um: if enabled, convert Universal Dependency (UD) features
+            to Universal Morphology (UM) format.
+        reverse_edits: if true, uses reverse (suffixal) edit scripts.
+        checkpoint: path to the model checkpoint.
     """
+
+    # TODO: argument documentation is incomplete.
+
+    # TODO: rename `model_name`, `path_name`, `lang_with_space`, and
+    # `reverse_edits` variables.
+
+    # TODO(#20): reconsider inference for CoNLL-U vs. text file.
 
     def __init__(
         self,
         path_name: str = "UDTube",
-        model_name: str = "bert-base-multilingual-cased",
-        language: str = "en",
+        model_name: str = defaults.MODEL_NAME,
+        language: str = defaults.LANGUAGE,
         train_dataset: Optional[str] = None,
         val_dataset: Optional[str] = None,
         predict_dataset: Optional[str] = None,
         test_dataset: Optional[str] = None,
-        batch_size: int = 32,
-        convert_to_um: bool = True,
-        reverse_edits: bool = False,
-        lang_with_space: bool = True,
+        batch_size: int = defaults.BATCH_SIZE,
+        convert_to_um: bool = defaults.CONVERT_TO_UM,
+        reverse_edits: bool = defaults.REVERSE_EDITS,
+        lang_with_space: bool = defaults.LANG_WITH_SPACE,
         checkpoint: Optional[str] = None,
     ):
-        """Initializes the instance based on user input. Some attributes will not be set if train dataset is None.
-
-        Args:
-            path_name: The name of the folder to save model assets in
-            model_name: The name of the model; used to tokenize and encode.
-            train_dataset: The path to the training conllu file
-            val_dataset: The path to the validation conllu file
-            predict_dataset: The path to the prediction dataset, can either be text or conllu
-            batch_size: The batch_size
-            convert_to_um: enable Universal Dependency (UD) file conversion to Universal Morphology (UM) format
-            reverse_edits: Reverse edit script calculation. Recommended for suffixal languages. False by default
-            checkpoint: The path to the model checkpoint file
-        """
         super().__init__()
+        # TODO: only catch relevant exceptions and remove the "noqa".
         try:
             self.pretokenizer = spacy_udpipe.load(language)
-        except:
+        except:  # noqa: E722
             spacy_udpipe.download(language)
             self.pretokenizer = spacy_udpipe.load(language)
         self.reverse_edits = reverse_edits
         self.lang_with_space = lang_with_space
-        self.train_dataset = ConlluMapDataset(
+        self.train_dataset = datasets.ConlluMapDataset(
             train_dataset,
             reverse_edits=self.reverse_edits,
             path_name=path_name,
             convert_to_um=convert_to_um,
             train=True,
         )
-        self.val_dataset = ConlluMapDataset(
+        self.val_dataset = datasets.ConlluMapDataset(
             val_dataset,
             reverse_edits=self.reverse_edits,
             path_name=path_name,
@@ -105,10 +111,10 @@ class ConlluDataModule(pl.LightningDataModule):
             train=False,
         )
         if predict_dataset and predict_dataset.endswith(".conllu"):
-            self.predict_dataset = ConlluIterDataset(predict_dataset)
+            self.predict_dataset = datasets.ConlluIterDataset(predict_dataset)
         else:
-            self.predict_dataset = TextIterDataset(predict_dataset)
-        self.test_dataset = ConlluMapDataset(
+            self.predict_dataset = datasets.TextIterDataset(predict_dataset)
+        self.test_dataset = datasets.ConlluMapDataset(
             test_dataset,
             reverse_edits=self.reverse_edits,
             path_name=path_name,
@@ -118,41 +124,43 @@ class ConlluDataModule(pl.LightningDataModule):
         with open(f"{path_name}/multiword_dict.json", "r") as mw_tb:
             self.multiword_table = json.load(mw_tb)
         self.batch_size = batch_size
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
         self.checkpoint = checkpoint
         if self.train_dataset:
             # this is a bit hacky, but not sure how to do this with setup & CLI
             # + 3 is the padding & unk tok & _
-            self.pos_classes_cnt = len(self.train_dataset.UPOS_CLASSES) + len(
-                SPECIAL_TOKENS
+            self.pos_classes_cnt = len(defaults.SPECIAL_TOKENS) + len(
+                self.train_dataset.UPOS_CLASSES
             )
-            self.xpos_classes_cnt = len(self.train_dataset.xpos_classes) + len(
-                SPECIAL_TOKENS
+            self.xpos_classes_cnt = len(defaults.SPECIAL_TOKENS) + len(
+                self.train_dataset.xpos_classes
             )
-            self.lemma_classes_cnt = len(
+            self.lemma_classes_cnt = len(defaults.SPECIAL_TOKENS) + len(
                 self.train_dataset.lemma_classes
-            ) + len(SPECIAL_TOKENS)
-            self.feats_classes_cnt = len(
+            )
+            self.feats_classes_cnt = len(defaults.SPECIAL_TOKENS) + len(
                 self.train_dataset.feats_classes
-            ) + len(SPECIAL_TOKENS)
+            )
         else:
             self._set_values_from_path_name()
 
-    def _set_values_from_path_name(self):
-        assert self.checkpoint, "model checkpoint must not be none"
+    def _set_values_from_path_name(self) -> None:
+        assert self.checkpoint, "no model checkpoint found"
         hps = torch.load(self.checkpoint)["hyper_parameters"]
         self.pos_classes_cnt = hps.get("pos_out_label_size", 0)
         self.xpos_classes_cnt = hps.get("xpos_out_label_size", 0)
         self.lemma_classes_cnt = hps.get("lemma_out_label_size", 0)
         self.feats_classes_cnt = hps.get("feats_out_label_size", 0)
 
+    # TODO: typing.
+
     def _adjust_sentence(self, sentences, lang_with_space=True):
         delimiter = " " if lang_with_space else ""
         new_sents = []
-        replacements = (
-            []
-        )  # will need to keep track of these to write out multiword tokens
-        # preprocessing sentences. The table is usually small so this is not too expensive
+        # We need to keep track of these to write out multiword tokens
+        # preprocessing sentences. The table is usually small so this is not
+        # too expensive.
+        replacements = []
         for sentence in sentences:
             new_sentence = sentence
             rep_i = []
@@ -166,38 +174,45 @@ class ConlluDataModule(pl.LightningDataModule):
             replacements.append(rep_i)
         return new_sents, replacements
 
+    # TODO: typing.
+
     def _pretokenize(self, sentences):
         batch_toks = []
         for sentence in sentences:
-            tokens = [ROOT_TOKEN]
-            tokens.extend(
-                token.text for token in self.pretokenizer(sentence)
-            )  # root token is needed for dependency parsing
+            tokens = [token.text for token in self.pretokenizer(sentence)]
             batch_toks.append(tokens)
         return batch_toks
 
-    def _collator(self, conllu=True):
+    # TODO: more precise typing.
+
+    def _collator(self, conllu=True) -> Callable:
         preprocessing = (
             self.conllu_preprocessing
             if conllu
             else self.txt_file_preprocessing
         )
-        return partial(
+        return functools.partial(
             preprocessing,
             tokenizer=self.tokenizer,
             lang_with_space=self.lang_with_space,
         )
 
+    # TODO: typing.
+    # TODO: docs.
+
     def conllu_preprocessing(
-        self, batch, tokenizer: AutoTokenizer, lang_with_space=True
+        self,
+        batch,
+        tokenizer: transformers.AutoTokenizer,
+        lang_with_space=True,
     ):
-        """Data pipeline -> tokenizing input and grouping token IDs to words. The output has varied dimensions"""
         sentences, *args = zip(*batch)
         sentences, replacements = self._adjust_sentence(
             sentences, lang_with_space=lang_with_space
         )
         pretoks = self._pretokenize(sentences)
-        # I want to load in tokens by batch to avoid using the inefficient max_length padding
+        # We load in tokens by batch to avoid using the inefficient max_length
+        # padding.
         tokenized_x = tokenizer(
             pretoks,
             padding="longest",
@@ -205,7 +220,8 @@ class ConlluDataModule(pl.LightningDataModule):
             is_split_into_words=True,
         )
         if not tokenized_x.encodings:
-            # for Byt5, which doesn't seem to have a fast tokenizer
+            # This is necessary for Byt5, which doesn't seem to have a fast
+            # tokenizer.
             encodings_ = []
             for sent in pretoks:
                 idxs = []
@@ -216,36 +232,47 @@ class ConlluDataModule(pl.LightningDataModule):
                     num_toks = len(toks_)
                     idxs.extend([i] * num_toks)
                     toks.extend(toks_)
-                # this is not the prettiest, but Encoding does not have an __init__(), so this is set manually
                 encodings_.append(CustomEncoding(word_ids=idxs, tokens=toks))
             tokenized_x.custom_encodings = encodings_
-        return ConlluBatch(tokenized_x, sentences, replacements, *args)
+        return batches.ConlluBatch(tokenized_x, sentences, replacements, *args)
 
-    def train_dataloader(self):
-        return DataLoader(
+    def train_dataloader(self) -> data.DataLoader:
+        return data.DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
             collate_fn=self._collator(conllu=True),
         )
 
-    def val_dataloader(self):
-        return DataLoader(
+    def val_dataloader(self) -> data.DataLoader:
+        return data.DataLoader(
             self.val_dataset,
             batch_size=self.batch_size,
             collate_fn=self._collator(conllu=True),
         )
 
-    def test_dataloader(self):
-        return DataLoader(
+    def test_dataloader(self) -> data.DataLoader:
+        return data.DataLoader(
             self.test_dataset,
             batch_size=self.batch_size,
             collate_fn=self._collator(conllu=True),
         )
 
+    def predict_dataloader(self) -> data.DataLoader:
+        return data.DataLoader(
+            self.predict_dataset,
+            batch_size=self.batch_size,
+            collate_fn=self._collator(conllu=False),
+        )
+
+    # TODO: typing.
+    # TODO: docs.
+
     def txt_file_preprocessing(
-        self, sentences, tokenizer: AutoTokenizer, lang_with_space=True
+        self,
+        sentences,
+        tokenizer: transformers.AutoTokenizer,
+        lang_with_space=True,
     ):
-        """This is the case where the input is NOT a conllu file"""
         sentences, replacements = self._adjust_sentence(
             sentences, lang_with_space=lang_with_space
         )
@@ -256,14 +283,9 @@ class ConlluDataModule(pl.LightningDataModule):
             return_tensors="pt",
             is_split_into_words=True,
         )
-        return TextBatch(tokenized_x, sentences, replacements)
+        return batches.TextBatch(tokenized_x, sentences, replacements)
 
-    def predict_dataloader(self):
-        return DataLoader(
-            self.predict_dataset,
-            batch_size=self.batch_size,
-            collate_fn=self._collator(conllu=False),
-        )
+    # TODO: is this necessary or wise?
 
     def teardown(self, stage: str) -> None:
         if stage == "predict":

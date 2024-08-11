@@ -1,22 +1,25 @@
-"""
-   In accordance with the incremental philosophy of UDTube, we override the default on_test_batch_end behavior so that
-   after every batch results are written to a file (or stdout).
-"""
+"""Additional callbacks."""
 
 import string
 import sys
-from typing import Any, Iterable, List, Optional, Sequence, Tuple
+from typing import Iterable, List, Optional, Sequence, Tuple
 
-from pytorch_lightning.callbacks import TQDMProgressBar
-from torch import Tensor
-from lightning.pytorch.callbacks import BasePredictionWriter
+import pytorch_lightning as pl
+import torch
 
-from conllu_datasets import ConlluMapDataset
-from batch import CustomBatch
-from defaults import PAD_TAG
+from . import batches, defaults
 
 
-class CustomWriter(BasePredictionWriter):
+class CustomWriter(pl.callbacks.BasePredictionWriter):
+    """Writes results after each batch.
+
+    Following our a generally incremental philosophy, this modifies the default
+    on_test_batch_end behavior so that after every batch results are written
+    to a file (or stdout).
+    """
+
+    # TODO(#18): address complexity here.
+
     def __init__(self, output_file):
         # We only want to write at batch intervals, not epoch
         super().__init__("batch")
@@ -40,7 +43,7 @@ class CustomWriter(BasePredictionWriter):
             need_to_close = True
             sink = open(self.output_file, "a")
         for batch_idx in range(len(words)):
-            print(f"# sent_id = TBD", sep="\t", file=sink)
+            print("# sent_id = TBD", sep="\t", file=sink)
             print(f"# text = {sentences[batch_idx]}", sep="\t", file=sink)
             repl = replacements[batch_idx]
             for item_idx in range(len(words[batch_idx])):
@@ -59,8 +62,9 @@ class CustomWriter(BasePredictionWriter):
                                 ]
                             ]:
                                 # writing multiword tok
+                                # 1-indexing, not 0-indexing
                                 print(
-                                    f"{item_idx + 1}-{item_idx + len(p_) + 1}",  # 1-indexing, not 0-indexing
+                                    f"{item_idx + 1}-{item_idx + len(p_) + 1}",
                                     mws[i],
                                     "_",
                                     "_",
@@ -74,8 +78,9 @@ class CustomWriter(BasePredictionWriter):
                                     file=sink,
                                 )
                 space_after = "_"
-                if words[batch_idx][item_idx] == PAD_TAG:
+                if words[batch_idx][item_idx] == defaults.PAD_TAG:
                     continue
+                # TODO(#19): this is probably broken outside of English.
                 if item_idx < len(words[batch_idx]) - 1:
                     space_after = (
                         "SpaceAfter=No"
@@ -96,17 +101,17 @@ class CustomWriter(BasePredictionWriter):
                     sep="\t",
                     file=sink,
                 )
-            print("", file=sink)
+            print(file=sink)
             if need_to_close:
                 sink.close()
 
     def write_on_batch_end(
         self,
-        trainer: "pl.Trainer",
-        pl_module: "pl.LightningModule",
-        prediction: Tuple[Iterable[str], list[list[str]], Tensor],
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        prediction: Tuple[Iterable[str], list[list[str]], torch.Tensor],
         batch_indices: Optional[Sequence[int]],
-        batch: CustomBatch,
+        batch: batches.Batch,
         batch_idx: int,
         dataloader_idx: int,
     ) -> None:
@@ -114,10 +119,10 @@ class CustomWriter(BasePredictionWriter):
 
     def on_test_batch_end(
         self,
-        trainer: "pl.Trainer",
-        pl_module: "pl.LightningModule",
-        outputs: Tuple[Iterable[str], list[list[str]], Tensor],
-        batch: CustomBatch,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        outputs: Tuple[Iterable[str], list[list[str]], torch.Tensor],
+        batch: batches.Batch,
         batch_idx: int,
         dataloader_idx: int = 0,
     ) -> None:

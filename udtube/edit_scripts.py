@@ -1,9 +1,14 @@
-#!/usr/bin/env python
 """Edit script extraction and application.
-This is based on:
-Chrupała, G. 2014. Normalizing tweets with edit scripts and recurrent neural
-embeddings. In Proceedings of the 52nd Annual Meeting of the Association for
-Computational Linguistics (Volume 2: Short Papers), pages 680-686."""
+
+Based on:
+
+    Chrupała, G. 2014. Normalizing tweets with edit scripts and recurrent
+    neural embeddings. In Proceedings of the 52nd Annual Meeting of the
+    Association for Computational Linguistics (Volume 2: Short Papers), pages
+    680-686.
+"""
+
+# TODO(#9): consider adding other edit script implementations.
 
 __author__ = "Kyle Gorman"
 
