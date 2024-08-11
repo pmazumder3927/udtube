@@ -1,6 +1,7 @@
 """Simple evaluation script."""
 
 import argparse
+import logging
 
 import conllu
 from udtube import defaults
@@ -8,7 +9,7 @@ from udtube import defaults
 
 def main(args: argparse.Namespace) -> None:
     with open(args.gold) as gold_file, open(args.hypo) as hypo_file:
-        gold_sentences = conllu.parse_incr(
+        gold_data = conllu.parse_incr(
             gold_file, field_parsers=defaults.OVERRIDDEN_FIELD_PARSERS
         )
         hypo_data = conllu.parse_incr(
@@ -26,7 +27,7 @@ def main(args: argparse.Namespace) -> None:
                 try:
                     gold_tok = gold_list[gold_idx]
                     hypo_tok = hypo_list[hypo_idx]
-                except:
+                except IndexError:
                     logging.warning(
                         "Sequence mismatch: %r and %r", gold_list, hypo_list
                     )

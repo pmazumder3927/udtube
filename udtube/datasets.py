@@ -62,19 +62,21 @@ class ConlluMapDataset(data.Dataset):
     def __init__(
         self,
         conllu_file: str,
+        model_dir: str,
         reverse_edits: bool = defaults.REVERSE_EDITS,
-        model_dir: str = "UDTube",
         train: bool = False,
     ):
         super().__init__()
-        self.model_dir = model_dir
-        self.all_words = []
         self.conllu_file = conllu_file
+        self.model_dir = model_dir
         self.e_script = (
             edit_scripts.ReverseEditScript
             if reverse_edits
             else edit_scripts.EditScript
         )
+        # TODO: this is enormously expensive in terms of memory. Can we do
+        # better?
+        self.all_words = []
         # Sets up label encoders.
         if conllu_file:
             self.xpos_classes = self._get_all_classes("xpos")

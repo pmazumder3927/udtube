@@ -53,21 +53,19 @@ class DataModule(pl.LightningDataModule):
 
     Args:
         path_name: directory for model assets.
-        model_name: model name (i.e., from HuggingFace).
+        encoder: name of encoder on Hugging Face.
         train_dataset: path to training CoNLL-U file.
         val_dataset: path to validation CoNLL-U file.
         predict_dataset: path to the prediction dataset; may either be text
             or CoNLL-U format (if the path ends with .conllu)
         batch_size: batch size.
-        convert_to_um: if enabled, convert Universal Dependency (UD) features
-            to Universal Morphology (UM) format.
         reverse_edits: if true, uses reverse (suffixal) edit scripts.
         checkpoint: path to the model checkpoint.
     """
 
     # TODO: argument documentation is incomplete.
 
-    # TODO: rename `model_name`, `path_name`, `lang_with_space`, and
+    # TODO: rename `path_name`, `lang_with_space`, and
     # `reverse_edits` variables.
 
     # TODO(#20): reconsider inference for CoNLL-U vs. text file.
@@ -75,14 +73,13 @@ class DataModule(pl.LightningDataModule):
     def __init__(
         self,
         path_name: str = "UDTube",
-        model_name: str = defaults.MODEL_NAME,
+        encoder: str = defaults.ENCODER,
         language: str = defaults.LANGUAGE,
         train_dataset: Optional[str] = None,
         val_dataset: Optional[str] = None,
         predict_dataset: Optional[str] = None,
         test_dataset: Optional[str] = None,
         batch_size: int = defaults.BATCH_SIZE,
-        convert_to_um: bool = defaults.CONVERT_TO_UM,
         reverse_edits: bool = defaults.REVERSE_EDITS,
         lang_with_space: bool = defaults.LANG_WITH_SPACE,
         checkpoint: Optional[str] = None,
@@ -100,14 +97,12 @@ class DataModule(pl.LightningDataModule):
             train_dataset,
             reverse_edits=self.reverse_edits,
             path_name=path_name,
-            convert_to_um=convert_to_um,
             train=True,
         )
         self.val_dataset = datasets.ConlluMapDataset(
             val_dataset,
             reverse_edits=self.reverse_edits,
             path_name=path_name,
-            convert_to_um=convert_to_um,
             train=False,
         )
         if predict_dataset and predict_dataset.endswith(".conllu"):
@@ -118,27 +113,26 @@ class DataModule(pl.LightningDataModule):
             test_dataset,
             reverse_edits=self.reverse_edits,
             path_name=path_name,
-            convert_to_um=convert_to_um,
             train=False,
         )
         with open(f"{path_name}/multiword_dict.json", "r") as mw_tb:
             self.multiword_table = json.load(mw_tb)
         self.batch_size = batch_size
-        self.tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
+        self.tokenizer = transformers.AutoTokenizer.from_pretrained(encoder)
         self.checkpoint = checkpoint
         if self.train_dataset:
             # this is a bit hacky, but not sure how to do this with setup & CLI
             # + 3 is the padding & unk tok & _
-            self.pos_classes_cnt = len(defaults.SPECIAL_TOKENS) + len(
+            self.pos_classes_count = len(defaults.SPECIAL_TOKENS) + len(
                 self.train_dataset.UPOS_CLASSES
             )
-            self.xpos_classes_cnt = len(defaults.SPECIAL_TOKENS) + len(
+            self.xpos_classes_count = len(defaults.SPECIAL_TOKENS) + len(
                 self.train_dataset.xpos_classes
             )
-            self.lemma_classes_cnt = len(defaults.SPECIAL_TOKENS) + len(
+            self.lemma_classes_count = len(defaults.SPECIAL_TOKENS) + len(
                 self.train_dataset.lemma_classes
             )
-            self.feats_classes_cnt = len(defaults.SPECIAL_TOKENS) + len(
+            self.feats_classes_count = len(defaults.SPECIAL_TOKENS) + len(
                 self.train_dataset.feats_classes
             )
         else:
@@ -147,10 +141,10 @@ class DataModule(pl.LightningDataModule):
     def _set_values_from_path_name(self) -> None:
         assert self.checkpoint, "no model checkpoint found"
         hps = torch.load(self.checkpoint)["hyper_parameters"]
-        self.pos_classes_cnt = hps.get("pos_out_label_size", 0)
-        self.xpos_classes_cnt = hps.get("xpos_out_label_size", 0)
-        self.lemma_classes_cnt = hps.get("lemma_out_label_size", 0)
-        self.feats_classes_cnt = hps.get("feats_out_label_size", 0)
+        self.pos_classes_count = hps.get("pos_out_label_size", 0)
+        self.xpos_classes_count = hps.get("xpos_out_label_size", 0)
+        self.lemma_classes_count = hps.get("lemma_out_label_size", 0)
+        self.feats_classes_count = hps.get("feats_out_label_size", 0)
 
     # TODO: typing.
 
@@ -220,14 +214,15 @@ class DataModule(pl.LightningDataModule):
             is_split_into_words=True,
         )
         if not tokenized_x.encodings:
-            # This is necessary for Byt5, which doesn't seem to have a fast
+            # This is necessary for ByT5, which doesn't seem to have a fast
             # tokenizer.
+            # TODO: variable names.
             encodings_ = []
             for sent in pretoks:
                 idxs = []
                 toks = []
                 for i, word in enumerate(sent):
-                    # number of toks
+                    # TODO: variable names.
                     toks_ = list(word.encode("utf-8"))
                     num_toks = len(toks_)
                     idxs.extend([i] * num_toks)

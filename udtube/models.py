@@ -24,25 +24,28 @@ class UDTube(pl.LightningModule):
     encoder.
 
     Args:
-        model_dir: model_directory.
-        model_name: name of the model.
-        pos_out_label_size: number of POS labels; usually provided by the
-            dataset object.
-        xpos_out_label_size: number of language-specific POS labels; usually
-            provided by the dataset object.
-        lemma_out_label_size: number of lemma tags; usually provided by the
-            dataset.
-        feats_out_label_size: number of feature tags; usually passed by the
-            dataset.
-        encoder_learning_rate: learning rate for the encoder layers.
-        classifiers_learning_rate: learning rate for the classifier layers.
-        pooling_layers: number of encoder layers to use to compute the
+        model_dir: Model directory.
+        reverse_edits: If true, uses reverse (suffixal) edit scripts.
+        encoder: Name of the encoder from Hugging Face.
+        encoder_learning_rate: Learning rate for the encoder layers.
+        encoder_dropout: Dropout probability for the encoder layers.
+        pooling_layers: Number of encoder layers to use to compute the
             embedding.
-        train_from: path to checkpoint used to resume training.
-        use_pos: if True, use POS tags.
-        use_xpos: if True, use language-specific POS tags.
-        use_lemma: if True, use lemmatization.
-        use_feats: if True, use morphological feature tags.
+        classifier_learning_rate: Learning rate for the classifier layers.
+        classifier_dropout: Dropout probability for the classifier layers.
+        warmup_steps: Number of warmup steps.
+        use_pos: If true, use POS tags.
+        use_xpos: If true, use language-specific POS tags.
+        use_lemma: If true, use lemmatization.
+        use_feats: If true, use morphological feature tags.
+        pos_out_label_size: Number of POS labels; usually provided by the
+            dataset object.
+        xpos_out_label_size: Number of language-specific POS labels; usually
+            provided by the dataset object.
+        lemma_out_label_size: Number of lemma tags; usually provided by the
+            dataset.
+        feats_out_label_size: Number of feature tags; usually passed by the
+            dataset.
     """
 
     # TODO: use defaults.
@@ -50,14 +53,13 @@ class UDTube(pl.LightningModule):
     def __init__(
         self,
         model_dir: str,
-        train_from: Optional[str] = None,
         reverse_edits: bool = defaults.REVERSE_EDITS,
         encoder: str = defaults.ENCODER,
         encoder_dropout: float = defaults.ENCODER_DROPOUT,
         encoder_learning_rate: float = defaults.ENCODER_LEARNING_RATE,
         pooling_layers: int = defaults.POOLING_LAYERS,
-        classifiers_dropout: float = defaults.CLASSIFIERS_DROPOUT,
-        classifiers_learning_rate: float = defaults.CLASSIFIERS_LEARNING_RATE,
+        classifier_dropout: float = defaults.CLASSIFIER_DROPOUT,
+        classifier_learning_rate: float = defaults.CLASSIFIER_LEARNING_RATE,
         warmup_steps: int = defaults.WARMUP_STEPS,
         use_pos: bool = defaults.USE_POS,
         use_xpos: bool = defaults.USE_XPOS,
@@ -71,7 +73,7 @@ class UDTube(pl.LightningModule):
     ):
         super().__init__()
         self.model_dir = model_dir
-        self.classifiers_learning_rate = classifiers_learning_rate
+        self.classifier_learning_rate = classifier_learning_rate
         self.encoder_learning_rate = encoder_learning_rate
         self.encoder_dropout = encoder_dropout
         self.warmup_steps = warmup_steps
@@ -79,7 +81,7 @@ class UDTube(pl.LightningModule):
         self.pooling_layers = pooling_layers
         # FIXME this is wrong.
         self.encoder_model = self._load_model(model_name)
-        self.dropout_layer = nn.Dropout(classifiers_dropout)
+        self.dropout_layer = nn.Dropout(classifier_dropout)
         # TODO: make heads nullable.
         if use_pos:
             self.pos_head = nn.Sequential(
@@ -133,9 +135,6 @@ class UDTube(pl.LightningModule):
         self.dummy_tensor = torch.zeros(
             self.encoder_model.config.hidden_size, device=self.device
         )
-        if train_from:
-            logging.info("Loading from checkpoint %s", train_from)
-            self.load_state_dict(torch.load(train_from)["state_dict"])
 
     # TODO: docs.
 
@@ -242,28 +241,28 @@ class UDTube(pl.LightningModule):
             grouped_params.append(
                 {
                     "params": self.lemma_head.parameters(),
-                    "lr": self.classifiers_learning_rate,
+                    "lr": self.classifier_learning_rate,
                 }
             )
         if self.use_pos:
             grouped_params.append(
                 {
                     "params": self.pos_head.parameters(),
-                    "lr": self.classifiers_learning_rate,
+                    "lr": self.classifier_learning_rate,
                 }
             )
         if self.use_xpos:
             grouped_params.append(
                 {
                     "params": self.xpos_head.parameters(),
-                    "lr": self.classifiers_learning_rate,
+                    "lr": self.classifier_learning_rate,
                 }
             )
         if self.use_feats:
             grouped_params.append(
                 {
                     "params": self.feats_head.parameters(),
-                    "lr": self.classifiers_learning_rate,
+                    "lr": self.classifier_learning_rate,
                 }
             )
         optimizer = torch.optim.AdamW(grouped_params)
@@ -434,7 +433,8 @@ class UDTube(pl.LightningModule):
     # TODO: docs.
 
     def forward(
-        self, batch: batches.CustomBatch
+        self,
+        batch: batches.Batch,
     ) -> Tuple[Iterable[str], list[list[str]], torch.Tensor]:
         # If something is longer than an allowed sequence, we trim it down.
         max_length = self.encoder_model.config.max_position_embeddings

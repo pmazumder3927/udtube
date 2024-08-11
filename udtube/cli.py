@@ -18,9 +18,9 @@ class UDTubeCLI(cli.LightningCLI):
             "--output_file",
             help="The file to output to, can be set to stdout.",
         )
-        parser.link_arguments("model.model_dir", "data.model_dir")
-        parser.link_arguments("model.model_dir", "trainer.default_root_dir")
-        parser.link_arguments("model.model_name", "data.model_name")
+        # parser.link_arguments("model.model_dir", "data.model_dir")
+        # parser.link_arguments("model.model_dir", "trainer.default_root_dir")
+        parser.link_arguments("model.encoder", "data.encoder")
         parser.link_arguments("data.reverse_edits", "model.reverse_edits")
         parser.link_arguments(
             "data.pos_classes_cnt",
@@ -60,11 +60,7 @@ def main() -> None:
         datefmt="%d-%b-%y %H:%M:%S",
         level="INFO",
     )
-    # The ConlluDataModule can handle both labelled and unlabelled data in
-    # prediction.
-    UDTubeCLI(
-        models.UDTube, datamodules.ConlluDataModule, save_config_callback=None
-    )
+    UDTubeCLI(models.UDTube, datamodules.DataModule, save_config_callback=None)
 
 
 if __name__ == "__main__":

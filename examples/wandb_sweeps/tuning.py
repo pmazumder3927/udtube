@@ -32,12 +32,13 @@ def setup_parser():
     parser.add_argument(
         "--fit_config",
         help="directory of the train config. Default is ../configs/fit_config.yaml",
-        default="../configs/fit_config.yaml"
+        default="../configs/fit_config.yaml",
     )
     return parser
 
-def setup_run_params(train_config='../configs/fit_config.yaml'):
-    with open(train_config, 'r') as f:
+
+def setup_run_params(train_config="../configs/fit_config.yaml"):
+    with open(train_config, "r") as f:
         wandb.init()
         orig_config = yaml.safe_load(f)
         # Model arguments come from the wandb sweep config and override any
@@ -46,17 +47,17 @@ def setup_run_params(train_config='../configs/fit_config.yaml'):
             sub_key = None
             if key.startswith("model."):
                 sub_key = "model"
-                key = key[len("model."):]
+                key = key[len("model.") :]
             elif key.startswith("trainer."):
                 sub_key = "trainer"
-                key = key[len("trainer."):]
+                key = key[len("trainer.") :]
             if key in orig_config or sub_key and key in orig_config[sub_key]:
                 logging.info(f"Overriding YAML argument: {key}")
                 if sub_key:
                     orig_config[sub_key][key] = value
                 else:
                     orig_config[key] = value
-        with open('temp.yaml', 'w') as file:
+        with open("temp.yaml", "w") as file:
             yaml.dump(orig_config, file)
         logging.info("Running!")
         os.system("python3 udtube_package.py fit --config temp.yaml")
@@ -72,7 +73,9 @@ def main() -> None:
             sweep_id=args.sweep_id,
             project=args.project,
             entity=args.entity,
-            function=functools.partial(setup_run_params, train_config=args.fit_config),
+            function=functools.partial(
+                setup_run_params, train_config=args.fit_config
+            ),
         )
     except Exception as e:
         logging.error(e, file=sys.stderr)
