@@ -13,7 +13,7 @@ import transformers
 # FIXME
 from lightning.pytorch.core.optimizer import LightningOptimizer
 
-from . import batches, defaults, edit_scripts
+from . import data, defaults
 
 
 class UDTube(pl.LightningModule):
@@ -26,6 +26,7 @@ class UDTube(pl.LightningModule):
     Args:
         model_dir: Model directory.
         reverse_edits: If true, uses reverse (suffixal) edit scripts.
+        language: ISO-639-1 language code, for the UDPipe tokenizer.
         encoder: Name of the encoder from Hugging Face.
         encoder_learning_rate: Learning rate for the encoder layers.
         encoder_dropout: Dropout probability for the encoder layers.
@@ -34,21 +35,21 @@ class UDTube(pl.LightningModule):
         classifier_learning_rate: Learning rate for the classifier layers.
         classifier_dropout: Dropout probability for the classifier layers.
         warmup_steps: Number of warmup steps.
-        use_pos: If true, use POS tags.
+        use_upos: If true, use POS tags.
         use_xpos: If true, use language-specific POS tags.
         use_lemma: If true, use lemmatization.
         use_feats: If true, use morphological feature tags.
-        pos_out_label_size: Number of POS labels; usually provided by the
+        upos_out_size: Number of POS labels; usually provided by the
             dataset object.
-        xpos_out_label_size: Number of language-specific POS labels; usually
+        xpos_out_size: Number of language-specific POS labels; usually
             provided by the dataset object.
-        lemma_out_label_size: Number of lemma tags; usually provided by the
+        lemma_out_size: Number of lemma tags; usually provided by the
             dataset.
-        feats_out_label_size: Number of feature tags; usually passed by the
+        feats_out_size: Number of feature tags; usually passed by the
             dataset.
     """
 
-    # TODO: use defaults.
+    # Initialization.
 
     def __init__(
         self,
@@ -61,15 +62,15 @@ class UDTube(pl.LightningModule):
         classifier_dropout: float = defaults.CLASSIFIER_DROPOUT,
         classifier_learning_rate: float = defaults.CLASSIFIER_LEARNING_RATE,
         warmup_steps: int = defaults.WARMUP_STEPS,
-        use_pos: bool = defaults.USE_POS,
+        use_upos: bool = defaults.USE_POS,
         use_xpos: bool = defaults.USE_XPOS,
         use_lemma: bool = defaults.USE_LEMMA,
         use_feats: bool = defaults.USE_FEATS,
         # `2` is a dummy value here; it will be set by the data set object.
-        pos_out_label_size: int = 2,
-        xpos_out_label_size: int = 2,
-        lemma_out_label_size: int = 2,
-        feats_out_label_size: int = 2,
+        upos_out_size: int = 2,
+        xpos_out_size: int = 2,
+        lemma_out_size: int = 2,
+        feats_out_size: int = 2,
     ):
         super().__init__()
         self.model_dir = model_dir
@@ -79,152 +80,69 @@ class UDTube(pl.LightningModule):
         self.warmup_steps = warmup_steps
         self.step_adjustment = None
         self.pooling_layers = pooling_layers
-        # FIXME this is wrong.
-        self.encoder_model = self._load_model(model_name)
+        self.encoder_model = self._load_model(encoder)
         self.dropout_layer = nn.Dropout(classifier_dropout)
-        # TODO: make heads nullable.
-        if use_pos:
-            self.pos_head = nn.Sequential(
-                nn.Linear(
-                    self.encoder_model.config.hidden_size, pos_out_label_size
-                ),
-                nn.LeakyReLU(),
-            )
-        if use_xpos:
-            self.xpos_head = nn.Sequential(
-                nn.Linear(
-                    self.encoder_model.config.hidden_size, xpos_out_label_size
-                ),
-                nn.LeakyReLU(),
-            )
-        if use_lemma:
-            self.lemma_head = nn.Sequential(
-                nn.Linear(
-                    self.encoder_model.config.hidden_size, lemma_out_label_size
-                ),
-                nn.LeakyReLU(),
-            )
-        if use_feats:
-            self.feats_head = nn.Sequential(
-                nn.Linear(
-                    self.encoder_model.config.hidden_size, feats_out_label_size
-                ),
-                nn.LeakyReLU(),
-            )
-        self.use_pos = use_pos
-        self.use_xpos = use_xpos
-        self.use_lemma = use_lemma
-        self.use_feats = use_feats
-        # Retrieves the LabelEncoders set up by the data set object.
-        self.lemma_encoder = joblib.load(
-            f"{self.model_dir}/lemma_encoder.joblib"
-        )
-        self.feats_encoder = joblib.load(
-            f"{self.model_dir}/ufeats_encoder.joblib"
-        )
-        self.pos_encoder = joblib.load(f"{self.model_dir}/upos_encoder.joblib")
-        self.xpos_encoder = joblib.load(
-            f"{self.model_dir}/xpos_encoder.joblib"
-        )
-        self.edit_script = (
-            edit_scripts.ReverseEditScript
-            if reverse_edits
-            else edit_scripts.EditScript
-        )
+        self.upos_head = self._make_head(upos_out_size) if use_upos else None
+        self.xpos_head = self._make_head(xpos_out_size) if use_xpos else None
+        self.lemma_head = self._make_head(lemma_out_size) if use_lemma else None
+        self.feats_head = self._make_head(feats_out_size) if use_feats else None
         self.save_hyperparameters()
-        self.dummy_tensor = torch.zeros(
-            self.encoder_model.config.hidden_size, device=self.device
-        )
 
-    # TODO: docs.
+    def _make_head(self, out_size: int) -> nn.Sequential:
+        """Helper for generating heads.
 
-    def pad_seq(
+        Args:
+            out_size (int).
+        
+        Returns:
+            A sequential linear layer.
+        """
+        return nn.Sequential(nn.Linear(self.hidden_size, out_size), nn.LeakyReLU())
+
+    def group_embeddings(
         self,
-        sequence: Iterable,
-        pad: Iterable,
-        max_len: int,
-        return_long: bool = False,
-    ) -> torch.tensor:
-        # TODO find a way to keep this on GPU
-        padded_seq = []
-        for s in sequence:
-            if not torch.is_tensor(s):
-                s = torch.tensor(s, device=self.device)
-            if len(s) != max_len:
-                # TODO: I think the below operation puts padding back on CPU.
-                r_padding = torch.stack([pad] * (max_len - len(s)))
-                r_padding = r_padding.to(s.device)
-                padded_seq.append(torch.cat((s, r_padding)))
-            else:
-                padded_seq.append(s)
-        if return_long:
-            return torch.stack(padded_seq).long()
-        return torch.stack(padded_seq)
-
-    # TODO: docs.
-
-    def pool_embeddings(
-        self,
-        x_embs: torch.tensor,
+        embeddings: torch.Tensor,
         tokenized: transformers.BatchEncoding,
-        gold_label_ex=None,
-    ) -> Tuple[torch.tensor, List[str], torch.tensor, int]:
-        new_embs = []
-        new_masks = []
-        words = []
-        encodings = tokenized.encodings
-        offset = 1
-        if not encodings:
-            encodings = tokenized.custom_encodings
-            offset = 0  # no offset here, this is the Byt5 case
-        for encoding, x_emb_i in zip(encodings, x_embs):
-            embs_i = []
+    ) -> Tuple[torch.Tensor, List[List[str]]]:
+        """Groups subword embeddings to form word embeddings.
+
+        This is necessary because each classifier head makes per-word
+        decisions, but the contextual embeddings use subwords. Therefore,
+        we average over subwords.
+
+        Args:
+            embeddings: the embeddings tensor to pool.
+            tokens: the batch encoding.
+
+        Returns:
+            The re-pooled embeddings tensor and the words for the batch (as a
+                list of lists).
+        """
+        embeddings_list = []
+        words_list = []
+        for encoding, x_emb_i in zip(tokenized.encodings, x_embeddings):
+            embeddings_i = []
             words_i = []
-            mask_i = []
             last_word_idx = slice(0, 0)
-            # skipping over the first padding token ([CLS])
-            for word_id, x_emb_j in zip(
-                encoding.word_ids[offset:], x_emb_i[offset:]
-            ):
+            for word_id, x_emb_j in zip(encoding.word_ids, x_emb_i):
+                # Padding.
                 if word_id is None:
-                    # emb padding
                     break
                 start, end = encoding.word_to_tokens(word_id)
                 word_idxs = slice(start, end)
                 if word_idxs != last_word_idx:
                     last_word_idx = word_idxs
-                    word_emb_pooled = torch.mean(
-                        x_emb_i[word_idxs], keepdim=True, dim=0
-                    ).squeeze()
-                    embs_i.append(word_emb_pooled)
-                    try:
-                        words_i.append(
-                            "".join(encoding.tokens[word_idxs])
-                            .replace("##", "")
-                            .replace("▁", "")
-                        )
-                    except TypeError:
-                        words_i.append(
-                            bytes(encoding.tokens[word_idxs]).decode()
-                        )
-                    mask_i.append(1)
-            words.append(words_i)
-            new_embs.append(torch.stack(embs_i))
-            new_masks.append(torch.tensor(mask_i, device=self.device))
-        if gold_label_ex:
-            # TODO: variable names and remove noqa.
-            longest_seq = max(
-                max(len(m) for m in words),  # noqa: E741
-                max(len(l) for l in gold_label_ex),  # noqa: E741
-            )
-        else:
-            # TODO: variable names and remove noqa.
-            longest_seq = max(len(m) for m in words)  # noqa: E741
-        new_embs = self.pad_seq(new_embs, self.dummy_tensor, longest_seq)
-        new_masks = self.pad_seq(
-            new_masks, torch.tensor(0, device=self.device), longest_seq
-        )
-        return new_embs, words, new_masks, longest_seq
+                    word_emb_pooled = torch.mean(x_emb_i[word_idxs], dim=0)
+                    embeddings_i.append(word_emb_pooled)
+                    words_i.append(
+                        "".join(encoding.tokens[word_idxs])
+                         .replace("##", "")
+                         .replace("▁", "")
+                    )
+            embeddings_list.append(torch.stack(embeddings_i))
+            words_list.append(words_i)
+        new_embeddings = data.pad_tensors(embeddings_list)
+        return new_embeddings, words
 
     # TODO: add additional optimizers.
 
@@ -244,10 +162,10 @@ class UDTube(pl.LightningModule):
                     "lr": self.classifier_learning_rate,
                 }
             )
-        if self.use_pos:
+        if self.use_upos:
             grouped_params.append(
                 {
-                    "params": self.pos_head.parameters(),
+                    "params": self.upos_head.parameters(),
                     "lr": self.classifier_learning_rate,
                 }
             )
@@ -279,7 +197,7 @@ class UDTube(pl.LightningModule):
     ) -> None:
         optimizer.step(closure=optimizer_closure)
         if epoch > 0:
-            # this only happens once params are unfrozen
+            # This only happens once params are unfrozen
             unfrozen_steps = self.trainer.global_step - self.step_adjustment
             if unfrozen_steps < self.warmup_steps:
                 # Warming up LR from 0 to the encoder LR begins before the
@@ -304,19 +222,17 @@ class UDTube(pl.LightningModule):
 
     def log_metrics(
         self,
-        y_pred: torch.tensor,
-        y_true: torch.tensor,
+        y_pred: torch.Tensor,
+        y_true: torch.Tensor,
         task_name: str,
         subset: str = "train",
         ignore_index: int = 0,
     ) -> None:
-        num_classes = y_pred.shape[1]
-        # getting the pad
         accuracy = classification.multiclass_accuracy(
             y_pred.permute(2, 1, 0),
             y_true.T,
-            num_classes=num_classes,
-            ignore_index=ignore_index,
+            num_classes=y_pred.shape[1],
+            ignore_index=pad_idx,
             average="micro",
         )
         self.log(
@@ -334,50 +250,42 @@ class UDTube(pl.LightningModule):
         self,
         y_gold,
         logits,
-        task_name="pos",
-        subset="train",
+        task_name: str,
+        subset: str = "train",
         return_loss=True,
     ):
-        batch_size, longest_seq, num_classes = logits.shape
-        # ignore_idx is used for padding.
-        lencoder = getattr(self, f"{task_name}_encoder")
-        # TODO: better way?
-        ignore_idx = int(lencoder.transform(["[PAD]"])[0])
-        pad = torch.tensor(ignore_idx, device=self.device)
-        y_gold_tensor = self.pad_seq(
-            y_gold, pad, longest_seq, return_long=True
-        )
         # Each head returns batch X sequence_len X classes, but we want
-        # minibatch X classes X sequence_len.
+        # batch X classes X sequence_len.
         logits = logits.permute(0, 2, 1)
         self.log_metrics(
             logits,
-            y_gold_tensor,
-            batch_size,
+            y_gold,
+            batch_size=len(logits),
             task_name,
             subset=subset,
-            ignore_index=ignore_idx,
+            ignore_index=pad_idx,
         )
         if return_loss:
             return nn.functional.cross_entropy(
-                logits, y_gold_tensor, ignore_index=ignore_idx
+                logits, y_gold_tensor, ignore_index=pad_idx,
             )
 
     # TODO: docs.
+    # TODO: this is not a good implementation.
 
     def _decode_to_str(
         self,
         sentences,
         words,
-        y_pos_logits,
+        y_upos_logits,
         y_xpos_logits,
         y_lemma_logits,
         y_feats_logits,
         replacements=None,
     ) -> Tuple[str]:
         # argmaxing.
-        if self.use_pos:
-            y_pos_hat = torch.argmax(y_pos_logits, dim=-1)
+        if self.use_upos:
+            y_upos_hat = torch.argmax(y_upos_logits, dim=-1)
         if self.use_xpos:
             y_xpos_hat = torch.argmax(y_xpos_logits, dim=-1)
         if self.use_lemma:
@@ -385,17 +293,17 @@ class UDTube(pl.LightningModule):
         if self.use_feats:
             y_feats_hat = torch.argmax(y_feats_logits, dim=-1)
         # Transforms to string.
-        y_pos_str_batch = []
+        y_upos_str_batch = []
         y_xpos_str_batch = []
         y_lemma_str_batch = []
         y_feats_hat_batch = []
         for batch_idx, w_i in enumerate(words):
             lemmas_i = []
             seq_len = len(w_i)  # Used to get rid of padding.
-            if self.use_pos:
-                y_pos_str_batch.append(
-                    self.pos_encoder.inverse_transform(
-                        y_pos_hat[batch_idx][:seq_len].cpu()
+            if self.use_upos:
+                y_upos_str_batch.append(
+                    self.upos_encoder.inverse_transform(
+                        y_upos_hat[batch_idx][:seq_len].cpu()
                     )
                 )
             if self.use_xpos:
@@ -423,7 +331,7 @@ class UDTube(pl.LightningModule):
         return (
             sentences,
             words,
-            y_pos_str_batch,
+            y_upos_str_batch,
             y_xpos_str_batch,
             y_lemma_str_batch,
             y_feats_hat_batch,
@@ -431,17 +339,18 @@ class UDTube(pl.LightningModule):
         )
 
     # TODO: docs.
+    # TODO: typing.
 
     def forward(
         self,
-        batch: batches.Batch,
-    ) -> Tuple[Iterable[str], list[list[str]], torch.Tensor]:
+        batch: data.Batch,
+    ) -> Tuple[Iterable[str], List[List[str]], Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
         # If something is longer than an allowed sequence, we trim it down.
-        max_length = self.encoder_model.config.max_position_embeddings
         actual_length = batch.tokens.input_ids.shape[1]
+        max_length = self.encoder_model.config.max_position_embeddings
         if actual_length > max_length:
             logging.warning(
-                "Truncating sequence from %d to %d", actual_length, max_length
+                "truncating sequence from %d to %d", actual_length, max_length
             )
             batch.tokens.input_ids = batch.tokens.input_ids[:max_length]
             batch.tokens.attention_mask = batch.tokens.attention_mask[
@@ -460,28 +369,21 @@ class UDTube(pl.LightningModule):
             x = x.unsqueeze(dim=0)
         # Applies dropout.
         x = self.dropout_layer(x)
-        # TODO: explain this.
-        if isinstance(batch, batches.TextBatch):
-            gold_label_ex = None
-        else:
-            gold_label_ex = batch.pos
         # Maps from subword embeddings to word-level embeddings.
-        x, words, masks, longest_seq = self.pool_embeddings(
-            x, batch.tokens, gold_label_ex=gold_label_ex
-        )
-        y_pos_logits = self.pos_head(x) if self.use_pos else None
+        x, words = self.repool_embeddings(x, batch.tokens)
+        # Applies classification heads.
+        y_upos_logits = self.upos_head(x) if self.use_upos else None
         y_xpos_logits = self.xpos_head(x) if self.use_xpos else None
         y_lemma_logits = self.lemma_head(x) if self.use_lemma else None
         y_feats_logits = self.feats_head(x) if self.use_feats else None
         # TODO(#6): make the response an object.
         return (
-            batch.sentences,
+            batch.texts,
             words,
-            y_pos_logits,
+            y_upos_logits,
             y_xpos_logits,
             y_lemma_logits,
             y_feats_logits,
-            masks,
         )
 
     # TODO: docs.
@@ -491,19 +393,19 @@ class UDTube(pl.LightningModule):
     ) -> Dict[str, float]:
         losses = {}
         (
-            sentences,
-            words,
-            y_pos_logits,
+            _,
+            _,
+            y_upos_logits,
             y_xpos_logits,
             y_lemma_logits,
             y_feats_logits,
-            masks,
+            _,
         ) = self(batch)
-        if self.use_pos:
+        if self.use_upos:
             pos_loss = self._call_head(
                 batch.pos,
-                y_pos_logits,
-                task_name="pos",
+                y_upos_logits,
+                task_name="upos",
                 subset=subset,
             )
             losses["pos_loss"] = pos_loss
@@ -547,8 +449,8 @@ class UDTube(pl.LightningModule):
         if self.current_epoch == 0:
             # How many steps are in an epoch?
             self.step_adjustment = self.trainer.global_step
-            for p in self.encoder_model.parameters():
-                p.requires_grad = True
+            for parameter in self.encoder_model.parameters():
+                parameter.requires_grad = True
             logging.info("Encoder Parameters unfrozen")
 
     # TODO: docs.
@@ -566,20 +468,19 @@ class UDTube(pl.LightningModule):
         (
             sentences,
             words,
-            y_pos_logits,
+            y_upos_logits,
             y_xpos_logits,
             y_lemma_logits,
             y_feats_logits,
-            masks,
+            _,
         ) = self(batch)
         return self._decode_to_str(
             sentences,
             words,
-            y_pos_logits,
+            y_upos_logits,
             y_xpos_logits,
             y_lemma_logits,
             y_feats_logits,
-            replacements=batch.replacements,
         )
 
     # TODO: docs.
@@ -588,4 +489,26 @@ class UDTube(pl.LightningModule):
         self, batch: batches.TextBatch, batch_idx: int
     ) -> Tuple[str]:
         *res, _ = self(batch)
-        return self._decode_to_str(*res, replacements=batch.replacements)
+        return self._decode_to_str(*res)
+
+    # Properties.
+
+    @property
+    def hidden_size(self) -> int:
+        return self.encoder_model.config.hidden_size
+
+    @property
+    def use_upos(self) -> bool:
+        return self.upos_head is not None
+
+    @property
+    def use_xpos(self) -> bool:
+        return self.xpos_head is not None
+
+    @property
+    def use_lemma(self) -> bool:
+        return self.lemma_head is not None
+
+    @property
+    def use_feats(self) -> bool:
+        return self.feats_head is not None

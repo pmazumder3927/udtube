@@ -14,32 +14,30 @@ class UDTubeCLI(cli.LightningCLI):
 
     @staticmethod
     def add_arguments_to_parser(parser: cli.LightningArgumentParser) -> None:
-        parser.add_argument(
-            "--output_file",
-            help="The file to output to, can be set to stdout.",
-        )
-        # parser.link_arguments("model.model_dir", "data.model_dir")
-        # parser.link_arguments("model.model_dir", "trainer.default_root_dir")
+        # Passed to the custom writer callback.
+        parser.add_argument("--output_file", help="Path for output file")
+        # Links.
+        parser.link_arguments("model_dir", "trainer.default_root_dir")
         parser.link_arguments("model.encoder", "data.encoder")
         parser.link_arguments("data.reverse_edits", "model.reverse_edits")
         parser.link_arguments(
-            "data.pos_classes_cnt",
-            "model.pos_out_label_size",
+            "data.upos_tagset_size",
+            "model.upos_out_size",
             apply_on="instantiate",
         )
         parser.link_arguments(
-            "data.xpos_classes_cnt",
-            "model.xpos_out_label_size",
+            "data.xpos_tagset_size",
+            "model.xpos_out_size",
             apply_on="instantiate",
         )
         parser.link_arguments(
-            "data.lemma_classes_cnt",
-            "model.lemma_out_label_size",
+            "data.lemma_tagset_size",
+            "model.lemma_out_size",
             apply_on="instantiate",
         )
         parser.link_arguments(
-            "data.feats_classes_cnt",
-            "model.feats_out_label_size",
+            "data.feats_tagset_size",
+            "model.feats_out_size",
             apply_on="instantiate",
         )
 
