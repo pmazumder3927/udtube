@@ -275,7 +275,8 @@ class DataModule(pl.LightningDataModule):
             return data.DataLoader(
                 datasets.TextIterDataset(self.parser),
                 collate_fn=collators.TextCollator(
-                    self.pretokenizer, self.tokenizer
+                    self.tokenizer,
+                    self.pretokenizer,
                 ),
                 batch_size=self.batch_size,
                 shuffle=False,

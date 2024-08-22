@@ -125,7 +125,7 @@ class CustomWriter(pl.callbacks.BasePredictionWriter):
         trainer: pl.Trainer,
         pl_module: pl.LightningModule,
         outputs: Tuple[Iterable[str], list[list[str]], torch.Tensor],
-        batch: batches.Batch,
+        batch: data.Batch,
         batch_idx: int,
         dataloader_idx: int = 0,
     ) -> None:

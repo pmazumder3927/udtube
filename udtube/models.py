@@ -1,7 +1,7 @@
 """Models."""
 
 import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import pytorch_lightning as pl
 import torch
