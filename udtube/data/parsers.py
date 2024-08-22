@@ -15,7 +15,7 @@ from . import edit_scripts
 # Overrides the feats parser for the conllu reader so it doesn't try to
 # turn them into dictionaries.
 OVERRIDDEN_FIELD_PARSERS = {
-    "feats": lambda line, i: conllu.parser.parse_nullable_value(line[i])
+    "feats": lambda line, i: line[i],
 }
 
 

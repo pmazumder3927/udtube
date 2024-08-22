@@ -5,9 +5,9 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import pytorch_lightning as pl
 import torch
+import transformers
 from torch import nn, optim
 from torchmetrics.functional import classification
-import transformers
 
 from . import data, defaults, encoders, special
 
@@ -61,14 +61,14 @@ class UDTube(pl.LightningModule):
 
     def __init__(
         self,
-        model_name: str = defaults.ENCODER,
+        encoder: str = defaults.ENCODER,
         encoder_dropout: float = defaults.ENCODER_DROPOUT,
         encoder_learning_rate: float = defaults.ENCODER_LEARNING_RATE,
         pooling_layers: int = defaults.POOLING_LAYERS,
         classifier_dropout: float = defaults.CLASSIFIER_DROPOUT,
         classifier_learning_rate: float = defaults.CLASSIFIER_LEARNING_RATE,
         warmup_steps: int = defaults.WARMUP_STEPS,
-        use_upos: bool = defaults.USE_POS,
+        use_upos: bool = defaults.USE_UPOS,
         use_xpos: bool = defaults.USE_XPOS,
         use_lemma: bool = defaults.USE_LEMMA,
         use_feats: bool = defaults.USE_FEATS,
@@ -79,7 +79,7 @@ class UDTube(pl.LightningModule):
         feats_out_size: int = 2,
     ):
         super().__init__()
-        self.encoder = encoders.load(model_name, encoder_dropout)
+        self.encoder = encoders.load(encoder, encoder_dropout)
         self.encoder_learning_rate = encoder_learning_rate
         self.pooling_layers = pooling_layers
         # Freezes encoder layer params for the first epoch.
@@ -97,6 +97,7 @@ class UDTube(pl.LightningModule):
         # Essentially, this is dropout for the context-depending encodings
         # going into the classifier.
         self.dropout_layer = nn.Dropout(classifier_dropout)
+        self.classifier_learning_rate = classifier_learning_rate
         self.loss_func = nn.CrossEntropyLoss(ignore_index=special.PAD_IDX)
         self.warmup_steps = warmup_steps
         self.step_adjustment = None
@@ -186,16 +187,18 @@ class UDTube(pl.LightningModule):
             batch.tokens.attention_mask = batch.tokens.attention_mask[
                 :max_length
             ]
-        # Gets raw embeddings.
-        x = self.encoder(batch.tokens.input_ids, batch.tokens.attention_mask)
+        x = self.encoder(
+            batch.tokens.input_ids, batch.tokens.attention_mask
+        ).hidden_states
         # Stacks the pooling layers.
-        x = torch.stack(x.hidden_states[-self.pooling_layers :])
+        x = torch.stack(x[-self.pooling_layers :])
         # Averages them into one embedding layer; automatically squeezes the
         # mean dimension.
         x = torch.mean(x, dim=0)
         # Applies dropout.
         x = self.dropout_layer(x)
         # Maps from subword embeddings to word-level embeddings.
+        # FIXME this is the part that's fucked up now.
         x = self._group_embeddings(x, batch.tokens)
         # Applies classification heads.
         y_upos_logits = self.upos_head(x) if self.use_upos else None

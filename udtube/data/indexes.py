@@ -4,21 +4,22 @@ This is closely based on the implementation in Yoyodyne:
 
     https://github.com/CUNY-CL/yoyodyne/blob/master/yoyodyne/data/indexes.py
 
-The major difference here is that we have a separate index for each classifier
-layer, since unlike in Yoyodyne, there is no such thing as a shared vocabulary
-for the classifier layers.
+The major difference here is that we have a separate vocabulary for each
+classifier layer, since unlike in Yoyodyne, there is no sense in which we
+we could share a vocabulary or an embedding across classifier layers.
 
-Because of this, we also have the Indexes class, which holds instances of
-the lower-level indexes, one for each enabled classifier head, and which
+Because of this, we also have the Index class, which holds instances of
+the lower-level vocabularies, one for each enabled classifier head, and which
 handles (de)serialization."""
 
+import dataclasses
 import pickle
 from typing import Dict, Iterable, List, Optional, Set
 
 from .. import special
 
 
-class Index:
+class Vocabulary:
     """Maintains an index over a vocabulary."""
 
     _index2symbol: List[str]
@@ -75,28 +76,25 @@ class Index:
         return {self.unk_idx, self.pad_idx, self.blank_idx}
 
 
-class Indexes:
-    """An index of indexes, with one index per enabled classification task.
+@dataclasses.dataclass
+class Index:
+    """A collection of vocabularies, one per enabled classification task.
 
     This also handles serialization and deserialization.
 
     Args:
-        upos: optional index for universal POS tagging.
-        xpos: optional index for language-specific POS tagging.
-        lemma: optional index for lemmatization.
-        feats: optional index for morphological tagging.
+        upos: optional vocabulary for universal POS tagging.
+        xpos: optional vocabulary for language-specific POS tagging.
+        lemma: optional vocabulary for lemmatization.
+        feats: optional vocabulary for morphological tagging.
     """
 
     # TODO(#3): other things (multiword table?) can also be stashed here.
 
-    upos: Optional[Index]
-    xpos: Optional[Index]
-    lemma: Optional[Index]
-    feats: Optional[Index]
-
-    def __init__(self, upos=None, xpos=None, lemma=None, feats=None):
-        self.upos = Index(upos) if upos else None
-        self.xpos = Index(xpos)
+    upos: Optional[Vocabulary] = None
+    xpos: Optional[Vocabulary] = None
+    lemma: Optional[Vocabulary] = None
+    feats: Optional[Vocabulary] = None
 
     # Properties.
 
@@ -119,7 +117,7 @@ class Indexes:
         return f"{model_dir}/index.pkl"
 
     @classmethod
-    def read(cls, model_dir: str) -> "Indexes":
+    def read(cls, model_dir: str) -> "Index":
         """Loads index.
 
         Args:

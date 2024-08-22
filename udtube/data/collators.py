@@ -6,8 +6,6 @@
   labeled batch.
 """
 
-import abc
-import dataclasses
 from typing import List
 
 import spacy
@@ -16,8 +14,8 @@ import transformers
 from . import batches, datasets, indexes, padding
 
 
-class Collator(abc.ABC):
-    """Base class for collators.
+class Tokenizer:
+    """Helper for tokenization.
 
     Args:
         tokenizer: transformer autotokenizer.
@@ -28,7 +26,7 @@ class Collator(abc.ABC):
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
 
-    def tokenize(
+    def __call__(
         self, pretokens: List[List[str]]
     ) -> transformers.BatchEncoding:
         return self.tokenizer(
@@ -39,75 +37,81 @@ class Collator(abc.ABC):
             add_special_tokens=False,
         )
 
-    def __call__(self, texts: List[str]) -> batches.Batch: ...
 
-
-@dataclasses.dataclass
-class TextCollator(Collator):
+class TextCollator:
     """Collator for raw text data.
 
     Args:
-        tokenizer: transformer autotokenizer.
         pretokenizer: UDPipe-style tokenizer.
+        tokenizer: transformer autotokenizer.
     """
 
-    pretokenizer: spacy.language.Language
+    def __init__(
+        self,
+        pretokenizer: spacy.language.Language,
+        tokenizer: transformers.AutoTokenizer,
+    ):
+        self.pretokenizer = pretokenizer
+        self.tokenizer = Tokenizer(tokenizer)
 
     def __call__(self, texts: List[str]) -> batches.TextBatch:
         pretokens = [
             [token.text for token in self.pretokenizer(text)] for text in texts
         ]
-        tokens = self.tokenize(pretokens)
+        tokens = self.tokenizer(pretokens)
         return batches.TextBatch(texts, tokens)
 
 
-@dataclasses.dataclass
-class ConlluCollator(Collator):
+class ConlluCollator:
     """Collator for CoNLL-U data.
 
     It doesn't matter whether or not the data already has labels.
 
     Args:
         tokenizer: transformer autotokenizer.
-        indexes: indexes.
+        index: the index.
     """
 
-    indexes: indexes.Index
+    def __init__(
+        self, tokenizer: transformers.AutoTokenizer, index: indexes.Index
+    ):
+        self.tokenizer = Tokenizer(tokenizer)
+        self.index = index
 
     def __call__(self, itemlist: List[datasets.Item]) -> batches.ConlluBatch:
         return batches.ConlluBatch(
             texts=[item.text for item in itemlist],
-            tokens=self.tokenize([item.form for item in itemlist]),
+            tokens=self.tokenizer([item.form for item in itemlist]),
             # Looks ugly, but this just pads and stacks data for whatever
             # classification tasks are enabled.
             upos=(
                 padding.pad_tensors(
-                    [item.upos for item in itemlist], self.indexes.upos.pad_idx
+                    [item.upos for item in itemlist], self.index.upos.pad_idx
                 )
-                if self.indexes.has_upos
+                if self.index.has_upos
                 else None
             ),
             xpos=(
                 padding.pad_tensors(
-                    [item.xpos for item in itemlist], self.indexes.xpos.pad_idx
+                    [item.xpos for item in itemlist], self.index.xpos.pad_idx
                 )
-                if self.indexes.has_xpos
+                if self.index.has_xpos
                 else None
             ),
             lemma=(
                 padding.pad_tensors(
                     [item.lemma for item in itemlist],
-                    self.indexes.lemma.pad_idx,
+                    self.index.lemma.pad_idx,
                 )
-                if self.indexes.has_lemma
+                if self.index.has_lemma
                 else None
             ),
             feats=(
                 padding.pad_tensors(
                     [item.feats for item in itemlist],
-                    self.indexes.feats.pad_idx,
+                    self.index.feats.pad_idx,
                 )
-                if self.indexes.has_feats
+                if self.index.has_feats
                 else None
             ),
         )

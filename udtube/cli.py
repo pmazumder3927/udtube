@@ -4,7 +4,7 @@ import logging
 
 from pytorch_lightning import cli
 
-from . import callbacks, datamodules, models
+from . import callbacks, data, models
 
 
 class UDTubeCLI(cli.LightningCLI):
@@ -17,9 +17,8 @@ class UDTubeCLI(cli.LightningCLI):
         # Passed to the custom writer callback.
         parser.add_argument("--output_file", help="Path for output file")
         # Links.
-        parser.link_arguments("model_dir", "trainer.default_root_dir")
         parser.link_arguments("model.encoder", "data.encoder")
-        parser.link_arguments("data.reverse_edits", "model.reverse_edits")
+        parser.link_arguments("data.model_dir", "trainer.default_root_dir")
         parser.link_arguments(
             "data.upos_tagset_size",
             "model.upos_out_size",
@@ -58,7 +57,7 @@ def main() -> None:
         datefmt="%d-%b-%y %H:%M:%S",
         level="INFO",
     )
-    UDTubeCLI(models.UDTube, datamodules.DataModule, save_config_callback=None)
+    UDTubeCLI(models.UDTube, data.DataModule, save_config_callback=None)
 
 
 if __name__ == "__main__":

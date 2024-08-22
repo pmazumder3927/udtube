@@ -14,7 +14,6 @@ __author__ = "Kyle Gorman"
 
 import dataclasses
 import difflib
-
 from typing import Dict, List
 
 

@@ -9,13 +9,7 @@ It's easy to imagine a "TextMapDataset" too, but it wouldn't serve any
 particular purpose."""
 
 import dataclasses
-from typing import (
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-    TextIO,
-)
+from typing import Iterable, Iterator, List, Optional, TextIO
 
 import torch
 from torch import nn
@@ -133,21 +127,21 @@ class ConlluMapDataset(data.Dataset):
 
     # Encoding.
 
+    @staticmethod
     def _encode(
-        self, labels: Iterable[str], index: indexes.Index
+        labels: Iterable[str],
+        vocabulary: indexes.Vocabulary,
     ) -> torch.Tensor:
         """Encodes a tensor.
 
         Args:
             labels: iterable of labels.
-            index: an index.
+            vocabulary: a vocabulary.
 
         Returns:
             Tensor of encoded labels.
         """
-        return torch.tensor(
-            [index(label) for label in labels], dtype=torch.long
-        )
+        return torch.tensor([vocabulary(label) for label in labels])
 
     def encode_upos(self, labels: Iterable[str]) -> torch.Tensor:
         """Encodes universal POS tags.
@@ -158,7 +152,7 @@ class ConlluMapDataset(data.Dataset):
         Returns:
             Tensor of encoded labels.
         """
-        return self._encode(labels, self.indexes.upos)
+        return self._encode(labels, self.index.upos)
 
     def encode_xpos(self, labels: Iterable[str]) -> torch.Tensor:
         """Encodes language-specific POS tags.
@@ -169,7 +163,7 @@ class ConlluMapDataset(data.Dataset):
         Returns:
             Tensor of encoded labels.
         """
-        return self._encode(labels, self.indexes.xpos)
+        return self._encode(labels, self.index.xpos)
 
     def encode_lemma(self, labels: Iterable[str]) -> torch.Tensor:
         """Encodes lemma (i.e., edit script) tags.
@@ -183,7 +177,7 @@ class ConlluMapDataset(data.Dataset):
         Returns:
             Tensor of encoded labels.
         """
-        return self._encode(labels, self.indexes.lemma)
+        return self._encode(labels, self.index.lemma)
 
     def encode_feats(self, labels: Iterable[str]) -> torch.Tensor:
         """Encodes morphological feature tags.
@@ -194,25 +188,29 @@ class ConlluMapDataset(data.Dataset):
         Returns:
             Tensor of encoded labels.
         """
-        return self._encode(labels, self.indexes.feats)
+        return self._encode(labels, self.index.feats)
 
     # Decoding.
 
+    @staticmethod
     def _decode(
-        self, indices: torch.Tensor, index: indexes.Index
+        indices: torch.Tensor,
+        vocabulary: indexes.Vocabulary,
     ) -> Iterator[List[str]]:
         """Decodes a tensor.
 
         Args:
             indices: 2d tensor of indices.
-            index: index.
+            vocabulary: the vocabulary
 
         Yields:
             List[str]: Lists of decoded strings.
         """
         for idx in indices.cpu().numpy():
             yield [
-                index.get_symbol(c) for c in idx if c not in index.special_idx
+                vocabulary.get_symbol(c)
+                for c in idx
+                if c not in vocabulary.special_idx
             ]
 
     def decode_upos(self, indices: torch.Tensor) -> Iterator[List[str]]:
@@ -224,7 +222,7 @@ class ConlluMapDataset(data.Dataset):
         Yields:
             List[str]: Decoded strings.
         """
-        return self._decode(indices, self.indexes.upos)
+        return self._decode(indices, self.index.upos)
 
     def decode_xpos(self, indices: torch.Tensor) -> Iterator[List[str]]:
         """Decodes an xpos tensor.
@@ -235,7 +233,7 @@ class ConlluMapDataset(data.Dataset):
         Yields:
             List[str]: Decoded strings.
         """
-        return self._decode(indices, self.indexes.xpos)
+        return self._decode(indices, self.index.xpos)
 
     # Does this need to be rewired to get the form so it can lemmatize?
 
@@ -251,12 +249,23 @@ class ConlluMapDataset(data.Dataset):
         Yields:
             List[str]: Decoded strings.
         """
-        return self._decode(indices, self.indexes.lemma)
+        return self._decode(indices, self.index.lemma)
+
+    def decode_feats(self, indices: torch.Tensor) -> Iterator[List[str]]:
+        """Decodes a morphological features tensor.
+
+        Args:
+            indices: 2d tensor of indices.
+
+        Yields:
+            List[str]: Decoded strings.
+        """
+        return self._decode(indices, self.index.feats)
 
     # Required API.
 
     def __len__(self) -> int:
-        return len(self._data)
+        return len(self.samples)
 
     def __getitem__(self, idx: int) -> Item:
         """Retrieves item by index.

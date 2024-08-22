@@ -4,6 +4,7 @@ BATCH_SIZE = 32
 
 REVERSE_EDITS = True
 
+LANGUAGE = "en"  # Sigh.
 ENCODER = "bert-base-multilingual-cased"
 ENCODER_DROPOUT = 0.5
 ENCODER_LEARNING_RATE = 5e-3

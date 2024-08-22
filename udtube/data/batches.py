@@ -11,34 +11,40 @@ simpler.
 * ConlluBatch contains tokenized and labeled data.
 """
 
-import dataclasses
-from typing import List, Optional
+from typing import List, Optional, Union
 
-import transformers
 import torch
+import transformers
 from torch import nn
 
 
-@dataclasses.dataclass
 class Batch(nn.Module):
-    """Base class for batch.
-
-    Args:
-        tokens: the encoded batch, the output of the tokenizer.
-        sentences: list of sentences.
-    """
+    """Base class for batches"""
 
     texts: List[str]
     tokens: transformers.BatchEncoding
 
+    def __init__(self, texts, tokens):
+        super().__init__()
+        self.texts = texts
+        self.tokens = tokens
+
     def __len__(self) -> int:
         return len(self.texts)
 
+    def to(self, device: Union[str, torch.device, int]) -> "Batch":
+        # `tokens` is a dictionary, so it can't be registered as a module
+        # buffer, but it itself supports a version of `.to`.
+        self.tokens = self.tokens.to(device)
+        return super().to(device)
 
-class TextBatch(Batch):
+
+class TextBatch(nn.Module):
     """Text data batch.
 
-    This consists of only tokenized inputs and sentences.
+    Args:
+        tokens: the encoded batch, the output of the tokenizer.
+        sentences: list of sentences.
     """
 
     pass
@@ -67,18 +73,14 @@ class ConlluBatch(Batch):
         self,
         texts,
         tokens,
-        pad_idx: int,
         upos=None,
         xpos=None,
         lemma=None,
         feats=None,
     ):
-        super().__init__(tokens, texts)
-        if upos:
-            self.register_module("upos", upos)
-        if xpos:
-            self.register_module("xpos", xpos)
-        if lemma:
-            self.register_module("lemma", lemma)
-        if feats:
-            self.register_module("feats", feats)
+        super().__init__(texts, tokens)
+        # None is harmless here.
+        self.register_buffer("upos", upos)
+        self.register_buffer("xpos", xpos)
+        self.register_buffer("lemma", lemma)
+        self.register_buffer("feats", feats)
