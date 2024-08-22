@@ -7,7 +7,10 @@ from typing import Iterable, List, Optional, Sequence, Tuple
 import pytorch_lightning as pl
 import torch
 
-from . import batches, defaults
+from . import data, defaults
+
+
+# TODO: update this with the new cool shit.
 
 
 class CustomWriter(pl.callbacks.BasePredictionWriter):
@@ -96,7 +99,7 @@ class CustomWriter(pl.callbacks.BasePredictionWriter):
                     feats[batch_idx][item_idx] if feats else "_",
                     "_",
                     "_",
-                    "_",  # doing nothing with this for now
+                    "_",  # Doing nothing with this for now
                     space_after,
                     sep="\t",
                     file=sink,
@@ -111,7 +114,7 @@ class CustomWriter(pl.callbacks.BasePredictionWriter):
         pl_module: pl.LightningModule,
         prediction: Tuple[Iterable[str], list[list[str]], torch.Tensor],
         batch_indices: Optional[Sequence[int]],
-        batch: batches.Batch,
+        batch: data.Batch,
         batch_idx: int,
         dataloader_idx: int,
     ) -> None:

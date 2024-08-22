@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 import transformers
 from torch.utils import data
 
-from . import collators, datasets, indexes, parsers
+from . import collators, datasets, indexes, parsers, pretokenizers, tokenizers
 from .. import defaults
 
 
@@ -85,6 +85,7 @@ class DataModule(pl.LightningDataModule):
         predict: Optional[str] = None,
         test: Optional[str] = None,
         # Modeling options.
+        language: str = defaults.LANGUAGE,
         encoder: str = defaults.ENCODER,
         use_upos: bool = defaults.USE_UPOS,
         use_xpos: bool = defaults.USE_XPOS,
@@ -119,7 +120,10 @@ class DataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         # FIXME I need to be able to load the indexes from a file too.
         self.indexes = indexes if indexes else self._make_indexes()
-        self.tokenizer = transformers.AutoTokenizer.from_pretrained(encoder)
+        # TODO: this is not needed if all files are CoNLL-U format. Can we
+        # hold off loading it until we know we need it?
+        self.pretokenizer = pretokenizers.load(language)
+        self.tokenizer = tokenizers.load(encoder)
 
     @staticmethod
     def _require_conllu_extension(path: str, file_type: str) -> None:
@@ -164,7 +168,8 @@ class DataModule(pl.LightningDataModule):
     ]
 
     def _make_index(self) -> indexes.Indexes:
-        # We don't need to collect the upos vocabulary because it's universal.
+        # We don't need to collect the upos vocabulary because "u" stands for
+        # "universal" here.
         xpos_vocabulary = set() if self.has_xpos else None
         lemma_vocabulary = set() if self.has_lemma else None
         feats_vocabulary = set() if self.has_feats else None
@@ -186,7 +191,7 @@ class DataModule(pl.LightningDataModule):
         """Writes the indexes to a file."""
         self.indexes.write(model_dir)
 
-    # Metadata about the task, etc.
+    # Properties.
 
     @property
     def has_upos(self) -> bool:
@@ -235,7 +240,6 @@ class DataModule(pl.LightningDataModule):
             ),
             batch_size=self.batch_size,
             shuffle=True,
-            num_workers=1,
         )
 
     def val_dataloader(self) -> data.DataLoader:
@@ -252,7 +256,6 @@ class DataModule(pl.LightningDataModule):
             ),
             batch_size=self.batch_size,
             shuffle=False,
-            num_workers=1,
         )
 
     def predict_dataloader(self) -> data.DataLoader:
@@ -267,15 +270,15 @@ class DataModule(pl.LightningDataModule):
                 ),
                 batch_size=self.batch_size,
                 shuffle=False,
-                num_workers=1,
             )
         else:
             return data.DataLoader(
                 datasets.TextIterDataset(self.parser),
-                collate_fn=collators.TextCollator(self.tokenizer),
+                collate_fn=collators.TextCollator(
+                    self.pretokenizer, self.tokenizer
+                ),
                 batch_size=self.batch_size,
                 shuffle=False,
-                num_workers=1,
             )
 
     def test_dataloader(self) -> data.DataLoader:
@@ -292,5 +295,4 @@ class DataModule(pl.LightningDataModule):
             ),
             batch_size=self.batch_size,
             shuffle=False,
-            num_workers=1,
         )

@@ -21,7 +21,7 @@ from torch import nn
 
 @dataclasses.dataclass
 class Batch(nn.Module):
-    """Base classe for batch.
+    """Base class for batch.
 
     Args:
         tokens: the encoded batch, the output of the tokenizer.

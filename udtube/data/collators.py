@@ -9,9 +9,7 @@
 import dataclasses
 from typing import List
 
-import spacy_udpipe
-import torch
-from torch import nn
+import spacy
 import transformers
 
 from . import batches, datasets, indexes, padding
@@ -31,8 +29,8 @@ class TextCollator:
 
     def __call__(self, texts: List[str]) -> batches.TextBatch:
         pretokens = [
-            [token.text for token in self.pretokenize(text)]
-            for text in texts]
+            [token.text for token in self.pretokenize(text)] for text in texts
+        ]
         tokens = self.tokenizer(
             pretokens,
             padding="longest",
@@ -54,16 +52,23 @@ class ConlluCollator:
         indexes: indexes.
     """
 
-    tokenizer: transformer autotokenizer.
+    tokenizer: transformers.AutoTokenizer
     indexes: indexes.Index
 
     def __call__(self, itemlist: List[datasets.Item]) -> batches.ConlluBatch:
         pretokens = [item.form for item in itemlist]
-        # Looks ugly, but this just pads and stacks data for whatever
-        # classification tasks are enabled.
-        return batches.ConlluBatch(
-            texts,
+        tokens = self.tokenizer(
             pretokens,
+            padding="longest",
+            return_tensors="pt",
+            is_split_into_words=True,
+            add_special_tokens=False,
+        )
+        return batches.ConlluBatch(
+            texts=[item.text for item in itemlist],
+            tokens=tokens,
+            # Looks ugly, but this just pads and stacks data for whatever
+            # classification tasks are enabled.
             upos=(
                 padding.pad_tensors(
                     [item.upos for item in itemlist], self.indexes.upos.pad_idx
