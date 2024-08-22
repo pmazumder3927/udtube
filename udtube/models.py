@@ -9,9 +9,6 @@ from torch import nn, optim
 from torchmetrics.functional import classification
 import transformers
 
-# FIXME
-from lightning.pytorch.core.optimizer import LightningOptimizer
-
 from . import data, defaults, encoders, special
 
 
@@ -258,7 +255,7 @@ class UDTube(pl.LightningModule):
         self,
         epoch: int,
         batch_idx: int,
-        optimizer: Union[optim.Optimizer, LightningOptimizer],
+        optimizer: optim.Optimizer,
         optimizer_closure: Optional[Callable[[], Any]] = None,
     ) -> None:
         optimizer.step(closure=optimizer_closure)
