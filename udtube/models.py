@@ -1,4 +1,9 @@
-"""Models."""
+"""The UDTube model.
+
+In the documentation below, N is the batch size, C is the number of classes
+for a classification head, and L is the maximum length (in subwords, tokens,
+or tags) of a sentence in the batch.
+"""
 
 import logging
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -10,6 +15,24 @@ from torch import nn, optim
 from torchmetrics.functional import classification
 
 from . import data, defaults, encoders, special
+
+
+class UDTubeLogits(nn.Module):
+    """Logits from the forward pass.
+
+    Each tensor is either null or of shape N x C x L."""
+
+    upos: Optional[torch.Tensor]
+    xpos: Optional[torch.Tensor]
+    lemma: Optional[torch.Tensor]
+    feats: Optional[torch.Tensor]
+
+    def __init__(self, upos=None, xpos=None, lemma=None, feats=None):
+        super().__init__()
+        self.register_buffer("upos", upos)
+        self.register_buffer("xpos", xpos)
+        self.register_buffer("lemma", lemma)
+        self.register_buffer("feats", feats)
 
 
 class UDTube(pl.LightningModule):
@@ -202,17 +225,11 @@ class UDTube(pl.LightningModule):
         ).permute(0, 2, 1)
 
     # TODO: docs.
-    # TODO: typing.
 
     def forward(
         self,
         batch: data.Batch,
-    ) -> Tuple[
-        Optional[torch.Tensor],
-        Optional[torch.Tensor],
-        Optional[torch.Tensor],
-        Optional[torch.Tensor],
-    ]:
+    ) -> UDTubeLogits:
         # If something is longer than an allowed sequence, we trim it down.
         actual_length = batch.tokens.input_ids.shape[1]
         max_length = self.encoder.config.max_position_embeddings
@@ -238,24 +255,18 @@ class UDTube(pl.LightningModule):
         x = self.dropout_layer(x)
         # Maps from subword embeddings to word-level embeddings.
         x = self._group_embeddings(x, batch.tokens)
-        # Applies classification heads, yielding logits of the form N x L x C
-        # where N is batch size, L is the max sentence length in words/tags,
-        # and C is the number of classes. The loss and accuracy functions
-        # instead need N x C x L, so we permute.
-        y_upos_logits = (
-            self.upos_head(x).permute(0, 2, 1) if self.use_upos else None
+        # Applies classification heads, yielding logits of the form N x L x C.
+        # The loss and accuracy functions expect N x C x L, so we permute.
+        return UDTubeLogits(
+            upos=self.upos_head(x).permute(0, 2, 1) if self.use_upos else None,
+            xpos=self.xpos_head(x).permute(0, 2, 1) if self.use_xpos else None,
+            lemma=(
+                self.lemma_head(x).permute(0, 2, 1) if self.use_lemma else None
+            ),
+            feats=(
+                self.feats_head(x).permute(0, 2, 1) if self.use_feats else None
+            ),
         )
-        y_xpos_logits = (
-            self.xpos_head(x).permute(0, 2, 1) if self.use_xpos else None
-        )
-        y_lemma_logits = (
-            self.lemma_head(x).permute(0, 2, 1) if self.use_lemma else None
-        )
-        y_feats_logits = (
-            self.feats_head(x).permute(0, 2, 1) if self.use_feats else None
-        )
-        # TODO(#6): make the response an object.
-        return y_upos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits
 
     # Required API.
 
@@ -379,33 +390,31 @@ class UDTube(pl.LightningModule):
     def _inference_step(
         self, batch: data.ConlluBatch, batch_idx: int, subset: str
     ) -> Dict[str, float]:
-        y_upos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits = self(
-            batch
-        )
+        logits = self(batch)
         losses = {}
         if self.use_upos:
-            losses["xpos_loss"] = self.loss_func(y_upos_logits, batch.upos)
+            losses["xpos_loss"] = self.loss_func(logits.upos, batch.upos)
             self._log_accuracy(
-                batch.upos, y_upos_logits, task_name="upos", subset=subset
+                batch.upos, logits.upos, task_name="upos", subset=subset
             )
         if self.use_xpos:
-            losses["xpos_loss"] = self.loss_func(y_xpos_logits, batch.xpos)
+            losses["xpos_loss"] = self.loss_func(logits.xpos, batch.xpos)
             self._log_accuracy(
-                batch.xpos, y_xpos_logits, task_name="xpos", subset=subset
+                batch.xpos, logits.xpos, task_name="xpos", subset=subset
             )
         if self.use_lemma:
-            losses["lemma_loss"] = self.loss_func(y_lemma_logits, batch.lemma)
+            losses["lemma_loss"] = self.loss_func(logits.lemma, batch.lemma)
             self._log_accuracy(
                 batch.lemma,
-                y_lemma_logits,
+                logits.lemma,
                 task_name="lemma",
                 subset=subset,
             )
         if self.use_feats:
-            losses["feats_loss"] = self.loss_func(y_feats_logits, batch.feats)
+            losses["feats_loss"] = self.loss_func(logits.feats, batch.feats)
             self._log_accuracy(
                 batch.feats,
-                y_feats_logits,
+                logits.feats,
                 task_name="feats",
                 subset=subset,
             )
@@ -423,17 +432,25 @@ class UDTube(pl.LightningModule):
         return loss
 
     def training_step(
-        self, batch: data.ConlluBatch, batch_idx: int, subset: str = "train",
+        self,
+        batch: data.ConlluBatch,
+        batch_idx: int,
+        subset: str = "train",
     ) -> Dict[str, float]:
         return self._inference_step(batch, batch_idx, subset)
 
     def validation_step(
-        self, batch: data.ConlluBatch, batch_idx: int, subset: str = "val",
+        self,
+        batch: data.ConlluBatch,
+        batch_idx: int,
+        subset: str = "val",
     ) -> Dict[str, float]:
         return self._inference_step(batch, batch_idx, subset)
 
+    # TODO: add test step.
+    # TODO: add predict step.
+
     # TODO: docs.
-    # TODO: why is this necessary?
 
     def on_train_epoch_end(self) -> None:
         if self.current_epoch == 0:
@@ -442,13 +459,3 @@ class UDTube(pl.LightningModule):
             for parameter in self.encoder.parameters():
                 parameter.requires_grad = True
             logging.info("Encoder parameters unfrozen")
-
-    # TODO: docs.
-
-    def validation_step(
-        self, batch: data.ConlluBatch, batch_idx: int
-    ) -> Dict[str, float]:
-        return self.training_step(batch, batch_idx, subset="val")
-
-    # TODO: add test step.
-    # TODO: add predict step.
