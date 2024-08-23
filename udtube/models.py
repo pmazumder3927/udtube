@@ -56,7 +56,8 @@ class UDTube(pl.LightningModule):
             A sequential linear layer.
         """
         return nn.Sequential(
-            nn.Linear(self.hidden_size, out_size), nn.LeakyReLU()
+            nn.Linear(self.hidden_size, out_size),
+            nn.LeakyReLU(),
         )
 
     def __init__(
@@ -136,7 +137,7 @@ class UDTube(pl.LightningModule):
 
         This is necessary because each classifier head makes per-word
         decisions, but the contextual embeddings use subwords. Therefore,
-        we average over subwords.
+        we average over the subwords for each word.
 
         Args:
             embeddings: the embeddings tensor to pool.
@@ -145,24 +146,49 @@ class UDTube(pl.LightningModule):
         Returns:
             The re-pooled embeddings tensor.
         """
-        embeddings_list = []
-        for encoding, x_embed_i in zip(tokenized.encodings, embeddings):
-            embeddings_i = []
-            last_word_idx = slice(0, 0)
-            for word_id, x_embed_j in zip(encoding.word_ids, x_embed_i):
-                # Padding.
+        new_sentence_embeddings = []
+        for sentence_encodings, sentence_embeddings in zip(
+            tokenized.encodings, embeddings
+        ):
+            # This looks like an overly elaborate loop that could be a list
+            # comprehension, but this is much faster.
+            indices = []
+            i = 0
+            while i < len(sentence_encodings.word_ids):
+                word_id = sentence_encodings.word_ids[i]
+                # Have hit padding.
                 if word_id is None:
                     break
-                start, end = encoding.word_to_tokens(word_id)
-                word_idxs = slice(start, end)
-                if word_idxs != last_word_idx:
-                    last_word_idx = word_idxs
-                    embeddings_i.append(
-                        # Automatically squeezes the mean dimension.
-                        torch.mean(x_embed_j[word_idxs], dim=0)
-                    )
-            embeddings_list.append(torch.stack(embeddings_i))
-        return data.pad_tensors(embeddings_list)
+                pair = sentence_encodings.word_to_tokens(word_id)
+                indices.append(pair)
+                # Fast-forwards to the start of the next word.
+                i = pair[-1]
+            # For each span of subwords, combine via mean and then stack them.
+            new_sentence_embeddings.append(
+                torch.stack(
+                    [
+                        torch.mean(sentence_embeddings[start:end], dim=0)
+                        for start, end in indices
+                    ]
+                )
+            )
+        # Pads and stacks across sentences; the leading dimension is ragged
+        # but `pad` cowardly refuses to pad non-trailing dimensions, so we
+        # abuse transposition and permutation.
+        pad_max = max(
+            len(sentence_embedding)
+            for sentence_embedding in new_sentence_embeddings
+        )
+        return torch.stack(
+            [
+                nn.functional.pad(
+                    sentence_embedding.T,
+                    (0, pad_max - len(sentence_embedding)),
+                    value=0,
+                )
+                for sentence_embedding in new_sentence_embeddings
+            ]
+        ).permute(0, 2, 1)
 
     # TODO: docs.
     # TODO: typing.
@@ -187,8 +213,10 @@ class UDTube(pl.LightningModule):
             batch.tokens.attention_mask = batch.tokens.attention_mask[
                 :max_length
             ]
+        # We move these manually rather than moving the whole batch encoding.
         x = self.encoder(
-            batch.tokens.input_ids, batch.tokens.attention_mask
+            batch.tokens.input_ids.to(self.device),
+            batch.tokens.attention_mask.to(self.device),
         ).hidden_states
         # Stacks the pooling layers.
         x = torch.stack(x[-self.pooling_layers :])
@@ -198,13 +226,23 @@ class UDTube(pl.LightningModule):
         # Applies dropout.
         x = self.dropout_layer(x)
         # Maps from subword embeddings to word-level embeddings.
-        # FIXME this is the part that's fucked up now.
         x = self._group_embeddings(x, batch.tokens)
-        # Applies classification heads.
-        y_upos_logits = self.upos_head(x) if self.use_upos else None
-        y_xpos_logits = self.xpos_head(x) if self.use_xpos else None
-        y_lemma_logits = self.lemma_head(x) if self.use_lemma else None
-        y_feats_logits = self.feats_head(x) if self.use_feats else None
+        # Applies classification heads, yielding logits of the form N x L x C
+        # where N is batch size, L is the max sentence length in words/tags,
+        # and C is the number of classes. The loss and accuracy functions
+        # instead need N x C x L, so we permute.
+        y_upos_logits = (
+            self.upos_head(x).permute(0, 2, 1) if self.use_upos else None
+        )
+        y_xpos_logits = (
+            self.xpos_head(x).permute(0, 2, 1) if self.use_xpos else None
+        )
+        y_lemma_logits = (
+            self.lemma_head(x).permute(0, 2, 1) if self.use_lemma else None
+        )
+        y_feats_logits = (
+            self.feats_head(x).permute(0, 2, 1) if self.use_feats else None
+        )
         # TODO(#6): make the response an object.
         return y_upos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits
 
@@ -284,41 +322,26 @@ class UDTube(pl.LightningModule):
                 logger=True,
             )
 
-    def _loss(self, golds: torch.Tensor, logits: torch.Tensor) -> torch.Tensor:
-        """Computes cross-entropy for a head.
-
-        This handles the necessary permutation.
-
-        Args:
-            golds: gold data.
-            logits: logits.
-
-        Returns:
-            A tensor containing the loss.
-        """
-        # TODO: explain the permutation here.
-        return self.loss_func(golds, logits.permute(0, 2, 1))
-
     @staticmethod
-    def _accuracy(golds: torch.Tensor, logits: torch.Tensor) -> float:
+    def _accuracy(logits: torch.Tensor, golds: torch.Tensor) -> float:
         """Computes multi-class micro-accuracy for a head.
 
-        This handles the necessary permutation.
+        Let N be the batch size, C be the number of classes, and L be the max
+        sentence length (e.g., number of tags for each sentence in batch).
 
         Args:
-            golds: gold data.
-            logits: logits.
+            logits: logits, of shape N x C x L.
+            golds: gold data, of shape N x L.
 
         Returns:
             The multi-class micro-accuracy.
         """
         return classification.multiclass_accuracy(
-            # TODO: explain the permutation and transpositions here.
-            logits.permute(1, 0, 2),
-            golds.T,
+            logits,
+            golds,
             num_classes=logits.shape[1],
-            ignore_index=special.PAD_IDX,
             average="micro",
+            ignore_index=special.PAD_IDX,
         )
 
     # TODO: docs.
@@ -332,45 +355,43 @@ class UDTube(pl.LightningModule):
     ) -> None:
         self.log(
             f"{subset}_{task_name}_accuracy",
-            self._accuracy(golds, logits),
+            self._accuracy(logits, golds),
             on_step=False,
             on_epoch=True,
             prog_bar=True,
             logger=True,
+            batch_size=len(logits),
         )
 
-    # TODO: do we really want to log accuracy every step? Probably better to
-    # log validation accuracy only and only at the end of an epoch.
+    # TODO: docs.
 
-    def training_step(
-        self, batch: data.ConlluBatch, batch_idx: int, subset: str = "train"
+    def _inference_step(
+        self, batch: data.ConlluBatch, batch_idx: int, subset: str
     ) -> Dict[str, float]:
         y_upos_logits, y_xpos_logits, y_lemma_logits, y_feats_logits = self(
             batch
         )
-        # Both helpers must permute the dimensions of logits. Fortunately,
-        # this is a cheap operation (permutation just creates a new view).
         losses = {}
         if self.use_upos:
-            losses["xpos_loss"] = self._loss(batch.upos, y_upos_logits)
+            losses["xpos_loss"] = self.loss_func(y_upos_logits, batch.upos)
             self._log_accuracy(
                 batch.upos, y_upos_logits, task_name="upos", subset=subset
             )
         if self.use_xpos:
-            losses["xpos_loss"] = self._loss(batch.xpos, y_xpos_logits)
+            losses["xpos_loss"] = self.loss_func(y_xpos_logits, batch.xpos)
             self._log_accuracy(
                 batch.xpos, y_xpos_logits, task_name="xpos", subset=subset
             )
         if self.use_lemma:
-            losses["lemma_loss"] = self._loss(batch.lemma, y_lemma_logits)
+            losses["lemma_loss"] = self.loss_func(y_lemma_logits, batch.lemma)
             self._log_accuracy(
-                batch.lemmas,
+                batch.lemma,
                 y_lemma_logits,
                 task_name="lemma",
                 subset=subset,
             )
         if self.use_feats:
-            losses["feats_loss"] = self._loss(batch.feats, y_feats_logits)
+            losses["feats_loss"] = self.loss_func(y_feats_logits, batch.feats)
             self._log_accuracy(
                 batch.feats,
                 y_feats_logits,
@@ -382,13 +403,23 @@ class UDTube(pl.LightningModule):
         self.log(
             f"{subset}_loss",
             loss,
-            on_step=True,
+            on_step=False,
             on_epoch=True,
             prog_bar=True,
             logger=True,
             batch_size=len(batch),
         )
         return loss
+
+    def training_step(
+        self, batch: data.ConlluBatch, batch_idx: int
+    ) -> Dict[str, float]:
+        return self._inference_step(batch, batch_idx, "train")
+
+    def validation_step(
+        self, batch: data.ConlluBatch, batch_idx: int
+    ) -> Dict[str, float]:
+        return self._inference_step(batch, batch_idx, "val")
 
     # TODO: docs.
     # TODO: why is this necessary?

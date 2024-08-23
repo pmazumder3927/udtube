@@ -11,7 +11,7 @@ simpler.
 * ConlluBatch contains tokenized and labeled data.
 """
 
-from typing import List, Optional, Union
+from typing import List, Optional
 
 import torch
 import transformers
@@ -31,12 +31,6 @@ class Batch(nn.Module):
 
     def __len__(self) -> int:
         return len(self.texts)
-
-    def to(self, device: Union[str, torch.device, int]) -> "Batch":
-        # `tokens` is a dictionary, so it can't be registered as a module
-        # buffer, but it itself supports a version of `.to`.
-        self.tokens = self.tokens.to(device)
-        return super().to(device)
 
 
 class TextBatch(nn.Module):

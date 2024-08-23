@@ -9,9 +9,11 @@
 from typing import List
 
 import spacy
+import torch
+from torch import nn
 import transformers
 
-from . import batches, datasets, indexes, padding
+from . import batches, datasets, indexes
 
 
 class Tokenizer:
@@ -78,6 +80,31 @@ class ConlluCollator:
         self.tokenizer = Tokenizer(tokenizer)
         self.index = index
 
+    @staticmethod
+    def pad_tensors(
+        tensorlist: List[torch.Tensor],
+        pad_idx: int = 0,
+        dim=0,
+    ) -> torch.Tensor:
+        """Pads and stacks a list of tensors.
+
+        Args:
+            tensorlist: a list of tensors to be padded.
+            pad_idx: padding index to use; defaults to 0.
+
+        Returns:
+            The padded and stacked tensor.
+        """
+        pad_max = max(len(tensor) for tensor in tensorlist)
+        return torch.stack(
+            [
+                nn.functional.pad(
+                    tensor, (0, pad_max - len(tensor)), value=pad_idx
+                )
+                for tensor in tensorlist
+            ]
+        )
+
     def __call__(self, itemlist: List[datasets.Item]) -> batches.ConlluBatch:
         return batches.ConlluBatch(
             texts=[item.text for item in itemlist],
@@ -85,21 +112,21 @@ class ConlluCollator:
             # Looks ugly, but this just pads and stacks data for whatever
             # classification tasks are enabled.
             upos=(
-                padding.pad_tensors(
+                self.pad_tensors(
                     [item.upos for item in itemlist], self.index.upos.pad_idx
                 )
                 if self.index.has_upos
                 else None
             ),
             xpos=(
-                padding.pad_tensors(
+                self.pad_tensors(
                     [item.xpos for item in itemlist], self.index.xpos.pad_idx
                 )
                 if self.index.has_xpos
                 else None
             ),
             lemma=(
-                padding.pad_tensors(
+                self.pad_tensors(
                     [item.lemma for item in itemlist],
                     self.index.lemma.pad_idx,
                 )
@@ -107,7 +134,7 @@ class ConlluCollator:
                 else None
             ),
             feats=(
-                padding.pad_tensors(
+                self.pad_tensors(
                     [item.feats for item in itemlist],
                     self.index.feats.pad_idx,
                 )
