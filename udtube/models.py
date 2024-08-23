@@ -42,7 +42,18 @@ class UDTube(pl.LightningModule):
             dataset.
     """
 
-    # TODO: declare instance types.
+    encoder: transformers.AutoModel
+    encoder_learning_rate: float
+    pooling_layers: int
+    upos_head: Optional[nn.Sequential]
+    xpos_head: Optional[nn.Sequential]
+    lemma_head: Optional[nn.Sequential]
+    feats_head: Optional[nn.Sequential]
+    dropout_layer: nn.Dropout
+    classifier_learning_rate: float
+    loss_func: nn.CrossEntropyLoss
+    warmup_steps: int
+    step_adjustment: Optional[int]  # FIXME is this right?
 
     # Initialization.
 
@@ -412,14 +423,14 @@ class UDTube(pl.LightningModule):
         return loss
 
     def training_step(
-        self, batch: data.ConlluBatch, batch_idx: int
+        self, batch: data.ConlluBatch, batch_idx: int, subset: str = "train",
     ) -> Dict[str, float]:
-        return self._inference_step(batch, batch_idx, "train")
+        return self._inference_step(batch, batch_idx, subset)
 
     def validation_step(
-        self, batch: data.ConlluBatch, batch_idx: int
+        self, batch: data.ConlluBatch, batch_idx: int, subset: str = "val",
     ) -> Dict[str, float]:
-        return self._inference_step(batch, batch_idx, "val")
+        return self._inference_step(batch, batch_idx, subset)
 
     # TODO: docs.
     # TODO: why is this necessary?
