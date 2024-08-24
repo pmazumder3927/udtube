@@ -5,6 +5,7 @@ for a classification head, and L is the maximum length (in subwords, tokens,
 or tags) of a sentence in the batch.
 """
 
+import inspect
 from typing import Dict, List
 
 import lightning
@@ -58,6 +59,7 @@ class UDTube(lightning.LightningModule):
         feats_out_size: int = 2,
     ):
         super().__init__()
+        self.automatic_optimization = False  # Required.
         self.encoder = modules.UDTubeEncoder(
             encoder,
             dropout,
@@ -120,7 +122,6 @@ class UDTube(lightning.LightningModule):
             "optimizer": encoder_optimizer,
             "lr_scheduler": {
                 "scheduler": encoder_scheduler,
-                "interval": "epoch",
                 "name": "encoder_lr",
             },
         }
@@ -132,7 +133,6 @@ class UDTube(lightning.LightningModule):
             "optimizer": classifier_optimizer,
             "lr_scheduler": {
                 "scheduler": classifier_scheduler,
-                "interval": "epoch",
                 "name": "classifier_lr",
             },
         }
@@ -187,7 +187,7 @@ class UDTube(lightning.LightningModule):
         batch_idx: int,
         subset: str = "train",
     ) -> torch.Tensor:
-        """Runs the forward pass and logs loss.
+        """Runs the forward pass, logs loss, and steps the optimizers.
 
         Args:
             batch: a labeled batch.
@@ -197,6 +197,8 @@ class UDTube(lightning.LightningModule):
         Returns:
             A tensor containing training loss.
         """
+        for optimizer in self.optimizers():
+            optimizer.zero_grad()
         logits = self(batch)
         losses = []
         if self.use_upos:
@@ -217,7 +219,20 @@ class UDTube(lightning.LightningModule):
             logger=True,
             batch_size=len(batch),
         )
+        self.manual_backward(loss)
+        for optimizer in self.optimizers():
+            optimizer.step()
         return loss
+
+    def on_train_epoch_end(self) -> None:
+        """Steps the schedulers."""
+        for scheduler in self.lr_schedulers():
+            if "metrics" in inspect.signature(scheduler.step).parameters:
+                scheduler.step(
+                    metrics=self.trainer.callback_metrics["val_loss"]
+                )
+            else:
+                scheduler.step()
 
     def validation_step(
         self,
