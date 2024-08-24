@@ -108,12 +108,22 @@ class UDTubeEncoder(lightning.LightningModule):
             ]
         ).permute(0, 2, 1)
 
-    # TODO: docs.
-
     def forward(
         self,
         batch: data.Batch,
     ) -> torch.Tensor:
+        """Computes the contextual word-level encoding.
+
+        This truncates (if necessary), computes the subword encodings,
+        stacks and mean-pools the pooling layers, applies dropout, and
+        then mean-pools the subwords that make up each word.
+    
+        Args:
+            batch: a data batch.
+        
+        Returns:
+            A contextual word-level encoding.
+        """
         # If something is longer than an allowed sequence, we trim it down.
         actual_length = batch.tokens.input_ids.shape[1]
         max_length = self.encoder.config.max_position_embeddings
@@ -245,27 +255,38 @@ class UDTubeClassifier(lightning.LightningModule):
 
     # Forward pass.
 
-    def forward(self, embeddings: torch.Tensor) -> Logits:
-        # Applies classification heads, yielding logits of the form N x L x C.
-        # The loss and accuracy functions expect N x C x L, so we permute.
+    def forward(self, encodings: torch.Tensor) -> Logits:
+        """Computes logits for each of the classification heads.
+
+        This takes the contextual word encodings and then computes the logits
+        for each of the active classification heads.This yields logits of the
+        shape N x L x C. Loss and accuracy functions expect N x C x L, so we
+        permute to produce this shape.
+    
+        Args:
+            encodings: the contextual word 
+        
+        Returns:
+            A contextual word-level encoding.
+        """
         return Logits(
             upos=(
-                self.upos_head(embeddings).permute(0, 2, 1)
+                self.upos_head(encodings).permute(0, 2, 1)
                 if self.use_upos
                 else None
             ),
             xpos=(
-                self.xpos_head(embeddings).permute(0, 2, 1)
+                self.xpos_head(encodings).permute(0, 2, 1)
                 if self.use_xpos
                 else None
             ),
             lemma=(
-                self.lemma_head(embeddings).permute(0, 2, 1)
+                self.lemma_head(encodings).permute(0, 2, 1)
                 if self.use_lemma
                 else None
             ),
             feats=(
-                self.feats_head(embeddings).permute(0, 2, 1)
+                self.feats_head(encodings).permute(0, 2, 1)
                 if self.use_feats
                 else None
             ),

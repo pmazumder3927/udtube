@@ -15,34 +15,6 @@ class Error(Exception):
     pass
 
 
-# TODO: will it break if we inherit from tokenizers.Encoding?
-class CustomEncoding:
-    """Encoding object emulating tokenizer encodings object.
-
-    For models that are not built on Rust (like ByT5) this object is needed to
-    preserve the implementation of word_to_tokens.
-    """
-
-    # TODO: typing.
-
-    def __init__(self, word_ids, tokens):
-        self.word_ids = word_ids
-        self.tokens = tokens
-
-    # TODO: typing.
-
-    def word_to_tokens(self, word_id):
-        # TODO: less naive approach.
-        start = self.word_ids.index(word_id)
-        stop = start + 1
-        for i, idx in enumerate(self.word_ids[start + 1 :]):
-            if idx == word_id:
-                stop += 1
-            else:
-                break
-        return start, stop
-
-
 class DataModule(lightning.LightningDataModule):
     """CoNLL-U data module.
 
