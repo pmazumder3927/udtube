@@ -2,6 +2,8 @@
 
 from torch import optim
 
+from . import schedulers
+
 BATCH_SIZE = 32
 
 REVERSE_EDITS = True
@@ -21,4 +23,4 @@ USE_FEATS = True
 
 # Optimization options.
 OPTIMIZER = optim.Adam
-SCHEDULER = optim.lr_scheduler.ConstantLR
+SCHEDULER = schedulers.Dummy

@@ -117,10 +117,10 @@ class UDTubeEncoder(lightning.LightningModule):
         This truncates (if necessary), computes the subword encodings,
         stacks and mean-pools the pooling layers, applies dropout, and
         then mean-pools the subwords that make up each word.
-    
+
         Args:
             batch: a data batch.
-        
+
         Returns:
             A contextual word-level encoding.
         """
@@ -262,10 +262,10 @@ class UDTubeClassifier(lightning.LightningModule):
         for each of the active classification heads.This yields logits of the
         shape N x L x C. Loss and accuracy functions expect N x C x L, so we
         permute to produce this shape.
-    
+
         Args:
-            encodings: the contextual word 
-        
+            encodings: the contextual word
+
         Returns:
             A contextual word-level encoding.
         """

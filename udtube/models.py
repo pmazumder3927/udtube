@@ -165,7 +165,7 @@ class UDTube(lightning.LightningModule):
         subset: str = "train",
     ) -> None:
         """Computes and logs accuracy for a head.
-        
+
         Args:
             logits: logits, tensor of shape N x C x L.
             golds: gold data, tensor of shape N x L.
