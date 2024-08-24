@@ -5,83 +5,15 @@ for a classification head, and L is the maximum length (in subwords, tokens,
 or tags) of a sentence in the batch.
 """
 
-import dataclasses
 import logging
-from typing import Dict, Iterator, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import lightning
 import torch
 import transformers
-from torch import nn, optim
+from torch import nn
 
-from . import data, defaults, encoders, schedulers
-
-
-@dataclasses.dataclass
-class OptimizationConfig:
-    """Struct for configuring optimization and LR scheduling."""
-
-    optimizer: str = defaults.OPTIMIZER
-    learning_rate: float = defaults.LEARNING_RATE
-    beta1: float = defaults.BETA1
-    beta2: float = defaults.BETA2
-    scheduler: str = defaults.SCHEDULER
-    reduceonplateau_factor: float = defaults.REDUCEONPLATEAU_FACTOR
-    reduceonplateau_patience: float = defaults.REDUCEONPLATEAU_PATIENCE
-    min_learning_rate: float = defaults.MIN_LEARNING_RATE
-    warmup_steps: int = defaults.WARMUP_STEPS
-
-    def _get_optimizer(
-        self, parameters: Iterator[nn.Parameter]
-    ) -> optim.Optimizer:
-        """Factory for selecting the optimizer."""
-        optim_fac = {
-            "adadelta": optim.Adadelta,
-            "adam": optim.Adam,
-            "adamw": optim.AdamW,
-            "sgd": optim.SGD,
-        }
-        cls = optim_fac[self.optimizer]
-        kwargs = {}
-        if self.optimizer.startswith("adam"):
-            kwargs["betas"] = self.beta1, self.beta2
-        return cls(parameters, self.learning_rate, **kwargs)
-
-    def _get_scheduler(
-        self, optimizer: optim.Optimizer
-    ) -> optim.lr_scheduler.LRScheduler:
-        """Factory for selecting the scheduler.
-
-        Args:
-            scheduler: name of scheduler.
-            optimizer: the optimizer.
-
-        Returns:
-            The scheduler.
-        """
-        scheduler_fac = {
-            "reduceonplateau": schedulers.ReduceOnPlateau,
-            "warmupinvsqrt": schedulers.WarmupInverseSquareRoot,
-        }
-        cls = scheduler_fac[self.scheduler]
-        kwargs = {}
-        if self.scheduler == "reduceonplateau":
-            kwargs["reduceonplateau_factor"] = self.reduceonplateau_factor
-            kwargs["reduceonplateau_patience"] = self.reduceonplateau_patience
-            kwargs["min_learning_rate"] = self.min_learning_rate
-        elif self.scheduler == "warmupinvsqrt":
-            kwargs["warmup_steps"] = self.warmup_steps
-        return cls(optimizer, **kwargs)
-
-    def __call__(self, parameters: Iterator[nn.Parameter]) -> Dict:
-        """Configures the optimizer and scheduler."""
-        optimizer = self._get_optimizer(parameters)
-        optdict = {"optimizer": optimizer}
-        if self.scheduler:
-            optdict["lr_scheduler"] = {
-                "scheduler": self._get_scheduler(optimizer),
-            }
-        return optdict
+from . import data, defaults, encoders
 
 
 class UDTubeEncoder(lightning.LightningModule):
@@ -91,7 +23,6 @@ class UDTubeEncoder(lightning.LightningModule):
         encoder: Name of the Hugging Face model used to tokenize and encode.
         pooling_layers: Number of layers to use to compute the embedding.
         dropout: Dropout probability.
-        **kwargs: optimization and LR scheduling arguments.
     """
 
     encoder: transformers.AutoModel
@@ -103,14 +34,11 @@ class UDTubeEncoder(lightning.LightningModule):
         encoder: str = defaults.ENCODER,
         dropout: float = defaults.DROPOUT,
         pooling_layers: int = defaults.POOLING_LAYERS,
-        # Optimization and LR scheduling.
-        **kwargs,
     ):
         super().__init__()
         self.encoder = encoders.load(encoder, dropout)
         self.dropout_layer = nn.Dropout(dropout)
         self.pooling_layers = pooling_layers
-        self.optconf = OptimizationConfig(**kwargs)
 
     # Properties.
 
@@ -191,7 +119,7 @@ class UDTubeEncoder(lightning.LightningModule):
         max_length = self.encoder.config.max_position_embeddings
         if actual_length > max_length:
             logging.warning(
-                "truncating sequence from %d to %d", actual_length, max_length
+                "Truncating sequence from %d to %d", actual_length, max_length
             )
             batch.tokens.input_ids = batch.tokens.input_ids[:max_length]
             batch.tokens.attention_mask = batch.tokens.attention_mask[
@@ -212,11 +140,6 @@ class UDTubeEncoder(lightning.LightningModule):
         # Maps from subword embeddings to word-level embeddings.
         x = self._group_embeddings(x, batch.tokens)
         return x
-
-    # Required API.
-
-    def configure_optimizers(self) -> Dict:
-        return self.optconf(self.parameters())
 
 
 class Logits(nn.Module):
@@ -250,14 +173,12 @@ class UDTubeClassifier(lightning.LightningModule):
         xpos_out_size: number of XPOS classes; usually set automatically.
         lemma_out_size: number of LEMMA classes; usually set automatically.
         feats_out_size: number of FEATS classes; usually set automatically.
-        **kwargs: optimization and LR scheduling arguments.
     """
 
     upos_head: Optional[nn.Sequential]
     xpos_head: Optional[nn.Sequential]
     lemma_head: Optional[nn.Sequential]
     feats_head: Optional[nn.Sequential]
-    optconf: OptimizationConfig
 
     @staticmethod
     def _make_head(hidden_size: int, out_size: int) -> nn.Sequential:
@@ -303,7 +224,6 @@ class UDTubeClassifier(lightning.LightningModule):
         self.feats_head = (
             self._make_head(hidden_size, feats_out_size) if use_feats else None
         )
-        self.optconf = OptimizationConfig(**kwargs)
 
     # Properties.
 
@@ -350,8 +270,3 @@ class UDTubeClassifier(lightning.LightningModule):
                 else None
             ),
         )
-
-    # Required API.
-
-    def configure_optimizers(self) -> Dict:
-        return self.optconf(self.parameters())

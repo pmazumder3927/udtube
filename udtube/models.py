@@ -6,11 +6,12 @@ or tags) of a sentence in the batch.
 """
 
 import inspect
-from typing import Dict, Tuple
+from typing import List
 
 import lightning
+from lightning.pytorch import cli
 import torch
-from torch import nn
+from torch import nn, optim
 from torchmetrics.functional import classification
 
 from . import data, defaults, modules, special
@@ -22,6 +23,15 @@ class UDTube(lightning.LightningModule):
     This model handles POS tagging, lemmatization, and morphological feature
     tagging using a single shared, pre-trained, fine-tuned BERT-style encoder
     and sequential linear classifiers for each subtask.
+
+    Args:
+        encoder: Name of the Hugging Face model used to tokenize and encode.
+        pooling_layers: Number of layers to use to compute the embedding.
+        dropout: Dropout probability.
+        use_upos: enables the universal POS tagging task.
+        use_xpos: enables the language-specific POS tagging task.
+        use_lemma: enables the lemmatization task.
+        use_feats: enables the morphological feature tagging task.
     """
 
     encoder: modules.UDTubeEncoder
@@ -38,31 +48,15 @@ class UDTube(lightning.LightningModule):
         use_lemma: bool = defaults.USE_LEMMA,
         use_feats: bool = defaults.USE_FEATS,
         *,
+        encoder_optimizer: cli.OptimizerCallable = defaults.OPTIMIZER,
+        encoder_scheduler: cli.LRSchedulerCallable = defaults.SCHEDULER,
+        classifier_optimizer: cli.OptimizerCallable = defaults.OPTIMIZER,
+        classifier_scheduler: cli.LRSchedulerCallable = defaults.SCHEDULER,
         # `2` is a dummy value here; it will be set by the data set object.
         upos_out_size: int = 2,
         xpos_out_size: int = 2,
         lemma_out_size: int = 2,
         feats_out_size: int = 2,
-        # Optimization and LR scheduling for the encoder.
-        encoder_optimizer: str = defaults.OPTIMIZER,
-        encoder_learning_rate: float = defaults.LEARNING_RATE,
-        encoder_beta1: float = defaults.BETA1,
-        encoder_beta2: float = defaults.BETA2,
-        encoder_scheduler: str = defaults.SCHEDULER,
-        encoder_reduceonplateau_factor: float = defaults.REDUCEONPLATEAU_FACTOR,  # noqa: E501
-        encoder_reduceonplateau_patience: float = defaults.REDUCEONPLATEAU_PATIENCE,  # noqa: E501
-        encoder_min_learning_rate: float = defaults.MIN_LEARNING_RATE,
-        encoder_warmup_steps: int = defaults.WARMUP_STEPS,
-        # Optimization and LR scheduling for the classifier.
-        classifier_optimizer: str = defaults.OPTIMIZER,
-        classifier_learning_rate: float = defaults.LEARNING_RATE,
-        classifier_beta1: float = defaults.BETA1,
-        classifier_beta2: float = defaults.BETA2,
-        classifier_scheduler: str = defaults.SCHEDULER,
-        classifier_reduceonplateau_factor: float = defaults.REDUCEONPLATEAU_FACTOR,  # noqa: E501
-        classifier_reduceonplateau_patience: float = defaults.REDUCEONPLATEAU_PATIENCE,  # noqa: E501
-        classifier_min_learning_rate: float = defaults.MIN_LEARNING_RATE,
-        classifier_warmup_steps: int = defaults.WARMUP_STEPS,
     ):
         super().__init__()
         self.automatic_optimization = False
@@ -70,16 +64,6 @@ class UDTube(lightning.LightningModule):
             encoder,
             dropout,
             pooling_layers,
-            # Optimization and LR scheduling.
-            optimizer=encoder_optimizer,
-            learning_rate=encoder_learning_rate,
-            beta1=encoder_beta1,
-            beta2=encoder_beta2,
-            scheduler=encoder_scheduler,
-            reduceonplateau_factor=encoder_reduceonplateau_factor,
-            reduceonplateau_patience=encoder_reduceonplateau_patience,
-            min_learning_rate=encoder_min_learning_rate,
-            warmup_steps=encoder_warmup_steps,
         )
         self.classifier = modules.UDTubeClassifier(
             self.encoder.hidden_size,
@@ -91,20 +75,14 @@ class UDTube(lightning.LightningModule):
             xpos_out_size=xpos_out_size,
             lemma_out_size=lemma_out_size,
             feats_out_size=feats_out_size,
-            # Optimization and LR scheduling.
-            optimizer=classifier_optimizer,
-            learning_rate=classifier_learning_rate,
-            beta1=classifier_beta1,
-            beta2=classifier_beta2,
-            scheduler=classifier_scheduler,
-            reduceonplateau_factor=classifier_reduceonplateau_factor,  # noqa: E501
-            reduceonplateau_patience=classifier_reduceonplateau_patience,  # noqa: E501
-            min_learning_rate=classifier_min_learning_rate,
-            warmup_steps=classifier_warmup_steps,
         )
         # Other stuff.
         self.loss_func = nn.CrossEntropyLoss(ignore_index=special.PAD_IDX)
         self.save_hyperparameters()
+        self.encoder_optimizer = encoder_optimizer
+        self.encoder_scheduler = encoder_scheduler
+        self.classifier_optimizer = classifier_optimizer
+        self.classifier_scheduler = classifier_scheduler
 
     # Properties.
 
@@ -136,12 +114,31 @@ class UDTube(lightning.LightningModule):
 
     def configure_optimizers(
         self,
-    ) -> Tuple[Dict, Dict]:
-        """Prepare optimizer and schedulers."""
-        return (
-            self.encoder.configure_optimizers(),
-            self.classifier.configure_optimizers(),
+    ) -> List[optim.Optimizer]:
+        """Prepare optimizers and schedulers."""
+        encoder_optimizer = self.encoder_optimizer(self.encoder.parameters())
+        encoder_scheduler = self.encoder_scheduler(encoder_optimizer)
+        encoder_dict = {
+            "optimizer": encoder_optimizer,
+            "lr_scheduler": {
+                "scheduler": encoder_scheduler,
+                "interval": "epoch",
+                "name": "encoder",
+            },
+        }
+        classifier_optimizer = self.classifier_optimizer(
+            self.classifier.parameters()
         )
+        classifier_scheduler = self.classifier_scheduler(classifier_optimizer)
+        classifier_dict = {
+            "optimizer": classifier_optimizer,
+            "lr_scheduler": {
+                "scheduler": classifier_scheduler,
+                "interval": "epoch",
+                "name": "classifier",
+            },
+        }
+        return [encoder_dict, classifier_dict]
 
     @staticmethod
     def _accuracy(logits: torch.Tensor, golds: torch.Tensor) -> float:
@@ -262,12 +259,7 @@ class UDTube(lightning.LightningModule):
 
     def on_train_epoch_end(self) -> None:
         """Steps the schedulers."""
-        schedulers = self.lr_schedulers()
-        if schedulers is None:
-            return
-        for scheduler in schedulers:
-            # TODO: very annoying to have to do this switching. Is there an
-            # obvious alternative?
+        for scheduler in self.lr_schedulers():
             if "metrics" in inspect.signature(scheduler.step).parameters:
                 scheduler.step(
                     metrics=self.trainer.callback_metrics["val_loss"]

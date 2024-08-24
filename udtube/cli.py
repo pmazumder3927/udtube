@@ -47,7 +47,12 @@ def main() -> None:
         datefmt="%d-%b-%y %H:%M:%S",
         level="INFO",
     )
-    UDTubeCLI(models.UDTube, data.DataModule, save_config_callback=None)
+    UDTubeCLI(
+        models.UDTube,
+        data.DataModule,
+        auto_configure_optimizers=False,
+        save_config_callback=None,
+    )
 
 
 if __name__ == "__main__":
