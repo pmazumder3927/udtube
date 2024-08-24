@@ -13,9 +13,11 @@ from .. import defaults
 from . import edit_scripts
 
 # Overrides the feats parser for the conllu reader so it doesn't try to
-# turn them into dictionaries.
+# turn them into dictionaries or None.
 OVERRIDDEN_FIELD_PARSERS = {
     "feats": lambda line, i: line[i],
+    "upos": lambda line, i: line[i],
+    "xpos": lambda line, i: line[i],
 }
 
 
