@@ -5,351 +5,143 @@ for a classification head, and L is the maximum length (in subwords, tokens,
 or tags) of a sentence in the batch.
 """
 
-import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Dict, Tuple
 
 import pytorch_lightning as pl
 import torch
-import transformers
-from torch import nn, optim
+from torch import nn
 from torchmetrics.functional import classification
 
-from . import data, defaults, encoders, special
-
-
-class UDTubeLogits(nn.Module):
-    """Logits from the forward pass.
-
-    Each tensor is either null or of shape N x C x L."""
-
-    upos: Optional[torch.Tensor]
-    xpos: Optional[torch.Tensor]
-    lemma: Optional[torch.Tensor]
-    feats: Optional[torch.Tensor]
-
-    def __init__(self, upos=None, xpos=None, lemma=None, feats=None):
-        super().__init__()
-        self.register_buffer("upos", upos)
-        self.register_buffer("xpos", xpos)
-        self.register_buffer("lemma", lemma)
-        self.register_buffer("feats", feats)
+from . import data, defaults, modules, special
 
 
 class UDTube(pl.LightningModule):
-    """UDTube model.
+    """The UDTube model.
 
     This model handles POS tagging, lemmatization, and morphological feature
-    classification using a single shared, pre-trained, tuned BERT-style
-    encoder.
-
-    Args:
-        model_name: The name of the model; used to tokenize and encode.
-        encoder_dropout: Dropout probability for the encoder layers.
-        encoder_learning_rate: Learning rate for the encoder layers.
-        pooling_layers: Number of encoder layers to use to compute the
-            embedding.
-        classifier_dropout: Dropout probability for the classifier layers.
-        classifier_learning_rate: Learning rate for the classifier layers.
-        warmup_steps: Number of warmup steps.
-        use_upos: If true, use POS tags.
-        use_xpos: If true, use language-specific POS tags.
-        use_lemma: If true, use lemmatization.
-        use_feats: If true, use morphological feature tags.
-        upos_out_size: Number of POS labels; usually provided by the
-            dataset object.
-        xpos_out_size: Number of language-specific POS labels; usually
-            provided by the dataset object.
-        lemma_out_size: Number of lemma tags; usually provided by the
-            dataset.
-        feats_out_size: Number of feature tags; usually provided by the
-            dataset.
+    tagging using a single shared, pre-trained, fine-tuned BERT-style encoder
+    and sequential linear classifiers for each subtask.
     """
 
-    encoder: transformers.AutoModel
-    encoder_learning_rate: float
-    pooling_layers: int
-    upos_head: Optional[nn.Sequential]
-    xpos_head: Optional[nn.Sequential]
-    lemma_head: Optional[nn.Sequential]
-    feats_head: Optional[nn.Sequential]
-    dropout_layer: nn.Dropout
-    classifier_learning_rate: float
+    encoder: modules.UDTubeEncoder
+    classifier: modules.UDTubeClassifier
     loss_func: nn.CrossEntropyLoss
-    warmup_steps: int
-    step_adjustment: Optional[int]  # FIXME is this right?
-
-    # Initialization.
-
-    def _make_head(self, out_size: int) -> nn.Sequential:
-        """Helper for generating heads.
-
-        Args:
-            out_size (int).
-
-        Returns:
-            A sequential linear layer.
-        """
-        return nn.Sequential(
-            nn.Linear(self.hidden_size, out_size),
-            nn.LeakyReLU(),
-        )
 
     def __init__(
         self,
         encoder: str = defaults.ENCODER,
-        encoder_dropout: float = defaults.ENCODER_DROPOUT,
-        encoder_learning_rate: float = defaults.ENCODER_LEARNING_RATE,
+        dropout: float = defaults.DROPOUT,
         pooling_layers: int = defaults.POOLING_LAYERS,
-        classifier_dropout: float = defaults.CLASSIFIER_DROPOUT,
-        classifier_learning_rate: float = defaults.CLASSIFIER_LEARNING_RATE,
-        warmup_steps: int = defaults.WARMUP_STEPS,
         use_upos: bool = defaults.USE_UPOS,
         use_xpos: bool = defaults.USE_XPOS,
         use_lemma: bool = defaults.USE_LEMMA,
         use_feats: bool = defaults.USE_FEATS,
+        *,
         # `2` is a dummy value here; it will be set by the data set object.
         upos_out_size: int = 2,
         xpos_out_size: int = 2,
         lemma_out_size: int = 2,
         feats_out_size: int = 2,
+        # Optimization and LR scheduling for the encoder.
+        encoder_optimizer: str = defaults.OPTIMIZER,
+        encoder_learning_rate: float = defaults.LEARNING_RATE,
+        encoder_beta1: float = defaults.BETA1,
+        encoder_beta2: float = defaults.BETA2,
+        encoder_scheduler: str = defaults.SCHEDULER,
+        encoder_reduceonplateau_factor: float = defaults.REDUCEONPLATEAU_FACTOR,  # noqa: E501
+        encoder_reduceonplateau_patience: float = defaults.REDUCEONPLATEAU_PATIENCE,  # noqa: E501
+        encoder_min_learning_rate: float = defaults.MIN_LEARNING_RATE,
+        encoder_warmup_steps: int = defaults.WARMUP_STEPS,
+        # Optimization and LR scheduling for the classifier.
+        classifier_optimizer: str = defaults.OPTIMIZER,
+        classifier_learning_rate: float = defaults.LEARNING_RATE,
+        classifier_beta1: float = defaults.BETA1,
+        classifier_beta2: float = defaults.BETA2,
+        classifier_scheduler: str = defaults.SCHEDULER,
+        classifier_reduceonplateau_factor: float = defaults.REDUCEONPLATEAU_FACTOR,  # noqa: E501
+        classifier_reduceonplateau_patience: float = defaults.REDUCEONPLATEAU_PATIENCE,  # noqa: E501
+        classifier_min_learning_rate: float = defaults.MIN_LEARNING_RATE,
+        classifier_warmup_steps: int = defaults.WARMUP_STEPS,
     ):
         super().__init__()
-        self.encoder = encoders.load(encoder, encoder_dropout)
-        self.encoder_learning_rate = encoder_learning_rate
-        self.pooling_layers = pooling_layers
-        # Freezes encoder layer params for the first epoch.
-        for p in self.encoder.parameters():
-            p.requires_grad = False
-        logging.info("Encoder parameters frozen for the first epoch")
-        self.upos_head = self._make_head(upos_out_size) if use_upos else None
-        self.xpos_head = self._make_head(xpos_out_size) if use_xpos else None
-        self.lemma_head = (
-            self._make_head(lemma_out_size) if use_lemma else None
+        self.automatic_optimization = False
+        self.encoder = modules.UDTubeEncoder(
+            encoder,
+            dropout,
+            pooling_layers,
+            encoder_optimizer=encoder_optimizer,
+            encoder_learning_rate=encoder_learning_rate,
+            encoder_beta1=encoder_beta1,
+            encoder_beta2=encoder_beta2,
+            encoder_scheduler=encoder_scheduler,
+            encoder_reduceonplateau_factor=encoder_reduceonplateau_factor,
+            encoder_reduceonplateau_patience=encoder_reduceonplateau_patience,
+            encoder_min_learning_rate=encoder_min_learning_rate,
+            encoder_warmup_steps=encoder_warmup_steps,
         )
-        self.feats_head = (
-            self._make_head(feats_out_size) if use_feats else None
+        self.classifier = modules.UDTubeClassifier(
+            use_upos,
+            use_xpos,
+            use_lemma,
+            use_feats,
+            upos_out_size=upos_out_size,
+            xpos_out_size=xpos_out_size,
+            lemma_out_size=lemma_out_size,
+            feats_out_size=feats_out_size,
+            classifier_optimizer=classifier_optimizer,
+            classifier_learning_rate=classifier_learning_rate,
+            classifier_beta1=classifier_beta1,
+            classifier_beta2=classifier_beta2,
+            classifier_scheduler=classifier_scheduler,
+            classifier_reduceonplateau_factor=classifier_reduceonplateau_factor,  # noqa: E501
+            classifier_reduceonplateau_patience=classifier_reduceonplateau_patience,  # noqa: E501
+            classifier_min_learning_rate=classifier_min_learning_rate,
+            classifier_warmup_steps=classifier_warmup_steps,
         )
-        # Essentially, this is dropout for the context-depending encodings
-        # going into the classifier.
-        self.dropout_layer = nn.Dropout(classifier_dropout)
-        self.classifier_learning_rate = classifier_learning_rate
+        # Other stuff.
         self.loss_func = nn.CrossEntropyLoss(ignore_index=special.PAD_IDX)
-        self.warmup_steps = warmup_steps
-        self.step_adjustment = None
         self.save_hyperparameters()
 
     # Properties.
 
     @property
-    def hidden_size(self) -> int:
-        return self.encoder.config.hidden_size
-
-    @property
     def use_upos(self) -> bool:
-        return self.upos_head is not None
+        return self.classifier.use_upos
 
     @property
     def use_xpos(self) -> bool:
-        return self.xpos_head is not None
+        return self.classifier.use_xpos
 
     @property
     def use_lemma(self) -> bool:
-        return self.lemma_head is not None
+        return self.classifier.use_lemma
 
     @property
     def use_feats(self) -> bool:
-        return self.feats_head is not None
+        return self.classifier.use_feats
 
     # Forward pass.
-
-    def _group_embeddings(
-        self,
-        embeddings: torch.Tensor,
-        tokenized: transformers.BatchEncoding,
-    ) -> Tuple[torch.Tensor, List[List[str]]]:
-        """Groups subword embeddings to form word embeddings.
-
-        This is necessary because each classifier head makes per-word
-        decisions, but the contextual embeddings use subwords. Therefore,
-        we average over the subwords for each word.
-
-        Args:
-            embeddings: the embeddings tensor to pool.
-            tokens: the batch encoding.
-
-        Returns:
-            The re-pooled embeddings tensor.
-        """
-        new_sentence_embeddings = []
-        for sentence_encodings, sentence_embeddings in zip(
-            tokenized.encodings, embeddings
-        ):
-            # This looks like an overly elaborate loop that could be a list
-            # comprehension, but this is much faster.
-            indices = []
-            i = 0
-            while i < len(sentence_encodings.word_ids):
-                word_id = sentence_encodings.word_ids[i]
-                # Have hit padding.
-                if word_id is None:
-                    break
-                pair = sentence_encodings.word_to_tokens(word_id)
-                indices.append(pair)
-                # Fast-forwards to the start of the next word.
-                i = pair[-1]
-            # For each span of subwords, combine via mean and then stack them.
-            new_sentence_embeddings.append(
-                torch.stack(
-                    [
-                        torch.mean(sentence_embeddings[start:end], dim=0)
-                        for start, end in indices
-                    ]
-                )
-            )
-        # Pads and stacks across sentences; the leading dimension is ragged
-        # but `pad` cowardly refuses to pad non-trailing dimensions, so we
-        # abuse transposition and permutation.
-        pad_max = max(
-            len(sentence_embedding)
-            for sentence_embedding in new_sentence_embeddings
-        )
-        return torch.stack(
-            [
-                nn.functional.pad(
-                    sentence_embedding.T,
-                    (0, pad_max - len(sentence_embedding)),
-                    value=0,
-                )
-                for sentence_embedding in new_sentence_embeddings
-            ]
-        ).permute(0, 2, 1)
-
-    # TODO: docs.
 
     def forward(
         self,
         batch: data.Batch,
-    ) -> UDTubeLogits:
-        # If something is longer than an allowed sequence, we trim it down.
-        actual_length = batch.tokens.input_ids.shape[1]
-        max_length = self.encoder.config.max_position_embeddings
-        if actual_length > max_length:
-            logging.warning(
-                "truncating sequence from %d to %d", actual_length, max_length
-            )
-            batch.tokens.input_ids = batch.tokens.input_ids[:max_length]
-            batch.tokens.attention_mask = batch.tokens.attention_mask[
-                :max_length
-            ]
-        # We move these manually rather than moving the whole batch encoding.
-        x = self.encoder(
-            batch.tokens.input_ids.to(self.device),
-            batch.tokens.attention_mask.to(self.device),
-        ).hidden_states
-        # Stacks the pooling layers.
-        x = torch.stack(x[-self.pooling_layers :])
-        # Averages them into one embedding layer; automatically squeezes the
-        # mean dimension.
-        x = torch.mean(x, dim=0)
-        # Applies dropout.
-        x = self.dropout_layer(x)
-        # Maps from subword embeddings to word-level embeddings.
-        x = self._group_embeddings(x, batch.tokens)
-        # Applies classification heads, yielding logits of the form N x L x C.
-        # The loss and accuracy functions expect N x C x L, so we permute.
-        return UDTubeLogits(
-            upos=self.upos_head(x).permute(0, 2, 1) if self.use_upos else None,
-            xpos=self.xpos_head(x).permute(0, 2, 1) if self.use_xpos else None,
-            lemma=(
-                self.lemma_head(x).permute(0, 2, 1) if self.use_lemma else None
-            ),
-            feats=(
-                self.feats_head(x).permute(0, 2, 1) if self.use_feats else None
-            ),
-        )
+    ) -> modules.UDTubeLogits:
+        return self.classifier(self.encoder(batch))
 
     # Required API.
 
-    # TODO: add additional optimizers.
-
-    def configure_optimizers(self):
-        """Prepare optimizer and schedulers."""
-        grouped_params = [
-            {
-                "params": self.encoder.parameters(),
-                "lr": self.encoder_learning_rate,
-                "weight_decay": 0.01,
-            }
-        ]
-        if self.use_lemma:
-            grouped_params.append(
-                {
-                    "params": self.lemma_head.parameters(),
-                    "lr": self.classifier_learning_rate,
-                }
-            )
-        if self.use_upos:
-            grouped_params.append(
-                {
-                    "params": self.upos_head.parameters(),
-                    "lr": self.classifier_learning_rate,
-                }
-            )
-        if self.use_xpos:
-            grouped_params.append(
-                {
-                    "params": self.xpos_head.parameters(),
-                    "lr": self.classifier_learning_rate,
-                }
-            )
-        if self.use_feats:
-            grouped_params.append(
-                {
-                    "params": self.feats_head.parameters(),
-                    "lr": self.classifier_learning_rate,
-                }
-            )
-        optimizer = torch.optim.AdamW(grouped_params)
-        return [optimizer]
-
-    # TODO: docs.
-
-    def optimizer_step(
+    def configure_optimizers(
         self,
-        epoch: int,
-        batch_idx: int,
-        optimizer: optim.Optimizer,
-        optimizer_closure: Optional[Callable[[], Any]] = None,
-    ) -> None:
-        optimizer.step(closure=optimizer_closure)
-        if epoch > 0:
-            # This only happens once params are unfrozen
-            unfrozen_steps = self.trainer.global_step - self.step_adjustment
-            if unfrozen_steps < self.warmup_steps:
-                # Warming up LR from 0 to the encoder LR begins before the
-                # encoder is unfrozen, so LR is not really at zero.
-                lr_scale = 0 + float(unfrozen_steps) / self.warmup_steps
-            else:
-                # Decaying weight.
-                lr_scale = 1 / (unfrozen_steps**0.5)
-            optimizer.param_groups[0]["lr"] = (
-                lr_scale * self.encoder_learning_rate
-            )
-            self.log(
-                "encoder_lr",
-                optimizer.param_groups[0]["lr"],
-                on_step=True,
-                on_epoch=False,
-                prog_bar=False,
-                logger=True,
-            )
+    ) -> Tuple[Dict, Dict]:
+        """Prepare optimizer and schedulers."""
+        return (
+            self.encoder.configure_optimizers(),
+            self.classifier.configure_optimizers(),
+        )
 
     @staticmethod
     def _accuracy(logits: torch.Tensor, golds: torch.Tensor) -> float:
         """Computes multi-class micro-accuracy for a head.
-
-        Let N be the batch size, C be the number of classes, and L be the max
-        sentence length (e.g., number of tags for each sentence in batch).
 
         Args:
             logits: logits, of shape N x C x L.
@@ -389,21 +181,22 @@ class UDTube(pl.LightningModule):
 
     def _inference_step(
         self, batch: data.ConlluBatch, batch_idx: int, subset: str
-    ) -> Dict[str, float]:
+    ) -> None:
         logits = self(batch)
-        losses = {}
+        # Computes and logs loss and accuracy.
+        losses = []
         if self.use_upos:
-            losses["xpos_loss"] = self.loss_func(logits.upos, batch.upos)
+            losses.append(self.loss_func(logits.upos, batch.upos))
             self._log_accuracy(
                 batch.upos, logits.upos, task_name="upos", subset=subset
             )
         if self.use_xpos:
-            losses["xpos_loss"] = self.loss_func(logits.xpos, batch.xpos)
+            losses.append(self.loss_func(logits.xpos, batch.xpos))
             self._log_accuracy(
                 batch.xpos, logits.xpos, task_name="xpos", subset=subset
             )
         if self.use_lemma:
-            losses["lemma_loss"] = self.loss_func(logits.lemma, batch.lemma)
+            losses.append(self.loss_func(logits.lemma, batch.lemma))
             self._log_accuracy(
                 batch.lemma,
                 logits.lemma,
@@ -411,15 +204,14 @@ class UDTube(pl.LightningModule):
                 subset=subset,
             )
         if self.use_feats:
-            losses["feats_loss"] = self.loss_func(logits.feats, batch.feats)
+            losses.append(self.loss_func(logits.feats, batch.feats))
             self._log_accuracy(
                 batch.feats,
                 logits.feats,
                 task_name="feats",
                 subset=subset,
             )
-        # Averages the loss of all active heads.
-        losses["loss"] = loss = torch.mean(torch.stack(list(losses.values())))
+        loss = torch.mean(torch.stack(losses))
         self.log(
             f"{subset}_loss",
             loss,
@@ -436,26 +228,31 @@ class UDTube(pl.LightningModule):
         batch: data.ConlluBatch,
         batch_idx: int,
         subset: str = "train",
-    ) -> Dict[str, float]:
-        return self._inference_step(batch, batch_idx, subset)
+    ) -> None:
+        """Runs the forward pass, logs, and steps the optimizers."""
+        optimizer1, optimizer2 = self.optimizers()
+        optimizer1.zero_grad()
+        optimizer2.zero_grad()
+        loss = self._inference_step(batch, batch_idx, subset)
+        self.manual_backwards(loss, optimizer1)
+        self.manual_backwards(loss, optimizer2)
+        optimizer1.step()
+        optimizer2.step()
+
+    def training_epoch_end(self) -> None:
+        """Steps the schedulers."""
+        scheduler1, scheduler2 = self.lr_schedulers()
+        scheduler1.step(self.trainer.callback_metrics["val_loss"])
+        scheduler2.step(self.trainer.callback_metrics["val_loss"])
 
     def validation_step(
         self,
         batch: data.ConlluBatch,
         batch_idx: int,
         subset: str = "val",
-    ) -> Dict[str, float]:
-        return self._inference_step(batch, batch_idx, subset)
+    ) -> None:
+        """Runs the forward pass and logs."""
+        self._inference_step(batch, batch_idx, subset)
 
     # TODO: add test step.
     # TODO: add predict step.
-
-    # TODO: docs.
-
-    def on_train_epoch_end(self) -> None:
-        if self.current_epoch == 0:
-            # How many steps are in an epoch?
-            self.step_adjustment = self.trainer.global_step
-            for parameter in self.encoder.parameters():
-                parameter.requires_grad = True
-            logging.info("Encoder parameters unfrozen")
