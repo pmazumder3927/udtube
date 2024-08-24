@@ -2,9 +2,9 @@
 
 import logging
 
-from pytorch_lightning import cli
+from lightning.pytorch import cli
 
-from . import callbacks, data, models
+from . import data, models
 
 
 class UDTubeCLI(cli.LightningCLI):
@@ -39,16 +39,6 @@ class UDTubeCLI(cli.LightningCLI):
             "model.feats_out_size",
             apply_on="instantiate",
         )
-
-    def before_instantiate_classes(self) -> None:
-        if self.subcommand == "predict":
-            self.trainer_defaults["callbacks"] = [
-                callbacks.CustomWriter(self.config.predict.output_file)
-            ]
-        elif self.subcommand == "test":
-            self.trainer_defaults["callbacks"] = [
-                callbacks.CustomWriter(self.config.test.output_file)
-            ]
 
 
 def main() -> None:

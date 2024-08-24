@@ -5,9 +5,10 @@ for a classification head, and L is the maximum length (in subwords, tokens,
 or tags) of a sentence in the batch.
 """
 
+import inspect
 from typing import Dict, Tuple
 
-import pytorch_lightning as pl
+import lightning
 import torch
 from torch import nn
 from torchmetrics.functional import classification
@@ -15,7 +16,7 @@ from torchmetrics.functional import classification
 from . import data, defaults, modules, special
 
 
-class UDTube(pl.LightningModule):
+class UDTube(lightning.LightningModule):
     """The UDTube model.
 
     This model handles POS tagging, lemmatization, and morphological feature
@@ -69,17 +70,19 @@ class UDTube(pl.LightningModule):
             encoder,
             dropout,
             pooling_layers,
-            encoder_optimizer=encoder_optimizer,
-            encoder_learning_rate=encoder_learning_rate,
-            encoder_beta1=encoder_beta1,
-            encoder_beta2=encoder_beta2,
-            encoder_scheduler=encoder_scheduler,
-            encoder_reduceonplateau_factor=encoder_reduceonplateau_factor,
-            encoder_reduceonplateau_patience=encoder_reduceonplateau_patience,
-            encoder_min_learning_rate=encoder_min_learning_rate,
-            encoder_warmup_steps=encoder_warmup_steps,
+            # Optimization and LR scheduling.
+            optimizer=encoder_optimizer,
+            learning_rate=encoder_learning_rate,
+            beta1=encoder_beta1,
+            beta2=encoder_beta2,
+            scheduler=encoder_scheduler,
+            reduceonplateau_factor=encoder_reduceonplateau_factor,
+            reduceonplateau_patience=encoder_reduceonplateau_patience,
+            min_learning_rate=encoder_min_learning_rate,
+            warmup_steps=encoder_warmup_steps,
         )
         self.classifier = modules.UDTubeClassifier(
+            self.encoder.hidden_size,
             use_upos,
             use_xpos,
             use_lemma,
@@ -88,15 +91,16 @@ class UDTube(pl.LightningModule):
             xpos_out_size=xpos_out_size,
             lemma_out_size=lemma_out_size,
             feats_out_size=feats_out_size,
-            classifier_optimizer=classifier_optimizer,
-            classifier_learning_rate=classifier_learning_rate,
-            classifier_beta1=classifier_beta1,
-            classifier_beta2=classifier_beta2,
-            classifier_scheduler=classifier_scheduler,
-            classifier_reduceonplateau_factor=classifier_reduceonplateau_factor,  # noqa: E501
-            classifier_reduceonplateau_patience=classifier_reduceonplateau_patience,  # noqa: E501
-            classifier_min_learning_rate=classifier_min_learning_rate,
-            classifier_warmup_steps=classifier_warmup_steps,
+            # Optimization and LR scheduling.
+            optimizer=classifier_optimizer,
+            learning_rate=classifier_learning_rate,
+            beta1=classifier_beta1,
+            beta2=classifier_beta2,
+            scheduler=classifier_scheduler,
+            reduceonplateau_factor=classifier_reduceonplateau_factor,  # noqa: E501
+            reduceonplateau_patience=classifier_reduceonplateau_patience,  # noqa: E501
+            min_learning_rate=classifier_min_learning_rate,
+            warmup_steps=classifier_warmup_steps,
         )
         # Other stuff.
         self.loss_func = nn.CrossEntropyLoss(ignore_index=special.PAD_IDX)
@@ -125,7 +129,7 @@ class UDTube(pl.LightningModule):
     def forward(
         self,
         batch: data.Batch,
-    ) -> modules.UDTubeLogits:
+    ) -> modules.Logits:
         return self.classifier(self.encoder(batch))
 
     # Required API.
@@ -229,21 +233,47 @@ class UDTube(pl.LightningModule):
         batch_idx: int,
         subset: str = "train",
     ) -> None:
-        """Runs the forward pass, logs, and steps the optimizers."""
-        optimizer1, optimizer2 = self.optimizers()
-        optimizer1.zero_grad()
-        optimizer2.zero_grad()
-        loss = self._inference_step(batch, batch_idx, subset)
-        self.manual_backwards(loss, optimizer1)
-        self.manual_backwards(loss, optimizer2)
-        optimizer1.step()
-        optimizer2.step()
+        """Runs the forward pass, logs loss, and steps the optimizers."""
+        for optimizer in self.optimizers():
+            optimizer.zero_grad()
+        logits = self(batch)
+        losses = []
+        if self.use_upos:
+            losses.append(self.loss_func(logits.upos, batch.upos))
+        if self.use_xpos:
+            losses.append(self.loss_func(logits.xpos, batch.xpos))
+        if self.use_lemma:
+            losses.append(self.loss_func(logits.lemma, batch.lemma))
+        if self.use_feats:
+            losses.append(self.loss_func(logits.feats, batch.feats))
+        loss = torch.mean(torch.stack(losses))
+        self.log(
+            f"{subset}_loss",
+            loss,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            batch_size=len(batch),
+        )
+        self.manual_backward(loss)
+        for optimizer in self.optimizers():
+            optimizer.step()
 
-    def training_epoch_end(self) -> None:
+    def on_train_epoch_end(self) -> None:
         """Steps the schedulers."""
-        scheduler1, scheduler2 = self.lr_schedulers()
-        scheduler1.step(self.trainer.callback_metrics["val_loss"])
-        scheduler2.step(self.trainer.callback_metrics["val_loss"])
+        schedulers = self.lr_schedulers()
+        if schedulers is None:
+            return
+        for scheduler in schedulers:
+            # TODO: very annoying to have to do this switching. Is there an
+            # obvious alternative?
+            if "metrics" in inspect.signature(scheduler.step).parameters:
+                scheduler.step(
+                    metrics=self.trainer.callback_metrics["val_loss"]
+                )
+            else:
+                scheduler.step()
 
     def validation_step(
         self,
@@ -251,8 +281,51 @@ class UDTube(pl.LightningModule):
         batch_idx: int,
         subset: str = "val",
     ) -> None:
-        """Runs the forward pass and logs."""
-        self._inference_step(batch, batch_idx, subset)
+        """Runs the forward pass and logs loss and accuracy."""
+        logits = self(batch)
+        losses = []
+        if self.use_upos:
+            losses.append(self.loss_func(logits.upos, batch.upos))
+            self._log_accuracy(
+                batch.upos,
+                logits.upos,
+                task_name="upos",
+                subset=subset,
+            )
+        if self.use_xpos:
+            losses.append(self.loss_func(logits.xpos, batch.xpos))
+            self._log_accuracy(
+                batch.xpos,
+                logits.xpos,
+                task_name="xpos",
+                subset=subset,
+            )
+        if self.use_lemma:
+            losses.append(self.loss_func(logits.lemma, batch.lemma))
+            self._log_accuracy(
+                batch.lemma,
+                logits.lemma,
+                task_name="lemma",
+                subset=subset,
+            )
+        if self.use_feats:
+            losses.append(self.loss_func(logits.feats, batch.feats))
+            self._log_accuracy(
+                batch.feats,
+                logits.feats,
+                task_name="feats",
+                subset=subset,
+            )
+        loss = torch.mean(torch.stack(losses))
+        self.log(
+            f"{subset}_loss",
+            loss,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            batch_size=len(batch),
+        )
 
     # TODO: add test step.
     # TODO: add predict step.

@@ -7,8 +7,9 @@ or tags) of a sentence in the batch.
 
 import dataclasses
 import logging
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterator, List, Optional, Tuple
 
+import lightning
 import torch
 import transformers
 from torch import nn, optim
@@ -18,7 +19,7 @@ from . import data, defaults, encoders, schedulers
 
 @dataclasses.dataclass
 class OptimizationConfig:
-    """Configures optimization and LR scheduling."""
+    """Struct for configuring optimization and LR scheduling."""
 
     optimizer: str = defaults.OPTIMIZER
     learning_rate: float = defaults.LEARNING_RATE
@@ -31,7 +32,7 @@ class OptimizationConfig:
     warmup_steps: int = defaults.WARMUP_STEPS
 
     def _get_optimizer(
-        self, parameters: Iterable[nn.Parameter]
+        self, parameters: Iterator[nn.Parameter]
     ) -> optim.Optimizer:
         """Factory for selecting the optimizer."""
         optim_fac = {
@@ -41,13 +42,10 @@ class OptimizationConfig:
             "sgd": optim.SGD,
         }
         cls = optim_fac[self.optimizer]
-        return cls(
-            parameters,
-            self.learning_rate,
-            # FIXME: could this ever hurt?
-            self.beta1,
-            self.beta2,
-        )
+        kwargs = {}
+        if self.optimizer.startswith("adam"):
+            kwargs["betas"] = self.beta1, self.beta2
+        return cls(parameters, self.learning_rate, **kwargs)
 
     def _get_scheduler(
         self, optimizer: optim.Optimizer
@@ -63,47 +61,45 @@ class OptimizationConfig:
         """
         scheduler_fac = {
             "reduceonplateau": schedulers.ReduceOnPlateau,
-            "warmupinvsqrt": schedulers.WarmupInverseSquareRootScheduler,
+            "warmupinvsqrt": schedulers.WarmupInverseSquareRoot,
         }
         cls = scheduler_fac[self.scheduler]
-        return cls(
-            optimizer,
-            # FIXME: could this ever hurt?
-            self.reduceonplateau_factor,
-            self.reduceonplateau_patience,
-            self.min_learning_rate,
-            self.warmup_steps,
-        )
+        kwargs = {}
+        if self.scheduler == "reduceonplateau":
+            kwargs["reduceonplateau_factor"] = self.reduceonplateau_factor
+            kwargs["reduceonplateau_patience"] = self.reduceonplateau_patience
+            kwargs["min_learning_rate"] = self.min_learning_rate
+        elif self.scheduler == "warmupinvsqrt":
+            kwargs["warmup_steps"] = self.warmup_steps
+        return cls(optimizer, **kwargs)
 
-    def configure(self, parameters: Iterable[nn.Parameter]) -> Dict:
+    def __call__(self, parameters: Iterator[nn.Parameter]) -> Dict:
         """Configures the optimizer and scheduler."""
         optimizer = self._get_optimizer(parameters)
         optdict = {"optimizer": optimizer}
         if self.scheduler:
             optdict["lr_scheduler"] = {
                 "scheduler": self._get_scheduler(optimizer),
-                "monitor": "val_loss",
             }
         return optdict
 
 
-class UDTubeEncoder(nn.Module):
+class UDTubeEncoder(lightning.LightningModule):
     """Encoder portion of the model.
 
     Args:
         encoder: Name of the Hugging Face model used to tokenize and encode.
         pooling_layers: Number of layers to use to compute the embedding.
         dropout: Dropout probability.
+        **kwargs: optimization and LR scheduling arguments.
     """
 
     encoder: transformers.AutoModel
     dropout_layer: nn.Dropout
     pooling_layers: int
-    optconf: OptimizationConfig
 
     def __init__(
         self,
-        *,
         encoder: str = defaults.ENCODER,
         dropout: float = defaults.DROPOUT,
         pooling_layers: int = defaults.POOLING_LAYERS,
@@ -220,7 +216,7 @@ class UDTubeEncoder(nn.Module):
     # Required API.
 
     def configure_optimizers(self) -> Dict:
-        return self.optconf.configure()
+        return self.optconf(self.parameters())
 
 
 class Logits(nn.Module):
@@ -241,24 +237,20 @@ class Logits(nn.Module):
         self.register_buffer("feats", feats)
 
 
-class UDTubeClassifier(nn.Module):
+class UDTubeClassifier(lightning.LightningModule):
     """Classifier portion of the model.
 
     Args:
-        learning_rate: Learning rate.
-        optimizer: Optimizer (one of: adadelta, adam, adamw, sgd).
-        beta1: beta_1 (adam/adamw optimizers only).
-        beta2: beta_2 (adam/adamw optimizers only).
-        scheduler: Optional learning rate scheduler (one of: None,
-            reduceonplateau, warmupinvsqrt).
-        reduceonplateau_factor: Factor by which learning rate is reduced
-            (reduceonplateau scheduler only).
-        reduceonplateau_patience: Number of epochs with no improvement before
-            reducing learning rate (reduceonplateau scheduler only).
-        min_learning_rate: Lower bound on learning rate (reduceonplateau
-            scheduler only).
-        warmup_steps: Number of warmup steps (warmupinvsqrt optimizer only).
-
+        hidden_size: size of the encoder hidden layer.
+        use_upos: enables the universal POS tagging task.
+        use_xpos: enables the language-specific POS tagging task.
+        use_lemma: enables the lemmatization task.
+        use_feats: enables the morphological feature tagging task.
+        upos_out_size: number of UPOS classes; usually set automatically.
+        xpos_out_size: number of XPOS classes; usually set automatically.
+        lemma_out_size: number of LEMMA classes; usually set automatically.
+        feats_out_size: number of FEATS classes; usually set automatically.
+        **kwargs: optimization and LR scheduling arguments.
     """
 
     upos_head: Optional[nn.Sequential]
@@ -267,7 +259,8 @@ class UDTubeClassifier(nn.Module):
     feats_head: Optional[nn.Sequential]
     optconf: OptimizationConfig
 
-    def _make_head(self, out_size: int) -> nn.Sequential:
+    @staticmethod
+    def _make_head(hidden_size: int, out_size: int) -> nn.Sequential:
         """Helper for generating heads.
 
         Args:
@@ -277,17 +270,18 @@ class UDTubeClassifier(nn.Module):
             A sequential linear layer.
         """
         return nn.Sequential(
-            nn.Linear(self.hidden_size, out_size),
+            nn.Linear(hidden_size, out_size),
             nn.LeakyReLU(),
         )
 
     def __init__(
         self,
-        *,
+        hidden_size: int,
         use_upos: bool = defaults.USE_UPOS,
         use_xpos: bool = defaults.USE_XPOS,
         use_lemma: bool = defaults.USE_LEMMA,
         use_feats: bool = defaults.USE_FEATS,
+        *,
         # `2` is a dummy value here; it will be set by the data set object.
         upos_out_size: int = 2,
         xpos_out_size: int = 2,
@@ -297,13 +291,17 @@ class UDTubeClassifier(nn.Module):
         **kwargs,
     ):
         super().__init__()
-        self.upos_head = self._make_head(upos_out_size) if use_upos else None
-        self.xpos_head = self._make_head(xpos_out_size) if use_xpos else None
+        self.upos_head = (
+            self._make_head(hidden_size, upos_out_size) if use_upos else None
+        )
+        self.xpos_head = (
+            self._make_head(hidden_size, xpos_out_size) if use_xpos else None
+        )
         self.lemma_head = (
-            self._make_head(lemma_out_size) if use_lemma else None
+            self._make_head(hidden_size, lemma_out_size) if use_lemma else None
         )
         self.feats_head = (
-            self._make_head(feats_out_size) if use_feats else None
+            self._make_head(hidden_size, feats_out_size) if use_feats else None
         )
         self.optconf = OptimizationConfig(**kwargs)
 
@@ -356,4 +354,4 @@ class UDTubeClassifier(nn.Module):
     # Required API.
 
     def configure_optimizers(self) -> Dict:
-        return self.optconf.configure()
+        return self.optconf(self.parameters())

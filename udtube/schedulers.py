@@ -7,7 +7,7 @@ from torch import optim
 from . import defaults
 
 
-class WarmupInverseSquareRootSchedule(optim.lr_scheduler.LambdaLR):
+class WarmupInverseSquareRoot(optim.lr_scheduler.LambdaLR):
     """Linear warmup and then inverse square root decay.
 
     Linearly increases learning rate from 0 to the learning rate over the
@@ -92,7 +92,6 @@ class ReduceOnPlateau(optim.lr_scheduler.ReduceLROnPlateau):
             patience=reduceonplateau_patience,
             min_lr=min_learning_rate,
         )
-        self.metric = "val_loss"
 
     def __repr__(self) -> str:
         return (

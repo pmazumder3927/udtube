@@ -3,7 +3,7 @@
 import os
 from typing import Optional
 
-import pytorch_lightning as pl
+import lightning
 import transformers
 from torch.utils import data
 
@@ -43,7 +43,7 @@ class CustomEncoding:
         return start, stop
 
 
-class DataModule(pl.LightningDataModule):
+class DataModule(lightning.LightningDataModule):
     """CoNLL-U data module.
 
     This class is initialized by the LightningCLI interface. It manages all
