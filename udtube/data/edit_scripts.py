@@ -10,7 +10,7 @@ Based on:
 
 # TODO(#9): consider adding other edit script implementations.
 
-__author__ = "Kyle Gorman"
+from __future__ import annotations
 
 import dataclasses
 import difflib
@@ -68,7 +68,7 @@ class EditScript:
         return self.SEP.join(pieces)
 
     @classmethod
-    def fromtag(cls, tag: str) -> "EditScript":
+    def fromtag(cls, tag: str) -> EditScript:
         script = cls.__new__(cls)
         script._ops = []
         for opstr in tag.split(cls.SEP):

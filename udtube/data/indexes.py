@@ -1,6 +1,6 @@
 """Symbol indexes.
 
-This is closely based on the implementation in Yoyodyne:
+Adapted from Yoyodyne:
 
     https://github.com/CUNY-CL/yoyodyne/blob/master/yoyodyne/data/indexes.py
 
@@ -11,6 +11,8 @@ we could share a vocabulary or an embedding across classifier layers.
 Because of this, we also have the Index class, which holds instances of
 the lower-level vocabularies, one for each enabled classifier head, and which
 handles (de)serialization."""
+
+from __future__ import annotations
 
 import dataclasses
 import pickle
@@ -117,7 +119,7 @@ class Index:
         return f"{model_dir}/index.pkl"
 
     @classmethod
-    def read(cls, model_dir: str) -> "Index":
+    def read(cls, model_dir: str) -> Index:
         """Loads index.
 
         Args:

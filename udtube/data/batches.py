@@ -1,6 +1,6 @@
 """Batch objects.
 
-This is closely based on the implementation in Yoyodyne:
+Adapted from Yoyodyne:
 
     https://github.com/CUNY-CL/yoyodyne/blob/master/yoyodyne/data/indexes.py
 
