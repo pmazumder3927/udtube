@@ -5,7 +5,6 @@ for a classification head, and L is the maximum length (in subwords, tokens,
 or tags) of a sentence in the batch.
 """
 
-import inspect
 from typing import Dict, List
 
 import lightning
@@ -227,9 +226,11 @@ class UDTube(lightning.LightningModule):
     def on_train_epoch_end(self) -> None:
         """Steps the schedulers."""
         for scheduler in self.lr_schedulers():
-            if "metrics" in inspect.signature(scheduler.step).parameters:
+            # Users are advised to use the subclass defined in LightningCLI,
+            # which has the name of the monitored variable encoded in it.
+            if isinstance(scheduler, cli.ReduceLROnPlateau):
                 scheduler.step(
-                    metrics=self.trainer.callback_metrics["val_loss"]
+                    metrics=self.trainer.callback_metrics[scheduler.monitor]
                 )
             else:
                 scheduler.step()
