@@ -37,16 +37,16 @@ class UDTube(lightning.LightningModule):
     classifier: modules.UDTubeClassifier
     loss_func: nn.CrossEntropyLoss
     # Used for validation in `fit` and testing in `test`.
-    upos_accuracy: Optional[classification.MulticlassAccuracy] = None
-    xpos_accuracy: Optional[classification.MulticlassAccuracy] = None
-    lemma_accuracy: Optional[classification.MulticlassAccuracy] = None
-    feats_accuracy: Optional[classification.MulticlassAccuracy] = None
+    upos_accuracy: Optional[classification.MulticlassAccuracy]
+    xpos_accuracy: Optional[classification.MulticlassAccuracy]
+    lemma_accuracy: Optional[classification.MulticlassAccuracy]
+    feats_accuracy: Optional[classification.MulticlassAccuracy]
 
     @staticmethod
     def _make_accuracy(num_classes: int) -> classification.MulticlassAccuracy:
         """Creates a multi-class accuracy object."""
         return classification.MulticlassAccuracy(
-            num_classes, "micro", ignore_index=special.PAD_IDX
+            num_classes, average="micro", ignore_index=special.PAD_IDX
         )
 
     def __init__(
@@ -70,7 +70,9 @@ class UDTube(lightning.LightningModule):
         feats_out_size: int = 2,
     ):
         super().__init__()
-        self.automatic_optimization = False  # Required.
+        # See what this disables here:
+        # https://lightning.ai/docs/pytorch/stable/model/manual_optimization.html#manual-optimization
+        self.automatic_optimization = False
         self.encoder = modules.UDTubeEncoder(
             encoder,
             dropout,
@@ -87,21 +89,24 @@ class UDTube(lightning.LightningModule):
             lemma_out_size=lemma_out_size,
             feats_out_size=feats_out_size,
         )
-        if use_upos:
-            self.upos_accuracy = self._make_accuracy(upos_out_size)
-        if use_xpos:
-            self.xpos_accuracy = self._make_accuracy(xpos_out_size)
-        if use_lemma:
-            self.lemma_accuracy = self._make_accuracy(lemma_out_size)
-        if use_feats:
-            self.feats_accuracy = self._make_accuracy(feats_out_size)
-        # Other stuff.
         self.loss_func = nn.CrossEntropyLoss(ignore_index=special.PAD_IDX)
-        self.save_hyperparameters()
+        self.upos_accuracy = (
+            self._make_accuracy(upos_out_size) if use_upos else None
+        )
+        self.xpos_accuracy = (
+            self._make_accuracy(xpos_out_size) if use_xpos else None
+        )
+        self.lemma_accuracy = (
+            self._make_accuracy(lemma_out_size) if use_lemma else None
+        )
+        self.feats_accuracy = (
+            self._make_accuracy(feats_out_size) if use_feats else None
+        )
         self.encoder_optimizer = encoder_optimizer
         self.encoder_scheduler = encoder_scheduler
         self.classifier_optimizer = classifier_optimizer
         self.classifier_scheduler = classifier_scheduler
+        self.save_hyperparameters()
 
     # Properties.
 
@@ -213,6 +218,9 @@ class UDTube(lightning.LightningModule):
     # In validation mode we compute per-batch average loss across all heads
     # and per-epoch micro-accuracy for each active head.
 
+    # See the following for how these are called in `fit`:
+    # https://lightning.ai/docs/pytorch/latest/common/lightning_module.html#hooks
+
     def _reset_accuracies(self) -> None:
         if self.use_upos:
             self.upos_accuracy.reset()
@@ -223,7 +231,7 @@ class UDTube(lightning.LightningModule):
         if self.use_feats:
             self.feats_accuracy.reset()
 
-    def validation_step_epoch_start(self) -> None:
+    def on_validation_epoch_start(self) -> None:
         self._reset_accuracies()
 
     def validation_step(
@@ -261,7 +269,7 @@ class UDTube(lightning.LightningModule):
             batch_size=len(batch),
         )
 
-    def validation_step_epoch_end(self) -> None:
+    def on_validation_epoch_end(self) -> None:
         """Logs accuracies for the heads."""
         if self.use_upos:
             self.log(
@@ -298,7 +306,7 @@ class UDTube(lightning.LightningModule):
 
     # In test mode we compute micro-accuracy for each active head.
 
-    def test_step_epoch_start(self) -> None:
+    def on_test_step_epoch_start(self) -> None:
         self._reset_accuracies()
 
     def test_step(self, batch: data.ConlluBatch, batch_idx: int) -> None:
@@ -318,7 +326,7 @@ class UDTube(lightning.LightningModule):
         if self.use_feats:
             self.feats_accuracy.update(logits.feats, batch.feats)
 
-    def test_step_epoch_end(self) -> None:
+    def on_test_step_epoch_end(self) -> None:
         """Logs accuracies for the heads."""
         if self.use_upos:
             self.log(
