@@ -326,14 +326,13 @@ class UDTube(lightning.LightningModule):
         if self.use_feats:
             self.feats_accuracy.update(logits.feats, batch.feats)
 
-    def on_test_step_epoch_end(self) -> None:
+    def on_test_epoch_end(self) -> None:
         """Logs accuracies for the heads."""
         if self.use_upos:
             self.log(
                 "test_upos_accuracy",
                 self.upos_accuracy.compute(),
                 on_epoch=True,
-                prog_bar=True,
                 logger=True,
             )
         if self.use_xpos:
@@ -341,7 +340,6 @@ class UDTube(lightning.LightningModule):
                 "test_xpos_accuracy",
                 self.xpos_accuracy.compute(),
                 on_epoch=True,
-                prog_bar=True,
                 logger=True,
             )
         if self.use_lemma:
@@ -349,7 +347,6 @@ class UDTube(lightning.LightningModule):
                 "test_lemma_accuracy",
                 self.lemma_accuracy.compute(),
                 on_epoch=True,
-                prog_bar=True,
                 logger=True,
             )
         if self.use_feats:
@@ -357,7 +354,6 @@ class UDTube(lightning.LightningModule):
                 "test_feats_accuracy",
                 self.feats_accuracy.compute(),
                 on_epoch=True,
-                prog_bar=True,
                 logger=True,
             )
 
