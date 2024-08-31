@@ -13,10 +13,7 @@ BLANK = "_"
 def main(args: argparse.Namespace) -> None:
     spacy_udpipe.download(args.langcode)
     model = spacy_udpipe.load(args.langcode)
-    with (
-        open(args.gold_file, "r") as source,
-        open(args.output_file, "w") as sink,
-    ):
+    with open(args.input, "r") as source, open(args.output, "w") as sink:
         for sentence in conllu.parse_incr(source):
             # The model insists on retokenizing the data but this is harmless.
             result = model(sentence.metadata["text"])
@@ -44,10 +41,11 @@ def main(args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("gold_file", help="path input CoNLL-U file")
-    parser.add_argument("output_file", help="path for output CoNLL-U file")
+    parser.add_argument("input", help="path to input CoNLL-U file")
+    parser.add_argument("output", help="path for output CoNLL-U file")
     parser.add_argument(
         "--langcode",
+        required=True,
         help="the language and name of treebank (e.g., `en-ewt`); "
         "for a list of supported languages, see: "
         "https://github.com/TakeLab/spacy-udpipe/blob/master/spacy_udpipe/"

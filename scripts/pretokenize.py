@@ -11,13 +11,12 @@ BLANK = "_"
 
 def main(args: argparse.Namespace) -> None:
     spacy_udpipe.download(args.langcode)
-    model = spacy_udpipe.load(args.langcode)
+    tokenize = spacy_udpipe.load(args.langcode).tokenizer
     with (
         open(args.text, "r") as source,
         open(args.conllu, "w") as sink,
     ):
-        document = model(source.read())
-        for sentence in document.sents:
+        for sentence in tokenize(source.read()).sents:
             tokenlist = conllu.TokenList(
                 [
                     {
@@ -47,6 +46,7 @@ if __name__ == "__main__":
     parser.add_argument("conllu", help="path for output CoNLL-U file")
     parser.add_argument(
         "--langcode",
+        required=True,
         help="the language and name of treebank (e.g., `en-ewt`); "
         "for a list of supported languages, see: "
         "https://github.com/TakeLab/spacy-udpipe/blob/master/spacy_udpipe/"
