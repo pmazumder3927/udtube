@@ -1,15 +1,12 @@
 """Datasets and related utilities.
 
-* TextIterDataset is a text dataset, loaded incrementally.
 * ConlluIterDataset is a CoNLL-U dataset (labeled or not, it doedsn't matter),
   loaded incrementally.
 * ConlluMapDataset is a labeled dataset, loaded greedily.
-
-It's easy to imagine a "TextMapDataset" too, but it wouldn't serve any
-particular purpose."""
+"""
 
 import dataclasses
-from typing import Iterable, Iterator, List, Optional, TextIO
+from typing import Iterable, Iterator, List, Optional
 
 import torch
 from torch import nn
@@ -54,25 +51,6 @@ class Item(nn.Module):
     @property
     def has_feats(self) -> bool:
         return self.feats is not None
-
-
-@dataclasses.dataclass
-class TextIterDataset(data.IterableDataset):
-    """Iterable data set for text file data.
-
-    This class can be used for inference over large files because it does not
-    load the whole data set into memory.
-
-    Args:
-        text_file: path to the input text file.
-    """
-
-    text_file: str
-
-    def __iter__(self) -> TextIO:
-        with open(self.text_file, "r") as source:
-            for line in source:
-                yield line.rstrip()
 
 
 @dataclasses.dataclass

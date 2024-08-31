@@ -304,6 +304,8 @@ class UDTube(lightning.LightningModule):
                 logger=True,
             )
 
+    # In predict mode we make predictions.
+
     # In test mode we compute micro-accuracy for each active head.
 
     def on_test_step_epoch_start(self) -> None:

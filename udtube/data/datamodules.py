@@ -8,7 +8,7 @@ import transformers
 from torch.utils import data
 
 from .. import defaults
-from . import collators, datasets, indexes, parsers, pretokenizers, tokenizers
+from . import collators, datasets, indexes, parsers, tokenizers
 
 
 class Error(Exception):
@@ -27,19 +27,17 @@ class DataModule(lightning.LightningDataModule):
         model_dir: path for checkpoints, indexes, and logs.
         train: path to training CoNLL-U file.
         val: path to validation CoNLL-U file.
-        predict: path to the prediction dataset; may either be text
-            or CoNLL-U format (if the path ends with .conllu)
-        test: path to the test CoNLL-U dataset.
-        language: ISO-639-1 language code (for the pretokenizer).
+        predict: path to the prediction CoNLL-U file.
+        test: path to the test CoNLL-U file.
         encoder: name of encoder on Hugging Face (for the tokenizer).
-        reverse_edits: if true, uses reverse (suffixal) edit scripts.
+        use_upos: enables the universal POS tagging task.
+        use_xpos: enables the language-specific POS tagging task.
+        use_lemma: enables the lemmatization task.
+        use_feats: enables the morphological feature tagging task.
+        reverse_edits: enables reverse (suffixal) edit scripts.
         batch_size: batch size.
         index: an optional pre-computed index.
     """
-
-    # TODO: argument documentation is incomplete.
-
-    # TODO(#20): reconsider inference for CoNLL-U vs. text file.
 
     train: Optional[str]
     val: Optional[str]
@@ -61,7 +59,6 @@ class DataModule(lightning.LightningDataModule):
         predict=None,
         test=None,
         # Modeling options.
-        language: str = defaults.LANGUAGE,
         encoder: str = defaults.ENCODER,
         use_upos: bool = defaults.USE_UPOS,
         use_xpos: bool = defaults.USE_XPOS,
@@ -95,9 +92,6 @@ class DataModule(lightning.LightningDataModule):
         self.batch_size = batch_size
         # FIXME I need to be able to load the index from a file too.
         self.index = index if index else self._make_index(model_dir)
-        # TODO: this is not needed if all files are CoNLL-U format. Can we
-        # hold off loading it until we know we need it?
-        self.pretokenizer = pretokenizers.load(language)
         self.tokenizer = tokenizers.load(encoder)
 
     @staticmethod
@@ -257,29 +251,16 @@ class DataModule(lightning.LightningDataModule):
 
     def predict_dataloader(self) -> data.DataLoader:
         assert self.predict is not None, "no predict path"
-        # In this mode, either a .conllu file or a text file will do.
-        if self.predict.endswith(".conllu"):
-            return data.DataLoader(
-                datasets.ConlluIterDataset(self.predict),
-                collate_fn=collators.ConlluCollator(
-                    self.tokenizer,
-                    self.index,
-                ),
-                batch_size=self.batch_size,
-                shuffle=False,
-                num_workers=1,
-            )
-        else:
-            return data.DataLoader(
-                datasets.TextIterDataset(self.parser),
-                collate_fn=collators.TextCollator(
-                    self.pretokenizer,
-                    self.tokenizer,
-                ),
-                batch_size=self.batch_size,
-                shuffle=False,
-                num_workers=1,
-            )
+        return data.DataLoader(
+            datasets.ConlluIterDataset(self.predict),
+            collate_fn=collators.ConlluCollator(
+                self.tokenizer,
+                self.index,
+            ),
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=1,
+        )
 
     def test_dataloader(self) -> data.DataLoader:
         assert self.test is not None, "no test path"

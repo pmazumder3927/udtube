@@ -1,4 +1,5 @@
-"""Simple evaluation script."""
+#!/usr/bin/env python
+"""UDTube evaluation."""
 
 import argparse
 import logging

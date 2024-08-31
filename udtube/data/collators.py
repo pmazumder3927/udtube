@@ -1,14 +1,7 @@
-"""Collators.
-
-* TextCollator is for raw text data only.
-* ConlluCollator is for text data from CoNLL-U files; it doesn't matter whether
-  that data has labels or not, but it can handle padding tensors if this is a
-  labeled batch.
-"""
+"""Collators."""
 
 from typing import List
 
-import spacy
 import torch
 from torch import nn
 import transformers
@@ -38,30 +31,6 @@ class Tokenizer:
             is_split_into_words=True,
             add_special_tokens=False,
         )
-
-
-class TextCollator:
-    """Collator for raw text data.
-
-    Args:
-        pretokenizer: UDPipe-style tokenizer.
-        tokenizer: transformer autotokenizer.
-    """
-
-    def __init__(
-        self,
-        pretokenizer: spacy.language.Language,
-        tokenizer: transformers.AutoTokenizer,
-    ):
-        self.pretokenizer = pretokenizer
-        self.tokenizer = Tokenizer(tokenizer)
-
-    def __call__(self, texts: List[str]) -> batches.TextBatch:
-        pretokens = [
-            [token.text for token in self.pretokenizer(text)] for text in texts
-        ]
-        tokens = self.tokenizer(pretokens)
-        return batches.TextBatch(texts, tokens)
 
 
 class ConlluCollator:
