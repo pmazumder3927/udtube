@@ -4,10 +4,8 @@
 import argparse
 
 import conllu
-import spacy
 import spacy_udpipe
 
-from udtube import defaults
 
 BLANK = "_"
 
