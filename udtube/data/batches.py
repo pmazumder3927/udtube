@@ -73,8 +73,23 @@ class ConlluBatch(Batch):
         feats=None,
     ):
         super().__init__(texts, tokens)
-        # None is harmless here.
         self.register_buffer("upos", upos)
         self.register_buffer("xpos", xpos)
         self.register_buffer("lemma", lemma)
         self.register_buffer("feats", feats)
+
+    @property
+    def has_upos(self) -> bool:
+        return self.upos is not None
+
+    @property
+    def has_xpos(self) -> bool:
+        return self.xpos is not None
+
+    @property
+    def has_lemma(self) -> bool:
+        return self.lemma is not None
+
+    @property
+    def has_feats(self) -> bool:
+        return self.feats is not None

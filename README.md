@@ -191,7 +191,7 @@ disable this with `model: reverse_edits: false`.
 Batch size is specified using `data: batch_size: ...` and defaults to 32.
 
 There are a number of ways to specify how long a model should train for. For
-example, the following YAML snippet;
+example, the following YAML snippet:
 
     trainer:
       max_epochs: 100

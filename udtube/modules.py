@@ -152,24 +152,6 @@ class UDTubeEncoder(lightning.LightningModule):
         return x
 
 
-class Logits(nn.Module):
-    """Logits from the classifier forward pass.
-
-    Each tensor is either null or of shape N x C x L."""
-
-    upos: Optional[torch.Tensor]
-    xpos: Optional[torch.Tensor]
-    lemma: Optional[torch.Tensor]
-    feats: Optional[torch.Tensor]
-
-    def __init__(self, upos=None, xpos=None, lemma=None, feats=None):
-        super().__init__()
-        self.register_buffer("upos", upos)
-        self.register_buffer("xpos", xpos)
-        self.register_buffer("lemma", lemma)
-        self.register_buffer("feats", feats)
-
-
 class UDTubeClassifier(lightning.LightningModule):
     """Classifier portion of the model.
 
@@ -255,7 +237,7 @@ class UDTubeClassifier(lightning.LightningModule):
 
     # Forward pass.
 
-    def forward(self, encodings: torch.Tensor) -> Logits:
+    def forward(self, encodings: torch.Tensor) -> data.Logits:
         """Computes logits for each of the classification heads.
 
         This takes the contextual word encodings and then computes the logits
@@ -269,7 +251,7 @@ class UDTubeClassifier(lightning.LightningModule):
         Returns:
             A contextual word-level encoding.
         """
-        return Logits(
+        return data.Logits(
             upos=(
                 self.upos_head(encodings).permute(0, 2, 1)
                 if self.use_upos

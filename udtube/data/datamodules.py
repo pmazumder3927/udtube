@@ -8,7 +8,7 @@ import transformers
 from torch.utils import data
 
 from .. import defaults
-from . import collators, datasets, indexes, parsers, tokenizers
+from . import collators, datasets, indexes, parsers
 
 
 class Error(Exception):
@@ -70,18 +70,10 @@ class DataModule(lightning.LightningDataModule):
         index: Optional[indexes.Index] = None,
     ):
         super().__init__()
-        # Validates and stores data paths.
-        if train:
-            self._require_conllu_extension(train, "training")
-            self.train = train
-        if val:
-            self._require_conllu_extension(train, "validation")
-            self.val = val
+        self.train = train
+        self.val = val
         self.predict = predict
-        if test:
-            self._require_conllu_extension(test, "testing")
-            self.test = test
-        # Stores or computes other necessary parameters.
+        self.test = test
         self.parser = parsers.ConlluParser(
             use_upos=use_upos,
             use_xpos=use_xpos,
@@ -92,7 +84,7 @@ class DataModule(lightning.LightningDataModule):
         self.batch_size = batch_size
         # FIXME I need to be able to load the index from a file too.
         self.index = index if index else self._make_index(model_dir)
-        self.tokenizer = tokenizers.load(encoder)
+        self.tokenizer = transformers.AutoTokenizer.from_pretrained(encoder)
 
     @staticmethod
     def _require_conllu_extension(path: str, file_type: str) -> None:

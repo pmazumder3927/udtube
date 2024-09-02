@@ -12,4 +12,3 @@ def load(model_name: str) -> transformers.AutoTokenizer:
     Returns:
         A Hugging Face tokenizer.
     """
-    return transformers.AutoTokenizer.from_pretrained(model_name)

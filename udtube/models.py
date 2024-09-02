@@ -1,8 +1,8 @@
 """The UDTube model.
 
-In the documentation below, N is the batch size, C is the number of classes
-for a classification head, and L is the maximum length (in subwords, tokens,
-or tags) of a sentence in the batch.
+In documentation below, N is the batch size, C is the number of classes for a
+classification head, and L is the maximum length (in subwords, tokens, or
+tags) of a sentence in the batch.
 """
 
 from typing import Dict, List, Optional
@@ -41,13 +41,6 @@ class UDTube(lightning.LightningModule):
     xpos_accuracy: Optional[classification.MulticlassAccuracy]
     lemma_accuracy: Optional[classification.MulticlassAccuracy]
     feats_accuracy: Optional[classification.MulticlassAccuracy]
-
-    @staticmethod
-    def _make_accuracy(num_classes: int) -> classification.MulticlassAccuracy:
-        """Creates a multi-class accuracy object."""
-        return classification.MulticlassAccuracy(
-            num_classes, average="micro", ignore_index=special.PAD_IDX
-        )
 
     def __init__(
         self,
@@ -108,7 +101,11 @@ class UDTube(lightning.LightningModule):
         self.classifier_scheduler = classifier_scheduler
         self.save_hyperparameters()
 
-    # Properties.
+    @staticmethod
+    def _make_accuracy(num_classes: int) -> classification.MulticlassAccuracy:
+        return classification.MulticlassAccuracy(
+            num_classes, average="micro", ignore_index=special.PAD_IDX
+        )
 
     @property
     def use_upos(self) -> bool:
@@ -126,15 +123,11 @@ class UDTube(lightning.LightningModule):
     def use_feats(self) -> bool:
         return self.classifier.use_feats
 
-    # Forward pass.
-
     def forward(
         self,
         batch: data.Batch,
     ) -> modules.Logits:
         return self.classifier(self.encoder(batch))
-
-    # Required API.
 
     def configure_optimizers(
         self,
@@ -162,49 +155,23 @@ class UDTube(lightning.LightningModule):
         }
         return [encoder_dict, classifier_dict]
 
+    # See the following for how these are called by the different subcommands.
+    # https://lightning.ai/docs/pytorch/latest/common/lightning_module.html#hooks
+
     def training_step(
         self,
         batch: data.ConlluBatch,
         batch_idx: int,
-    ) -> torch.Tensor:
-        """Runs the forward pass, logs loss, and steps the optimizers.
-
-        Args:
-            batch: a labeled batch.
-            batch_idx: ignored.
-
-        Returns:
-            A tensor containing training loss.
-        """
+    ) -> None:
         for optimizer in self.optimizers():
             optimizer.zero_grad()
         logits = self(batch)
-        losses = []
-        if self.use_upos:
-            losses.append(self.loss_func(logits.upos, batch.upos))
-        if self.use_xpos:
-            losses.append(self.loss_func(logits.xpos, batch.xpos))
-        if self.use_lemma:
-            losses.append(self.loss_func(logits.lemma, batch.lemma))
-        if self.use_feats:
-            losses.append(self.loss_func(logits.feats, batch.feats))
-        loss = torch.mean(torch.stack(losses))
-        self.log(
-            "train_loss",
-            loss,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True,
-            logger=True,
-            batch_size=len(batch),
-        )
+        self._log_loss(logits, batch, "train")
         self.manual_backward(loss)
         for optimizer in self.optimizers():
             optimizer.step()
-        return loss
 
     def on_train_epoch_end(self) -> None:
-        """Steps the schedulers."""
         for scheduler in self.lr_schedulers():
             # Users are advised to use the subclass defined in LightningCLI,
             # which has the name of the monitored variable encoded in it.
@@ -215,11 +182,57 @@ class UDTube(lightning.LightningModule):
             else:
                 scheduler.step()
 
-    # In validation mode we compute per-batch average loss across all heads
-    # and per-epoch micro-accuracy for each active head.
+    def on_validation_epoch_start(self) -> None:
+        self._reset_accuracies()
 
-    # See the following for how these are called in `fit`:
-    # https://lightning.ai/docs/pytorch/latest/common/lightning_module.html#hooks
+    def validation_step(
+        self,
+        batch: data.ConlluBatch,
+        batch_idx: int,
+    ) -> None:
+        logits = self(batch)
+        self._log_loss(logits, batch, "val")
+        self._log_accuracies(logits, batch, "val")
+
+    def on_validation_epoch_end(self) -> None:
+        self._log_accuracies_epoch_end("val")
+
+    def on_test_step_epoch_start(self) -> None:
+        self._reset_accuracies()
+
+    def test_step(self, batch: data.ConlluBatch, batch_idx: int) -> None:
+        logits = self(batch)
+        self._update_accuracies(logits, batch)
+
+    def on_test_epoch_end(self) -> None:
+        self._log_accuracies_epoch_end("test")
+
+    def _compute_and_log_loss(
+        self, logits: modules.Logits, batch: data.ConlluBatch, subset: str
+    ) -> None:
+        losses = []
+        if self.use_upos:
+            losses.append(self.loss_func(logits.upos, batch.upos))
+            self.upos_accuracy.update(logits.upos, batch.upos)
+        if self.use_xpos:
+            losses.append(self.loss_func(logits.xpos, batch.xpos))
+            self.xpos_accuracy.update(logits.xpos, batch.xpos)
+        if self.use_lemma:
+            losses.append(self.loss_func(logits.lemma, batch.lemma))
+            self.lemma_accuracy.update(logits.lemma, batch.lemma)
+        if self.use_feats:
+            losses.append(self.loss_func(logits.feats, batch.feats))
+            self.feats_accuracy.update(logits.feats, batch.feats)
+        loss = torch.sum(torch.stack(losses))
+        self.log(
+            f"{subset}_loss",
+            loss,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            batch_size=len(batch),
+        )
 
     def _reset_accuracies(self) -> None:
         if self.use_upos:
@@ -231,94 +244,9 @@ class UDTube(lightning.LightningModule):
         if self.use_feats:
             self.feats_accuracy.reset()
 
-    def on_validation_epoch_start(self) -> None:
-        self._reset_accuracies()
-
-    def validation_step(
-        self,
-        batch: data.ConlluBatch,
-        batch_idx: int,
+    def _update_accuracies(
+        self, logits: modules.Logits, batch: data.ConlluBatch
     ) -> None:
-        """Runs the forward pass, updates accuracy, and logs loss.
-
-        Args:
-            batch: a labeled batch.
-            batch_idx: ignored.
-        """
-        logits = self(batch)
-        losses = []
-        if self.use_upos:
-            losses.append(self.loss_func(logits.upos, batch.upos))
-            self.upos_accuracy.update(logits.upos, batch.upos)
-        if self.use_xpos:
-            losses.append(self.loss_func(logits.xpos, batch.xpos))
-            self.xpos_accuracy.update(logits.xpos, batch.xpos)
-        if self.use_lemma:
-            losses.append(self.loss_func(logits.lemma, batch.lemma))
-            self.lemma_accuracy.update(logits.lemma, batch.lemma)
-        if self.use_feats:
-            losses.append(self.loss_func(logits.feats, batch.feats))
-            self.feats_accuracy.update(logits.feats, batch.feats)
-        self.log(
-            "val_loss",
-            torch.mean(torch.stack(losses)),
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True,
-            logger=True,
-            batch_size=len(batch),
-        )
-
-    def on_validation_epoch_end(self) -> None:
-        """Logs accuracies for the heads."""
-        if self.use_upos:
-            self.log(
-                "val_upos_accuracy",
-                self.upos_accuracy.compute(),
-                on_epoch=True,
-                prog_bar=True,
-                logger=True,
-            )
-        if self.use_xpos:
-            self.log(
-                "val_xpos_accuracy",
-                self.xpos_accuracy.compute(),
-                on_epoch=True,
-                prog_bar=True,
-                logger=True,
-            )
-        if self.use_lemma:
-            self.log(
-                "val_lemma_accuracy",
-                self.lemma_accuracy.compute(),
-                on_epoch=True,
-                prog_bar=True,
-                logger=True,
-            )
-        if self.use_feats:
-            self.log(
-                "val_feats_accuracy",
-                self.feats_accuracy.compute(),
-                on_epoch=True,
-                prog_bar=True,
-                logger=True,
-            )
-
-    # In predict mode we make predictions.
-
-    # In test mode we compute micro-accuracy for each active head.
-
-    def on_test_step_epoch_start(self) -> None:
-        self._reset_accuracies()
-
-    def test_step(self, batch: data.ConlluBatch, batch_idx: int) -> None:
-        """Runs the forward pass and updates accuracies.
-
-        Args:
-            batch: a labeled batch.
-            batch_idx: ignored.
-        """
-        logits = self(batch)
         if self.use_upos:
             self.upos_accuracy.update(logits.upos, batch.upos)
         if self.use_xpos:
@@ -328,35 +256,32 @@ class UDTube(lightning.LightningModule):
         if self.use_feats:
             self.feats_accuracy.update(logits.feats, batch.feats)
 
-    def on_test_epoch_end(self) -> None:
-        """Logs accuracies for the heads."""
+    def _log_accuracies_epoch_end(self, subset: str) -> None:
         if self.use_upos:
             self.log(
-                "test_upos_accuracy",
+                f"{subset}_upos_accuracy",
                 self.upos_accuracy.compute(),
                 on_epoch=True,
                 logger=True,
             )
         if self.use_xpos:
             self.log(
-                "test_xpos_accuracy",
+                f"{subset}_xpos_accuracy",
                 self.xpos_accuracy.compute(),
                 on_epoch=True,
                 logger=True,
             )
         if self.use_lemma:
             self.log(
-                "test_lemma_accuracy",
+                f"{subset}_lemma_accuracy",
                 self.lemma_accuracy.compute(),
                 on_epoch=True,
                 logger=True,
             )
         if self.use_feats:
             self.log(
-                "test_feats_accuracy",
+                f"{subset}_feats_accuracy",
                 self.feats_accuracy.compute(),
                 on_epoch=True,
                 logger=True,
             )
-
-    # TODO: add predict step.

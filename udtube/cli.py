@@ -14,11 +14,13 @@ class UDTubeCLI(cli.LightningCLI):
 
     @staticmethod
     def add_arguments_to_parser(parser: cli.LightningArgumentParser) -> None:
-        # Passed to the custom writer callback.
-        parser.add_argument("--output_file", help="Path for output file")
+        parser.add_argument(
+            "--predictions", help="Path for predictions .conllu file"
+        )
         # Links.
         parser.link_arguments("model.encoder", "data.encoder")
         parser.link_arguments("data.model_dir", "trainer.default_root_dir")
+        parser.lling_arguments("model.reverse_edits", "data.reverse_edits")
         parser.link_arguments(
             "data.upos_tagset_size",
             "model.upos_out_size",
@@ -39,6 +41,17 @@ class UDTubeCLI(cli.LightningCLI):
             "model.feats_out_size",
             apply_on="instantiate",
         )
+
+    def before_instantiate_classes(self) -> None:
+        # Adds mandatory callbacks.
+        if self.subcommand == "train":
+            self.trainer_defaults["callbacks"].append(
+                callbacks.ModelCheckpoint(dirname, save_top_k)
+            )
+        elif self.subcommand == "predict":
+            self.trainer_defaults["callbacks"].append(
+                callbacks.PredictionWriter(self.config.predict.predictions)
+            )
 
 
 def main() -> None:

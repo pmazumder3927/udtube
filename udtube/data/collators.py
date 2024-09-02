@@ -21,11 +21,17 @@ class Tokenizer:
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
 
-    def __call__(
-        self, pretokens: List[List[str]]
-    ) -> transformers.BatchEncoding:
+    def __call__(self, tokens: List[List[str]]) -> transformers.BatchEncoding:
+        """Runs tokenizer.
+
+        Args:
+            tokens: a list of sentences, each a list of tokens.
+
+        Returns:
+            The BatchEncoding object.
+        """
         return self.tokenizer(
-            pretokens,
+            tokens,
             padding="longest",
             return_tensors="pt",
             is_split_into_words=True,
