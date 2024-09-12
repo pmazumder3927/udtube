@@ -13,7 +13,6 @@ OVERRIDDEN_FIELD_PARSERS = {
     "feats": lambda line, i: line[i],
     "upos": lambda line, i: line[i],
     "xpos": lambda line, i: line[i],
-    "misc": lambda line, i: line[i],
 }
 
 
