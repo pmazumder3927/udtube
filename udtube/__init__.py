@@ -1,1 +1,1 @@
-from . import cli, models, schedulers  # noqa: F401
+from . import callbacks, cli, models, schedulers  # noqa: F401

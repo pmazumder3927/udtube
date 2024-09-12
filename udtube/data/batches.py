@@ -6,58 +6,32 @@ Adapted from Yoyodyne:
 
 However, there are some different concerns here; for instance padding is much
 simpler.
-
-* TextBatch contains tokenized data only.
-* ConlluBatch contains tokenized and labeled data.
 """
 
 from typing import List, Optional
 
+import conllu
 import torch
 import transformers
 from torch import nn
 
 
 class Batch(nn.Module):
-    """Base class for batches"""
-
-    texts: List[str]
-    tokens: transformers.BatchEncoding
-
-    def __init__(self, texts, tokens):
-        super().__init__()
-        self.texts = texts
-        self.tokens = tokens
-
-    def __len__(self) -> int:
-        return len(self.texts)
-
-
-class TextBatch(nn.Module):
-    """Text data batch.
-
-    Args:
-        tokens: the encoded batch, the output of the tokenizer.
-        sentences: list of sentences.
-    """
-
-    pass
-
-
-class ConlluBatch(Batch):
     """CoNLL-U data batch.
 
     This can handle padded label tensors if present.
 
     Args:
-        tokens: the encoded batch, the output of the tokenizer.
-        sentences: list of sentences.
-        pos: optional padded tensor of POS labels.
+        tokenlists: list of TokenLists.
+        tokens: batch encoding from the transformer.
+        pos: optional padded tensor of universal POS labels.
         xpos: optional padded tensor of language-specific POS labels.
         lemma: optional padded tensor of lemma labels.
-        feats: optional padded tensor of feats labels.
+        feats: optional padded tensor of morphological feature labels.
     """
 
+    tokenlists: List[conllu.TokenList]
+    tokens: transformers.BatchEncoding
     upos: Optional[torch.Tensor]
     xpos: Optional[torch.Tensor]
     lemma: Optional[torch.Tensor]
@@ -65,31 +39,36 @@ class ConlluBatch(Batch):
 
     def __init__(
         self,
-        texts,
+        tokenlists,
         tokens,
         upos=None,
         xpos=None,
         lemma=None,
         feats=None,
     ):
-        super().__init__(texts, tokens)
+        super().__init__()
+        self.tokenlists = tokenlists
+        self.tokens = tokens
         self.register_buffer("upos", upos)
         self.register_buffer("xpos", xpos)
         self.register_buffer("lemma", lemma)
         self.register_buffer("feats", feats)
 
     @property
-    def has_upos(self) -> bool:
+    def use_upos(self) -> bool:
         return self.upos is not None
 
     @property
-    def has_xpos(self) -> bool:
+    def use_xpos(self) -> bool:
         return self.xpos is not None
 
     @property
-    def has_lemma(self) -> bool:
+    def use_lemma(self) -> bool:
         return self.lemma is not None
 
     @property
-    def has_feats(self) -> bool:
+    def use_feats(self) -> bool:
         return self.feats is not None
+
+    def __len__(self) -> int:
+        return len(self.tokenlists)

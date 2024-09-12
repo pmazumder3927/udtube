@@ -20,7 +20,7 @@ class UDTubeCLI(cli.LightningCLI):
         # Links.
         parser.link_arguments("model.encoder", "data.encoder")
         parser.link_arguments("data.model_dir", "trainer.default_root_dir")
-        parser.lling_arguments("model.reverse_edits", "data.reverse_edits")
+        parser.link_arguments("model.reverse_edits", "data.reverse_edits")
         parser.link_arguments(
             "data.upos_tagset_size",
             "model.upos_out_size",
@@ -42,17 +42,6 @@ class UDTubeCLI(cli.LightningCLI):
             apply_on="instantiate",
         )
 
-    def before_instantiate_classes(self) -> None:
-        # Adds mandatory callbacks.
-        if self.subcommand == "train":
-            self.trainer_defaults["callbacks"].append(
-                callbacks.ModelCheckpoint(dirname, save_top_k)
-            )
-        elif self.subcommand == "predict":
-            self.trainer_defaults["callbacks"].append(
-                callbacks.PredictionWriter(self.config.predict.predictions)
-            )
-
 
 def main() -> None:
     logging.basicConfig(
@@ -64,7 +53,6 @@ def main() -> None:
         models.UDTube,
         data.DataModule,
         auto_configure_optimizers=False,
-        save_config_callback=None,
     )
 
 

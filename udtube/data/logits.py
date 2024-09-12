@@ -1,5 +1,7 @@
 """Logits object."""
 
+from typing import Optional
+
 import torch
 from torch import nn
 
@@ -22,17 +24,17 @@ class Logits(nn.Module):
         self.register_buffer("feats", feats)
 
     @property
-    def has_upos(self) -> bool:
+    def use_upos(self) -> bool:
         return self.upos is not None
 
     @property
-    def has_xpos(self) -> bool:
+    def use_xpos(self) -> bool:
         return self.xpos is not None
 
     @property
-    def has_lemma(self) -> bool:
+    def use_lemma(self) -> bool:
         return self.lemma is not None
 
     @property
-    def has_feats(self) -> bool:
+    def use_feats(self) -> bool:
         return self.feats is not None

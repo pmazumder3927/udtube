@@ -5,51 +5,55 @@
 * ConlluMapDataset is a labeled dataset, loaded greedily.
 """
 
+import conllu
 import dataclasses
-from typing import Iterable, Iterator, List, Optional
+from typing import Iterator, List, Optional
 
 import torch
 from torch import nn
 from torch.utils import data
 
-from . import indexes, parsers
+from . import mappers, parsers
+from .. import defaults
 
 
 class Item(nn.Module):
     """Tensors representing a single sentence."""
 
-    text: str
-    form: List[str]
+    tokenlist: conllu.TokenList
     upos: Optional[torch.Tensor]
     xpos: Optional[torch.Tensor]
     lemma: Optional[torch.Tensor]
     feats: Optional[torch.Tensor]
 
     def __init__(
-        self, text, form, upos=None, xpos=None, lemma=None, feats=None
+        self, tokenlist, upos=None, xpos=None, lemma=None, feats=None
     ):
         super().__init__()
-        self.text = text
-        self.form = form
+        self.tokenlist = tokenlist
         self.register_buffer("upos", upos)
         self.register_buffer("xpos", xpos)
         self.register_buffer("lemma", lemma)
         self.register_buffer("feats", feats)
 
     @property
-    def has_upos(self) -> bool:
+    def tokens(self) -> List[str]:
+        return [token["form"] for token in self.tokenlist]
+
+    @property
+    def use_upos(self) -> bool:
         return self.upos is not None
 
     @property
-    def has_xpos(self) -> bool:
+    def use_xpos(self) -> bool:
         return self.xpos is not None
 
     @property
-    def has_lemma(self) -> bool:
+    def use_lemma(self) -> bool:
         return self.lemma is not None
 
     @property
-    def has_feats(self) -> bool:
+    def use_feats(self) -> bool:
         return self.feats is not None
 
 
@@ -69,8 +73,8 @@ class ConlluIterDataset(data.IterableDataset):
     conllu_file: str
 
     def __iter__(self) -> Iterator[str]:
-        for tokenlist in parsers.tokenlist_iterator(self.conllu_file):
-            yield tokenlist.metadata["text"]
+        for tokenlist in parsers.parse(self.conllu_file):
+            yield Item(tokenlist)
 
 
 @dataclasses.dataclass
@@ -83,162 +87,12 @@ class ConlluMapDataset(data.Dataset):
     It is mostly used during training and testing.
     """
 
-    samples: List[parsers.SampleType]
-    index: indexes.Index  # Usually copied from the DataModule.
-    parser: parsers.ConlluParser  # Ditto.
-
-    @property
-    def has_upos(self) -> bool:
-        return self.parser.use_upos
-
-    @property
-    def has_xpos(self) -> bool:
-        return self.parser.use_xpos
-
-    @property
-    def has_lemma(self) -> bool:
-        return self.parser.use_lemma
-
-    @property
-    def has_feats(self) -> bool:
-        return self.parser.use_feats
-
-    # Encoding.
-
-    @staticmethod
-    def _encode(
-        labels: Iterable[str],
-        vocabulary: indexes.Vocabulary,
-    ) -> torch.Tensor:
-        """Encodes a tensor.
-
-        Args:
-            labels: iterable of labels.
-            vocabulary: a vocabulary.
-
-        Returns:
-            Tensor of encoded labels.
-        """
-        return torch.tensor([vocabulary(label) for label in labels])
-
-    def encode_upos(self, labels: Iterable[str]) -> torch.Tensor:
-        """Encodes universal POS tags.
-
-        Args:
-            labels: iterable of universal POS strings.
-
-        Returns:
-            Tensor of encoded labels.
-        """
-        return self._encode(labels, self.index.upos)
-
-    def encode_xpos(self, labels: Iterable[str]) -> torch.Tensor:
-        """Encodes language-specific POS tags.
-
-        Args:
-            labels: iterable of label-specific POS strings.
-
-        Returns:
-            Tensor of encoded labels.
-        """
-        return self._encode(labels, self.index.xpos)
-
-    def encode_lemma(self, labels: Iterable[str]) -> torch.Tensor:
-        """Encodes lemma (i.e., edit script) tags.
-
-        Note that there's no processing of the lemmatization rule, which is
-        assumed to already be a string.
-
-        Args:
-            labels: iterable of lemma tags.
-
-        Returns:
-            Tensor of encoded labels.
-        """
-        return self._encode(labels, self.index.lemma)
-
-    def encode_feats(self, labels: Iterable[str]) -> torch.Tensor:
-        """Encodes morphological feature tags.
-
-        Args:
-            labels: iterable of feature tags.
-
-        Returns:
-            Tensor of encoded labels.
-        """
-        return self._encode(labels, self.index.feats)
-
-    # Decoding.
-
-    @staticmethod
-    def _decode(
-        indices: torch.Tensor,
-        vocabulary: indexes.Vocabulary,
-    ) -> Iterator[List[str]]:
-        """Decodes a tensor.
-
-        Args:
-            indices: 2d tensor of indices.
-            vocabulary: the vocabulary
-
-        Yields:
-            List[str]: Lists of decoded strings.
-        """
-        for idx in indices.cpu().numpy():
-            yield [
-                vocabulary.get_symbol(c)
-                for c in idx
-                if c not in vocabulary.special_idx
-            ]
-
-    def decode_upos(self, indices: torch.Tensor) -> Iterator[List[str]]:
-        """Decodes an upos tensor.
-
-        Args:
-            indices: 2d tensor of indices.
-
-        Yields:
-            List[str]: Decoded strings.
-        """
-        return self._decode(indices, self.index.upos)
-
-    def decode_xpos(self, indices: torch.Tensor) -> Iterator[List[str]]:
-        """Decodes an xpos tensor.
-
-        Args:
-            indices: 2d tensor of indices.
-
-        Yields:
-            List[str]: Decoded strings.
-        """
-        return self._decode(indices, self.index.xpos)
-
-    # Does this need to be rewired to get the form so it can lemmatize?
-
-    def decode_lemma(self, indices: torch.Tensor) -> Iterator[List[str]]:
-        """Decodes a lemma tensor.
-
-        Note that there's no processing of the lemmatization rule, which is
-        assumed to already be a string.
-
-        Args:
-            indices: 2d tensor of indices.
-
-        Yields:
-            List[str]: Decoded strings.
-        """
-        return self._decode(indices, self.index.lemma)
-
-    def decode_feats(self, indices: torch.Tensor) -> Iterator[List[str]]:
-        """Decodes a morphological features tensor.
-
-        Args:
-            indices: 2d tensor of indices.
-
-        Yields:
-            List[str]: Decoded strings.
-        """
-        return self._decode(indices, self.index.feats)
+    samples: List[conllu.TokenList]
+    mapper: mappers.Mapper
+    use_upos: bool = defaults.USE_UPOS
+    use_xpos: bool = defaults.USE_XPOS
+    use_lemma: bool = defaults.USE_LEMMA
+    use_feats: bool = defaults.USE_FEATS
 
     # Required API.
 
@@ -254,12 +108,30 @@ class ConlluMapDataset(data.Dataset):
         Returns:
             Item.
         """
-        text, form, upos, xpos, lemma, feats = self.samples[idx]
+        tokenlist = self.samples[idx]
         return Item(
-            text=text,
-            form=form,
-            upos=self.encode_upos(upos) if self.has_upos else None,
-            xpos=self.encode_xpos(xpos) if self.has_upos else None,
-            lemma=self.encode_lemma(lemma) if self.has_lemma else None,
-            feats=self.encode_feats(feats) if self.has_feats else None,
+            tokenlist,
+            upos=(
+                self.mapper.encode_upos(token["upos"] for token in tokenlist)
+                if self.use_upos
+                else None
+            ),
+            xpos=(
+                self.mapper.encode_xpos(token["xpos"] for token in tokenlist)
+                if self.use_xpos
+                else None
+            ),
+            lemma=(
+                self.mapper.encode_lemma(
+                    (token["form"] for token in tokenlist),
+                    (token["lemma"] for token in tokenlist),
+                )
+                if self.use_lemma
+                else None
+            ),
+            feats=(
+                self.mapper.encode_xpos(token["feats"] for token in tokenlist)
+                if self.use_feats
+                else None
+            ),
         )

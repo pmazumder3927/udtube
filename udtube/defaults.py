@@ -6,16 +6,10 @@ from . import schedulers
 
 BATCH_SIZE = 32
 
-REVERSE_EDITS = True
-
-LANGUAGE = "en"  # Sigh.
-
-# Encoder options.
-ENCODER = "bert-base-multilingual-cased"
 DROPOUT = 0.5
+ENCODER = "google-bert/bert-base-multilingual-cased"
 POOLING_LAYERS = 4
-
-# Classifier options.
+REVERSE_EDITS = True
 USE_UPOS = True
 USE_XPOS = True
 USE_LEMMA = True

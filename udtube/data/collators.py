@@ -39,7 +39,7 @@ class Tokenizer:
         )
 
 
-class ConlluCollator:
+class Collator:
     """Collator for CoNLL-U data.
 
     It doesn't matter whether or not the data already has labels.
@@ -59,7 +59,6 @@ class ConlluCollator:
     def pad_tensors(
         tensorlist: List[torch.Tensor],
         pad_idx: int = 0,
-        dim=0,
     ) -> torch.Tensor:
         """Pads and stacks a list of tensors.
 
@@ -80,24 +79,24 @@ class ConlluCollator:
             ]
         )
 
-    def __call__(self, itemlist: List[datasets.Item]) -> batches.ConlluBatch:
-        return batches.ConlluBatch(
-            texts=[item.text for item in itemlist],
-            tokens=self.tokenizer([item.form for item in itemlist]),
+    def __call__(self, itemlist: List[datasets.Item]) -> batches.Batch:
+        return batches.Batch(
+            tokenlists=[item.tokenlist for item in itemlist],
+            tokens=self.tokenizer([item.tokens for item in itemlist]),
             # Looks ugly, but this just pads and stacks data for whatever
             # classification tasks are enabled.
             upos=(
                 self.pad_tensors(
                     [item.upos for item in itemlist], self.index.upos.pad_idx
                 )
-                if self.index.has_upos
+                if itemlist[0].use_upos
                 else None
             ),
             xpos=(
                 self.pad_tensors(
                     [item.xpos for item in itemlist], self.index.xpos.pad_idx
                 )
-                if self.index.has_xpos
+                if itemlist[0].use_xpos
                 else None
             ),
             lemma=(
@@ -105,7 +104,7 @@ class ConlluCollator:
                     [item.lemma for item in itemlist],
                     self.index.lemma.pad_idx,
                 )
-                if self.index.has_lemma
+                if itemlist[0].use_lemma
                 else None
             ),
             feats=(
@@ -113,7 +112,7 @@ class ConlluCollator:
                     [item.feats for item in itemlist],
                     self.index.feats.pad_idx,
                 )
-                if self.index.has_feats
+                if itemlist[0].use_feats
                 else None
             ),
         )

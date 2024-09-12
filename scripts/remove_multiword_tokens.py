@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """Removes multiword tokenens from CoNLL-U files."""
 
 import argparse

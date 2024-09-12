@@ -24,13 +24,17 @@ class UDTube(lightning.LightningModule):
     and sequential linear classifiers for each subtask.
 
     Args:
+        dropout: Dropout probability.
         encoder: Name of the Hugging Face model used to tokenize and encode.
         pooling_layers: Number of layers to use to compute the embedding.
-        dropout: Dropout probability.
-        use_upos: enables the universal POS tagging task.
-        use_xpos: enables the language-specific POS tagging task.
-        use_lemma: enables the lemmatization task.
-        use_feats: enables the morphological feature tagging task.
+        reverse_edits: By default, lemmatization rules use reverse-edit
+            scripts, which are appropriate for predominantly suffixal
+            languages. When working with a predominantly prefixal language,
+            disable this by setting this to False.
+        use_upos: Enables the universal POS tagging task.
+        use_xpos: Enables the language-specific POS tagging task.
+        use_lemma: Enables the lemmatization task.
+        use_feats: Enables the morphological feature tagging task.
     """
 
     encoder: modules.UDTubeEncoder
@@ -44,9 +48,10 @@ class UDTube(lightning.LightningModule):
 
     def __init__(
         self,
-        encoder: str = defaults.ENCODER,
         dropout: float = defaults.DROPOUT,
+        encoder: str = defaults.ENCODER,
         pooling_layers: int = defaults.POOLING_LAYERS,
+        reverse_edits: bool = defaults.REVERSE_EDITS,
         use_upos: bool = defaults.USE_UPOS,
         use_xpos: bool = defaults.USE_XPOS,
         use_lemma: bool = defaults.USE_LEMMA,
@@ -66,11 +71,7 @@ class UDTube(lightning.LightningModule):
         # See what this disables here:
         # https://lightning.ai/docs/pytorch/stable/model/manual_optimization.html#manual-optimization
         self.automatic_optimization = False
-        self.encoder = modules.UDTubeEncoder(
-            encoder,
-            dropout,
-            pooling_layers,
-        )
+        self.encoder = modules.UDTubeEncoder(dropout, encoder, pooling_layers)
         self.classifier = modules.UDTubeClassifier(
             self.encoder.hidden_size,
             use_upos,
@@ -126,7 +127,7 @@ class UDTube(lightning.LightningModule):
     def forward(
         self,
         batch: data.Batch,
-    ) -> modules.Logits:
+    ) -> data.Logits:
         return self.classifier(self.encoder(batch))
 
     def configure_optimizers(
@@ -158,15 +159,18 @@ class UDTube(lightning.LightningModule):
     # See the following for how these are called by the different subcommands.
     # https://lightning.ai/docs/pytorch/latest/common/lightning_module.html#hooks
 
+    def predict_step(self, batch: data.Batch, batch_idx: int) -> data.Logits:
+        return self(batch)
+
     def training_step(
         self,
-        batch: data.ConlluBatch,
+        batch: data.Batch,
         batch_idx: int,
     ) -> None:
         for optimizer in self.optimizers():
             optimizer.zero_grad()
         logits = self(batch)
-        self._log_loss(logits, batch, "train")
+        loss = self._log_loss(logits, batch, "train")
         self.manual_backward(loss)
         for optimizer in self.optimizers():
             optimizer.step()
@@ -187,12 +191,12 @@ class UDTube(lightning.LightningModule):
 
     def validation_step(
         self,
-        batch: data.ConlluBatch,
+        batch: data.Batch,
         batch_idx: int,
     ) -> None:
         logits = self(batch)
         self._log_loss(logits, batch, "val")
-        self._log_accuracies(logits, batch, "val")
+        self._update_accuracies(logits, batch)
 
     def on_validation_epoch_end(self) -> None:
         self._log_accuracies_epoch_end("val")
@@ -200,16 +204,16 @@ class UDTube(lightning.LightningModule):
     def on_test_step_epoch_start(self) -> None:
         self._reset_accuracies()
 
-    def test_step(self, batch: data.ConlluBatch, batch_idx: int) -> None:
+    def test_step(self, batch: data.Batch, batch_idx: int) -> None:
         logits = self(batch)
         self._update_accuracies(logits, batch)
 
     def on_test_epoch_end(self) -> None:
         self._log_accuracies_epoch_end("test")
 
-    def _compute_and_log_loss(
-        self, logits: modules.Logits, batch: data.ConlluBatch, subset: str
-    ) -> None:
+    def _log_loss(
+        self, logits: data.Logits, batch: data.Batch, subset: str
+    ) -> torch.Tensor:
         losses = []
         if self.use_upos:
             losses.append(self.loss_func(logits.upos, batch.upos))
@@ -233,6 +237,8 @@ class UDTube(lightning.LightningModule):
             logger=True,
             batch_size=len(batch),
         )
+        # We can use the returned loss to step the optimizers.
+        return loss
 
     def _reset_accuracies(self) -> None:
         if self.use_upos:
@@ -245,7 +251,7 @@ class UDTube(lightning.LightningModule):
             self.feats_accuracy.reset()
 
     def _update_accuracies(
-        self, logits: modules.Logits, batch: data.ConlluBatch
+        self, logits: data.Logits, batch: data.Batch
     ) -> None:
         if self.use_upos:
             self.upos_accuracy.update(logits.upos, batch.upos)

@@ -18,7 +18,7 @@ import dataclasses
 import pickle
 from typing import Dict, Iterable, List, Optional, Set
 
-from .. import special
+from .. import defaults, special
 
 
 class Vocabulary:
@@ -85,6 +85,7 @@ class Index:
     This also handles serialization and deserialization.
 
     Args:
+        reverse_edits:
         upos: optional vocabulary for universal POS tagging.
         xpos: optional vocabulary for language-specific POS tagging.
         lemma: optional vocabulary for lemmatization.
@@ -93,6 +94,7 @@ class Index:
 
     # TODO(#3): other things (multiword table?) can also be stashed here.
 
+    reverse_edits: bool = defaults.REVERSE_EDITS
     upos: Optional[Vocabulary] = None
     xpos: Optional[Vocabulary] = None
     lemma: Optional[Vocabulary] = None
@@ -100,16 +102,16 @@ class Index:
 
     # Properties.
 
-    def has_upos(self) -> bool:
+    def use_upos(self) -> bool:
         return self.upos is not None
 
-    def has_xpos(self) -> bool:
+    def use_xpos(self) -> bool:
         return self.xpos is not None
 
-    def has_lemma(self) -> bool:
+    def use_lemma(self) -> bool:
         return self.lemma is not None
 
-    def has_feats(self) -> bool:
+    def use_feats(self) -> bool:
         return self.feats is not None
 
     # Serialization.

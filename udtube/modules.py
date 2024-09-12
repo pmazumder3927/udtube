@@ -25,19 +25,19 @@ class UDTubeEncoder(lightning.LightningModule):
         dropout: Dropout probability.
     """
 
-    encoder: transformers.AutoModel
     dropout_layer: nn.Dropout
+    encoder: transformers.AutoModel
     pooling_layers: int
 
     def __init__(
         self,
-        encoder: str = defaults.ENCODER,
         dropout: float = defaults.DROPOUT,
+        encoder: str = defaults.ENCODER,
         pooling_layers: int = defaults.POOLING_LAYERS,
     ):
         super().__init__()
-        self.encoder = encoders.load(encoder, dropout)
         self.dropout_layer = nn.Dropout(dropout)
+        self.encoder = encoders.load(encoder, dropout)
         self.pooling_layers = pooling_layers
 
     # Properties.
