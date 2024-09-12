@@ -150,9 +150,13 @@ To use a fixed learning rate for one or the other layer, specify
 
 #### Callbacks
 
-The user will likely want to configure additional callbacks. Some useful examples are given below.
+The user will likely want to configure additional callbacks. Some useful
+examples are given below.
 
-The [`ModelCheckpoint`](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.ModelCheckpoint.html) callback generates the checkpoints which give the highest validation accuracy. A sample YAML snippet is given below.
+The
+[`ModelCheckpoint`](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.ModelCheckpoint.html)
+callback generates the checkpoints which give the highest validation accuracy. A
+sample YAML snippet is given below.
 
     trainer:
       callbacks:
@@ -164,9 +168,14 @@ The [`ModelCheckpoint`](https://lightning.ai/docs/pytorch/stable/api/lightning.p
           verbose: true
       ...
 
-Note that without this, UDTube will not generate checkpoints! Adjust the `dirpath` argument as needed.
+Note that without this, UDTube will not generate checkpoints! Adjust the
+`dirpath` argument as needed.
 
-The [`LearningRateMonitor`](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.LearningRateMonitor.html) callback records learning rates; this is useful when working with multiple optimizers and/or schedulers, as we do here. A sample YAML snippet is given below.
+The
+[`LearningRateMonitor`](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.LearningRateMonitor.html)
+callback records learning rates; this is useful when working with multiple
+optimizers and/or schedulers, as we do here. A sample YAML snippet is given
+below.
 
     trainer:
       callbacks:
@@ -175,7 +184,10 @@ The [`LearningRateMonitor`](https://lightning.ai/docs/pytorch/stable/api/lightni
           logging_interval: epoch
       ...
 
-The [`EarlyStopping`](https://lightning.ai/docs/pytorch/stable/common/early_stopping.html) callback enables early stopping based on a monitored quantity and a fixed "patience". A sample YAML snipppet with a patience of 10 is given below.
+The
+[`EarlyStopping`](https://lightning.ai/docs/pytorch/stable/common/early_stopping.html)
+callback enables early stopping based on a monitored quantity and a fixed
+"patience". A sample YAML snipppet with a patience of 10 is given below.
 
     trainer:
       callbacks:
@@ -187,14 +199,21 @@ The [`EarlyStopping`](https://lightning.ai/docs/pytorch/stable/common/early_stop
       ...
 
 Adjust the `patience` parameter as needed.
-  
-All three of these features are enabled in the [sample configuration files](configs) we provide.
+
+All three of these features are enabled in the [sample configuration
+files](configs) we provide.
 
 #### Logging
 
-By default, UDTube performs some minimal logging to standard error and uses progress bars to keep track of progress during each epoch. However, one can enable additional logging faculties during training, using a similar syntax to the one we saw above for callbacks.
+By default, UDTube performs some minimal logging to standard error and uses
+progress bars to keep track of progress during each epoch. However, one can
+enable additional logging faculties during training, using a similar syntax to
+the one we saw above for callbacks.
 
-The [`CSVLogger`](https://lightning.ai/docs/pytorch/stable/extensions/generated/lightning.pytorch.loggers.CSVLogger.html) logs all monitored quantities to a CSV file. A sample configuration is given below.
+The
+[`CSVLogger`](https://lightning.ai/docs/pytorch/stable/extensions/generated/lightning.pytorch.loggers.CSVLogger.html)
+logs all monitored quantities to a CSV file. A sample configuration is given
+below.
 
     trainer:
       logger:
@@ -203,9 +222,14 @@ The [`CSVLogger`](https://lightning.ai/docs/pytorch/stable/extensions/generated/
             save_dir: /Users/Shinji/models
       ...
        
+
 Adjust the `save_dir` argument as needed.
 
-The [`WandbLogger`](https://lightning.ai/docs/pytorch/stable/extensions/generated/lightning.pytorch.loggers.WandbLogger.html) works similarly to the `CSVLogger`, but sends the data to the third-party website [Weights & Biases](https://wandb.ai/site), where it can be used to generate charts or share artifacts. A sample configuration is given below.
+The
+[`WandbLogger`](https://lightning.ai/docs/pytorch/stable/extensions/generated/lightning.pytorch.loggers.WandbLogger.html)
+works similarly to the `CSVLogger`, but sends the data to the third-party
+website [Weights & Biases](https://wandb.ai/site), where it can be used to
+generate charts or share artifacts. A sample configuration is given below.
 
     trainer:
       logger:
@@ -216,11 +240,13 @@ The [`WandbLogger`](https://lightning.ai/docs/pytorch/stable/extensions/generate
           save_dir: /Users/Shinji/models
       ...
 
-Adjust the `entity`, `project`, and `save_dir` arguments as needed; note that this functionality requires a working account with Weights & Biases.
+Adjust the `entity`, `project`, and `save_dir` arguments as needed; note that
+this functionality requires a working account with Weights & Biases.
 
 #### Other options
 
-By default, UDTube attempts to model all four tasks; one can disable the language-specific tagging task using `model: use_xpos: false`, and so on.
+By default, UDTube attempts to model all four tasks; one can disable the
+language-specific tagging task using `model: use_xpos: false`, and so on.
 
 Dropout probability is specified using `model: dropout: ...`.
 
@@ -246,10 +272,12 @@ The following YAML snippet shows the default architectural arguments.
         use_feats: true
         ...
       
+
 Batch size is specified using `data: batch_size: ...` and defaults to 32.
 
 There are a number of ways to specify how long a model should train for. For
-example, the following YAML snippet specifies that training should run for 100 epochs or 6 wall-clock hours, whichever comes first.
+example, the following YAML snippet specifies that training should run for 100
+epochs or 6 wall-clock hours, whichever comes first.
 
     trainer:
       max_epochs: 100
@@ -266,14 +294,20 @@ or debugging.
 
 ### Evaluation (`test`)
 
-In `test` mode, we compute accuracy over held-out test data (specified as `data: test: path/to/test.conllu`) using a previously trained checkpoint (`--ckpt_path path/to/checkpoint.ckpt` from the command line); it differs from `validation` mode in that it uses
-the `test` file rather than the `val` file and it does not compute loss.
+In `test` mode, we compute accuracy over held-out test data (specified as
+`data: test: path/to/test.conllu`) using a previously trained checkpoint
+(`--ckpt_path path/to/checkpoint.ckpt` from the command line); it differs from
+`validation` mode in that it uses the `test` file rather than the `val` file and
+it does not compute loss.
 
 ### Inference (`predict`)
 
 In `predict` mode, a previously trained model checkpoint
 (`model: ckpt_path: path/to/checkpoint.ckpt`) is used to label a CoNLL-U file
-using a previously trained checkpoint (`ckpt_path path/to/checkpoint.ckpt` from the command line). To make this work, one must also specify a custom callback which handles conversion to CoNLL-U. The following YAML snippet shows this is use.
+using a previously trained checkpoint (`ckpt_path path/to/checkpoint.ckpt` from
+the command line). To make this work, one must also specify a custom callback
+which handles conversion to CoNLL-U. The following YAML snippet shows this is
+use.
 
     trainer:
       callbacks:
