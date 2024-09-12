@@ -4,8 +4,7 @@ Adapted from Yoyodyne:
 
     https://github.com/CUNY-CL/yoyodyne/blob/master/yoyodyne/data/indexes.py
 
-However, there are some different concerns here; for instance padding is much
-simpler.
+However, there is no need for padding at this stage.
 """
 
 from typing import List, Optional
