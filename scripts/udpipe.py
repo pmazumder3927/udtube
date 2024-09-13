@@ -3,7 +3,6 @@
 
 import argparse
 
-import conllu
 import spacy_udpipe
 
 from udtube import data
