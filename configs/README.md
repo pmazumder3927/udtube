@@ -11,7 +11,7 @@ Data sets:
 Pre-trained encoders:
 
 -   [BERT
-    (\`google-bert/bert-base-cased')](https://huggingface.co/google-bert/bert-base-cased)
+    (`google-bert/bert-base-cased`)](https://huggingface.co/google-bert/bert-base-cased)
 -   [mBERT
     (`google-bert/bert-base-multilingual-cased`)](https://huggingface.co/google-bert/bert-base-multilingual-cased)
 -   [RoBERTa
