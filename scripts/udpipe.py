@@ -6,6 +6,8 @@ import argparse
 import conllu
 import spacy_udpipe
 
+from udtube import data
+
 
 BLANK = "_"
 
@@ -14,9 +16,9 @@ def main(args: argparse.Namespace) -> None:
     spacy_udpipe.download(args.langcode)
     model = spacy_udpipe.load(args.langcode)
     with open(args.input, "r") as source, open(args.output, "w") as sink:
-        for sentence in conllu.parse_incr(source):
+        for tokenlist in data.parse(source):
             # The model insists on retokenizing the data but this is harmless.
-            result = model(sentence.metadata["text"])
+            result = model(tokenlist.metadata["text"])
             tokenlist = conllu.TokenList(
                 [
                     {

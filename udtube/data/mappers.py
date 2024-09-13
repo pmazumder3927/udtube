@@ -147,7 +147,7 @@ class Mapper:
         """
         return [
             vocabulary.get_symbol(c)
-            for c in indices.cpu()
+            for c in indices
             if c not in vocabulary.special_idx
         ]
 

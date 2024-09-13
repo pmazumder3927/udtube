@@ -5,17 +5,13 @@ import argparse
 import logging
 
 import conllu
-from udtube import defaults
+from udtube import data
 
 
 def main(args: argparse.Namespace) -> None:
     with open(args.gold) as gold_file, open(args.hypo) as hypo_file:
-        gold_data = conllu.parse_incr(
-            gold_file, field_parsers=defaults.OVERRIDDEN_FIELD_PARSERS
-        )
-        hypo_data = conllu.parse_incr(
-            hypo_file, field_parsers=defaults.OVERRIDDEN_FIELD_PARSERS
-        )
+        gold_data = data.parse(gold_file)
+        hypo_data = data.parse(hypo_file)
         correct_pos = 0
         correct_xpos = 0
         correct_lemma = 0
@@ -54,6 +50,7 @@ def main(args: argparse.Namespace) -> None:
                         continue
                 correct_pos += gold_tok["upos"] == hypo_tok["upos"]
                 correct_xpos += gold_tok["xpos"] == hypo_tok["xpos"]
+                # We do this case-insensitively.
                 correct_lemma += (
                     gold_tok["lemma"].casefold()
                     == hypo_tok["lemma"].casefold()
