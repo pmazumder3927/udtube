@@ -232,6 +232,7 @@ class UDTube(lightning.LightningModule):
             f"{subset}_loss",
             loss,
             batch_size=len(batch),
+            on_step=False,
             on_epoch=True,
             logger=True,
             prog_bar=True,
