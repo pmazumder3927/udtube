@@ -12,10 +12,11 @@ The following scripts are provided:
 -   [`convert_to_um.py`](convert_to_um.py) converts the FEATS column of a
     CoNLL-U format file from [Universal
     Dependencies](https://universaldependencies.org/u/feat/index.html) format to
-    [UniMorph](https://unimorph.github.io/schema/) format. The user may wish to
-    do this conversion to training and validation files before training. Note
-    that this may not work with all languages in the Universal Dependencies
-    corpus.
+    [UniMorph](https://unimorph.github.io/schema/) format using
+    [`ud-compatibility`](https://github.com/unimorph/ud-compatibility). The user
+    may wish to do this conversion to training and validation files before
+    training. Note that this may not work with all languages in the Universal
+    Dependencies corpus.
 -   [`evaluate.py`](evaluate.py) provides a general tool for evaluating labeled
     CoNLL-U data; it reports accuracy for language-universal and
     language-specific POS tags, lemmatization, and morphological features.
