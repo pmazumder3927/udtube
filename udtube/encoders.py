@@ -31,7 +31,6 @@ SPECIAL_CASE_ENCODERS = {
 # Please keep in lexicographic order.
 TESTED_ENCODERS = {
     "DeepPavlov/rubert",
-    "FacebookAI/roberta",
     "FacebookAI/xlm-roberta",
     "dccuchile/bert-base-spanish",
     "google-bert/bert",
