@@ -59,7 +59,7 @@ class PredictionWriter(callbacks.BasePredictionWriter):
                 for j, upos in enumerate(upos_hat[: len(tokenlist)]):
                     tokenlist[j]["upos"] = upos
             if y_xpos_hat is not None:
-                xpos_hat = self.mapper.decode_upos(y_xpos_hat[i, :])
+                xpos_hat = self.mapper.decode_xpos(y_xpos_hat[i, :])
                 for j, xpos in enumerate(xpos_hat[: len(tokenlist)]):
                     tokenlist[j]["xpos"] = xpos
             if y_lemma_hat is not None:
