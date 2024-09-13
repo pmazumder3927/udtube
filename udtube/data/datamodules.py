@@ -85,7 +85,9 @@ class DataModule(lightning.LightningDataModule):
         self.batch_size = batch_size
         # FIXME I need to be able to load the index from a file too.
         self.index = index if index else self._make_index(model_dir)
-        self.tokenizer = transformers.AutoTokenizer.from_pretrained(encoder)
+        self.tokenizer = transformers.AutoTokenizer.from_pretrained(
+            encoder, clean_up_tokenization_spaces=False
+        )
 
     # Based on: https://universaldependencies.org/u/pos/index.html.
 
