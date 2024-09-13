@@ -15,28 +15,18 @@ BLANK = "_"
 def main(args: argparse.Namespace) -> None:
     spacy_udpipe.download(args.langcode)
     model = spacy_udpipe.load(args.langcode)
-    with open(args.input, "r") as source, open(args.output, "w") as sink:
-        for tokenlist in data.parse(source):
+    with open(args.output, "w") as sink:
+        for tokenlist in data.parse(args.input):
             # The model insists on retokenizing the data but this is harmless.
             result = model(tokenlist.metadata["text"])
-            tokenlist = conllu.TokenList(
-                [
-                    {
-                        "id": index,
-                        "form": token.text,
-                        "lemma": token.lemma_,
-                        "upos": token.pos_,
-                        "xpos": token.tag_,
-                        "feats": str(token.morph),
-                        "head": BLANK,
-                        "deprel": BLANK,
-                        "deps": BLANK,
-                        "misc": BLANK,
-                    }
-                    for index, token in enumerate(result, 1)
-                ],
-                metadata=sentence.metadata,
-            )
+            for i, (input_token, result_token) in enumerate(
+                zip(tokenlist, result)
+            ):
+                input_token["upos"] = result_token.pos_
+                input_token["xpos"] = result_token.tag_
+                input_token["lemma"] = result_token.lemma_
+                input_token["feats"] = str(result_token.morph)
+                tokenlist[i] = input_token
             # Prevents it from adding an extra newline.
             print(tokenlist.serialize(), file=sink, end="")
 
