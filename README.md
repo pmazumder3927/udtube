@@ -86,6 +86,10 @@ configuration options need to be set at training time. E.g., it is not possible
 to switch between different pre-trained encoders or enable new tasks after
 training.
 
+This mode is invoked using the `fit` subcommand, like so:
+
+    udtube fit --config path/to/config.yaml
+
 #### Seeding
 
 Setting the `seed_everything:` argument to some value ensures a reproducible
@@ -292,6 +296,10 @@ checkpoint (`--ckpt_path path/to/checkpoint.ckpt` from the command line),
 recording total loss and per-task accuracies. In practice this is mostly usefulf
 or debugging.
 
+This mode is invoked using the `validate` subcommand, like so:
+
+    udtube validate --config path/to/config.yaml --ckpt_path path/to/checkpoint.ckpt
+
 ### Evaluation (`test`)
 
 In `test` mode, we compute accuracy over held-out test data (specified as
@@ -300,13 +308,17 @@ In `test` mode, we compute accuracy over held-out test data (specified as
 `validation` mode in that it uses the `test` file rather than the `val` file and
 it does not compute loss.
 
+This mode is invoked using the `test` subcommand, like so:
+
+    udtube test --config path/to/config.yaml --ckpt_path path/to/checkpoint.ckpt
+
 ### Inference (`predict`)
 
 In `predict` mode, a previously trained model checkpoint
 (`model: ckpt_path: path/to/checkpoint.ckpt`) is used to label a CoNLL-U file
 using a previously trained checkpoint (`ckpt_path path/to/checkpoint.ckpt` from
 the command line). To make this work, one must also specify a custom callback
-which handles conversion to CoNLL-U. The following YAML snippet shows this is
+which handles conversion to CoNLL-U. The following YAML snippet shows this in
 use.
 
     trainer:
@@ -317,6 +329,9 @@ use.
           model_dir: /Users/Shinji/models
     ...
 
+Note that specifying this callback when not running in `predict` mode will do
+nothing other than create an empty text file.
+
 The following caveats apply:
 
 -   In `predict mode` UDTube loads the file to be labeled incrementally (i.e.,
@@ -324,6 +339,10 @@ The following caveats apply:
 -   The target task fields are overriden if their heads are active.
 -   Use [`scripts/pretokenize.py`](scripts/pretokenize.py) to convert raw text
     files to CoNLL-U input files.
+
+This mode is invoked using the `predict` subcommand, like so:
+
+    udtube predict --config path/to/config.yaml --ckpt_path path/to/checkpoint.ckpt
 
 ## Additional scripts
 
