@@ -36,7 +36,7 @@ model:
   pooling_layers: 4
   reverse_edits: true
   use_upos: true
-  use_xpos: false
+  use_xpos: true
   use_lemma: true
   use_feats: true
   encoder_optimizer:
