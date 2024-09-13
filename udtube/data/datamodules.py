@@ -134,18 +134,16 @@ class DataModule(lightning.LightningDataModule):
                 else None
             ),
             xpos=(
-                indexes.Vocabulary(xpos_vocabulary)
-                if xpos_vocabulary
-                else None
+                indexes.Vocabulary(xpos_vocabulary) if self.use_xpos else None
             ),
             lemma=(
                 indexes.Vocabulary(lemma_vocabulary)
-                if lemma_vocabulary
+                if self.use_lemma
                 else None
             ),
             feats=(
                 indexes.Vocabulary(feats_vocabulary)
-                if feats_vocabulary
+                if self.use_feats
                 else None
             ),
         )
