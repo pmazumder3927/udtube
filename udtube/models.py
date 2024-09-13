@@ -231,11 +231,10 @@ class UDTube(lightning.LightningModule):
         self.log(
             f"{subset}_loss",
             loss,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True,
-            logger=True,
             batch_size=len(batch),
+            on_epoch=True,
+            logger=True,
+            prog_bar=True,
         )
         # We can use the returned loss to step the optimizers.
         return loss
@@ -269,6 +268,7 @@ class UDTube(lightning.LightningModule):
                 self.upos_accuracy.compute(),
                 on_epoch=True,
                 logger=True,
+                prog_bar=True,
             )
         if self.use_xpos:
             self.log(
@@ -276,6 +276,7 @@ class UDTube(lightning.LightningModule):
                 self.xpos_accuracy.compute(),
                 on_epoch=True,
                 logger=True,
+                prog_bar=True,
             )
         if self.use_lemma:
             self.log(
@@ -283,6 +284,7 @@ class UDTube(lightning.LightningModule):
                 self.lemma_accuracy.compute(),
                 on_epoch=True,
                 logger=True,
+                prog_bar=True,
             )
         if self.use_feats:
             self.log(
@@ -290,4 +292,5 @@ class UDTube(lightning.LightningModule):
                 self.feats_accuracy.compute(),
                 on_epoch=True,
                 logger=True,
+                prog_bar=True,
             )
