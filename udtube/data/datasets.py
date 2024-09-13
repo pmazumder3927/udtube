@@ -130,7 +130,7 @@ class ConlluMapDataset(data.Dataset):
                 else None
             ),
             feats=(
-                self.mapper.encode_xpos(token["feats"] for token in tokenlist)
+                self.mapper.encode_feats(token["feats"] for token in tokenlist)
                 if self.use_feats
                 else None
             ),
