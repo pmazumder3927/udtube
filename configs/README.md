@@ -18,5 +18,3 @@ Pre-trained encoders:
     (`FacebookAI/roberta-base`)](https://huggingface.co/FacebookAI/roberta-base)
 -   [RuBERT
     (`DeepPavlov/rubert-base-cased`)](https://huggingface.co/DeepPavlov/rubert-base-cased)
--   [xlm-RoBERTa
-    (`FacebookAI/xlm-roberta-base`)](https://huggingface.co/FacebookAI/xlm-roberta-base)
