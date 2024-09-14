@@ -5,11 +5,11 @@ trainer:
   callbacks:
     - class_path: udtube.callbacks.PredictionWriter
       init_args:
-        predictions: /Users/Shinji/UD_English-EWT/predictions.conllu
-        model_dir: /Users/Shinji/UD_English-EWT/models
+        predictions: /Users/Shinji/UD_Russian-SynTagRus/predictions.conllu
+        model_dir: /Users/Shinji/UD_Russian-SynTagRus/models
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
-        dirpath: /Users/Shinji/UD_English-EWT/models/checkpoints
+        dirpath: /Users/Shinji/UD_Russian-SynTagRus/models/checkpoints
         filename: "model-{epoch:03d}-{val_loss:.4f}"
         monitor: val_loss
         verbose: true
@@ -24,19 +24,19 @@ trainer:
   logger:
     - class_path: lightning.pytorch.loggers.CSVLogger
       init_args:
-        save_dir: /Users/Shinji/UD_English-EWT/models
+        save_dir: /Users/Shinji/UD_Russian-SynTagRus/models
     - class_path: lightning.pytorch.loggers.wandb.WandbLogger
       init_args:
         entity: NERV
         project: unit1
-        save_dir: /Users/Shinji/UD_English-EWT/models
+        save_dir: /Users/Shinji/UD_Russian-SynTagRus/models
 model:
   dropout: 0.4
-  encoder: FacebookAI/roberta-base
+  encoder: FacebookAI/xlm-roberta-base
   pooling_layers: 4
   reverse_edits: true
   use_upos: true
-  use_xpos: true
+  use_xpos: false
   use_lemma: true
   use_feats: true
   encoder_optimizer:
@@ -57,9 +57,9 @@ model:
       monitor: val_loss
       factor: 0.1
 data:
-  model_dir: /Users/Shinji/UD_English-EWT/models
-  train: /Users/Shinji/UD_English-EWT/en_ewt-ud-train.conllu
-  val: /Users/Shinji/UD_English-EWT/en_ewt-ud-dev.conllu
-  test: /Users/Shinji/UD_English-EWT/en_ewt-ud-test.conllu
-  predict: /Users/Shinji/UD_English-EWT/en_ewt-ud-test.conllu
+  model_dir: /Users/Shinji/UD_Russian-SynTagRus/models
+  train: /Users/Shinji/UD_Russian-SynTagRus/ru_syntagrus-ud-train.conllu
+  val: /Users/Shinji/UD_Russian-SynTagRus/ru_syntagrus-ud-dev.conllu
+  test: /Users/Shinji/UD_Russian-SynTagRus/ru_syntagrus-ud-test.conllu
+  predict: /Users/Shinji/UD_Russian-SynTagRus/ru_syntagrus-ud-test.conllu
   batch_size: 32
