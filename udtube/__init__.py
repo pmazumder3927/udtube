@@ -7,3 +7,6 @@ import warnings
 warnings.filterwarnings(
     "ignore", ".*does not have many workers which may be a bottleneck.*"
 )
+warnings.filterwarnings(
+    "ignore", ".*Couldn't infer the batch indices fetched from.*"
+)
