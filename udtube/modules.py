@@ -20,9 +20,9 @@ class UDTubeEncoder(lightning.LightningModule):
     """Encoder portion of the model.
 
     Args:
+        dropout: Dropout probability.
         encoder: Name of the Hugging Face model used to tokenize and encode.
         pooling_layers: Number of layers to use to compute the embedding.
-        dropout: Dropout probability.
     """
 
     dropout_layer: nn.Dropout
@@ -195,7 +195,7 @@ class UDTubeClassifier(lightning.LightningModule):
         use_lemma: bool = defaults.USE_LEMMA,
         use_feats: bool = defaults.USE_FEATS,
         *,
-        # `2` is a dummy value here; it will be set by the data set object.
+        # `2` is a dummy value here; it will be set by the dataset object.
         upos_out_size: int = 2,
         xpos_out_size: int = 2,
         lemma_out_size: int = 2,

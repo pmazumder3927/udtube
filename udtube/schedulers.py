@@ -62,17 +62,17 @@ class WarmupInverseSquareRoot(optim.lr_scheduler.LambdaLR):
             f"{self.optimizer}, {self.warmup_epochs})"
         )
 
-    def lr_lambda(self, step: int) -> float:
-        """Computes the learning rate lambda at a given step.
+    def lr_lambda(self, epoch: int) -> float:
+        """Computes the learning rate lambda at a given epoch.
 
          Args:
-            step: current step.
+            epoch: current epoch.
 
         Returns:
             float: lr_lambda.
         """
         if self.warmup_epochs < 1:
             return self.decay_factor
-        if step < self.warmup_epochs:
-            return float(step) / float(max(1, self.warmup_epochs))
-        return self.decay_factor * step**-0.5
+        if epoch < self.warmup_epochs:
+            return float(epoch) / float(max(1, self.warmup_epochs))
+        return self.decay_factor * epoch**-0.5

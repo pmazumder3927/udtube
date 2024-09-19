@@ -4,8 +4,6 @@ from typing import Iterator
 
 import conllu
 
-# from .. import defaults
-# from . import edit_scripts
 
 # Overrides the feats parser for the conllu reader so it doesn't try to
 # turn them into dictionaries or None.
