@@ -11,10 +11,7 @@ def main(args: argparse.Namespace) -> None:
     sink_name = prefix + "-no_mwe" + ".conllu"
     with open(sink_name, "w") as sink:
         for tokenlist in data.parse(args.source):
-            # Metadata is lost during filtering, so we keep a copy.
-            metadata = tokenlist.metadata
             tokenlist = tokenlist.filter(id=lambda x: not isinstance(x, tuple))
-            tokenlist.metadata = metadata
             # Prevents it from adding an extra newline.
             print(tokenlist.serialize(), file=sink, end="")
 
