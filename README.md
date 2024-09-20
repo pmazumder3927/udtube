@@ -1,108 +1,367 @@
 # UDTube (beta)
 
-UDtube is a trainable neural morphological analyzer built on Pytorch Lightning. 
-
+UDTube is a neural morphological analyzer based on
+[PyTorch](https://pytorch.org/), [Lightning](https://lightning.ai/), and
+[Hugging Face transformers](https://huggingface.co/docs/transformers/en/index).
 
 ## Philosophy
 
-Named in homage to the tried-and-true UDPipe, UDTube is built with inference-at-scale in mind. The software avoids loading large amounts of data at any time and instead favors an incremental loading approach to prediction. 
-While originally built to investigate the linguistic problem of defectivity, UDTube is released for both replication and to enable new and exciting research in morphology.
+Named in homage to the venerable
+[UDPipe](https://lindat.mff.cuni.cz/services/udpipe/), UDTube is focused on
+incremental inference, allowing it to be used to label large text collections.
 
-## Authors
+## Design
 
-Daniel Yakubov & Kyle Gorman
+The UDTube model consists of a pre-trained (and possibly, fine-tuned)
+transformer encoder which feeds into a classifier layer with many as four heads
+handling the different morphological tasks.
+
+Lightning is used to generate the [training, validation, inference, and
+evaluation
+loops](https://lightning.ai/docs/pytorch/latest/common/lightning_module.html#hooks).
+The [LightningCLI
+interface](https://lightning.ai/docs/pytorch/stable/cli/lightning_cli.html#lightning-cli)
+is used to provide a user interface and manage configuration.
+
+Below, we use [YAML](https://yaml.org/) to specify configuration options, and we
+strongly recommend users do the same. However, most configuration options can
+also be specified using POSIX-style command-line flags.
 
 ## Installation
 
-UDTube is built on Python 3.10 and not extensively tested on other Python verisons.
+To install UDTube and its dependencies, run the following command:
 
-To begin, clone this repo please install the requirements:
-```
-pip install -r requirements.txt
-```
+    pip install .
+
+## File formats
+
+Other than YAML configuration files, most operations use files in
+[CoNLL-U](https://universaldependencies.org/format.html) format. This is a
+10-column tab-separated format with a blank line between each sentence and `#`
+used for comments. In all cases, the `ID` and `FORM` field must be fully
+populated; the `_` blank tag can be used for unknown fields.
+
+Many of our experiments are performed using CoNLL-U data from the [Universal
+Dependencies project](https://universaldependencies.org/).
+
+## Tasks
+
+UDTube can perform up to four morphological tasks simultaneously:
+
+-   Lemmatization is performed using the `LEMMA` field and [edit
+    scripts](https://aclanthology.org/P14-2111/).
+
+-   [Universal part-of-speech
+    tagging](https://universaldependencies.org/u/pos/index.html) is performed
+    using the `UPOS` field: enable with `data: use_upos: true`.
+
+-   Language-specific part-of-speech tagging is performed using the `XPOS`
+    field: enable with `data: use_xpos: true`.
+
+-   Morphological feature tagging is performed using the `FEATS` field: enable
+    with `data: use_feats: true`.
+
+The following caveats apply:
+
+-   Note that many newer Universal Dependencies datasets do not have
+    language-specific part-of-speech-tags.
+-   The `FEATS` field is treated as a single unit and is not segmented in any
+    way.
+-   One can convert from [Universal Dependencies morphological
+    features](https://universaldependencies.org/u/feat/index.html) to [UniMorph
+    features](https://unimorph.github.io/schema/) using
+    [`scripts/convert_to_um.py`](scripts/convert_to_um.py).
+-   UDTube does not perform dependency parsing at present, so the `HEAD`,
+    `DEPREL`, and `DEPS` fields are ignored and should be specified as `_`.
 
 ## Usage
 
-Since UDTube is built using the LightningCLI is doesn't hurt to read up on those [docs](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.cli.LightningCLI.html). However, straightforward guidance for using UDTube is below:
+The `udtube` command-line tool uses a subcommand interface, with the four
+following modes.
 
-Training
+### Training (`fit`)
 
-It is highly preferred that yaml config files are used for any model cycle. These configs can be found under configs/
+In `fit` mode, one trains a UDTube model from scratch. Naturally, most
+configuration options need to be set at training time. E.g., it is not possible
+to switch between different pre-trained encoders or enable new tasks after
+training.
 
-For fit, there is a default fit_config.yaml
+This mode is invoked using the `fit` subcommand, like so:
 
-There are A LOT of options in the config, assuming nothing fancy, the most common parameters that might need to be changed depending on your uses are:
-- `model.path_name`
-- `model.model_name`
-- `data.language`
-- `data.train_dataset`
-- `data.val_dataset`
-- `data.batch_size` (depending on your computer)
+    udtube fit --config path/to/config.yaml
 
-Once your `fit_config.yaml` is in order, you can run the following:
+#### Seeding
 
-```
-python udtube.py fit --config configs/fit_config.yaml
-```
+Setting the `seed_everything:` argument to some value ensures a reproducible
+experiment.
 
-To read more about the options for training, please run
-```
-python udtube.py fit --help
-```
+#### Encoder
 
-**WandB is required to keep track of runs done with UDTube**
+The encoder layer consists of a pre-trained BERT-style transformer model. By
+default, UDTube uses multilingual cased BERT
+(`model: encoder: google-bert/bert-base-multilingual-cased`). In theory, UDTube
+can use any Hugging Face pre-trained encoder so long as it provides a
+`AutoTokenizer` and has been exposed to the target language. We [list all the
+Hugging Face encoders we have tested thus far](udtube/encoders.py), and warn
+users when selecting an untested encoder. Since there is no standard for
+referring to the between-layer dropout probability parameter, it is in some
+cases also necessary to specify what this argument is called for a given model.
+We welcome pull requests from users who successfully make use of encoders not
+listed here.
 
-## Testing
+So-called "tokenizer-free" pre-trained encoders like ByT5 are not currently
+supported as they lack an `AutoTokenizer`.
 
-If you're evaluating one of your models before using it, the `test_config.yaml` might be of use to you. Like for fitting, some common parameters will need to be set:
+#### Classifier
 
-- `model.path_name`
-- `model.model_name`
-- `model.checkpoint`
-- `data.checkpoint` (same as `model.checkpoint`, 99% of the time)
-- `data.language`
-- `data.test_dataset`
-- `data.batch_size` (depending on your computer)
+The classifier layer contains up to four sequential linear heads for the four
+tasks described above. By default all four are enabled.
 
-The checkpoints will be written to your dir, look for `.ckpt` extensions. Sometimes found hiding in a `lightning_logs/` subdir.
+#### Optimization
 
-Once your `test_config.yaml` is ready to go:
-```
-python udtube.py test --config configs/test_config.yaml
-```
+UDTube uses separate optimizers and LR schedulers for the encoder and
+classifier. The intuition behind this is that we may wish to make slow, small
+changes (or possibly, no changes at all) to the pre-trained encoder, whereas we
+wish to make more rapid and larger changes to the classifier.
 
-To read more about the options for testing, please run
-```
-python udtube.py test --help
-```
+The following YAML snippet shows a simple configuration that encapsulates this
+principle. It uses the Adam optimizer for both encoder and classifier, but uses
+a lower learning rate for the encoder with a linear warm-up and a higher
+learning rate for the classifier.
 
-## Predict
+    model:
+      encoder_optimizer:
+        class_path: torch.optim.Adam
+        init_args:
+          lr: 1e-5
+      encoder_scheduler:
+        class_path: udtube.schedulers.WarmupInverseSquareRoot
+        init_args:
+          warmup_epochs: 5
+      classifier_optimizer:
+        class_path: torch.optim.Adam
+        init_args:
+          lr: 1e-3
+      classifier_scheduler:
+        class_path: lightning.pytorch.cli.ReduceLROnPlateau
+        init_args:
+          monitor: val_loss
+          factor: 0.1
+      ...
 
-Once you have a model you're ready to throw a boatload of data at, you're ready to predict. The key prediction parameters are:
+To use a fixed learning rate for one or the other layer, specify
+`class_path: udtube.schedulers.DummyScheduler`.
 
-- `model.path_name`
-- `model.model_name`
-- `model.checkpoint`
-- `data.checkpoint` (same as model.checkpoint, 99% of the time)
-- `data.language`
-- `data.test_dataset`
-- `data.batch_size` (depending on your computer)
-- `output_file` (this can be set to stdout, but I recommend setting `trainer.enable_progress_bar` to `false` if doing so)
+#### Callbacks
 
-Once your `predict_config.yaml` is ready to go:
-```
-python udtube.py predict --config configs/predict_config.yaml
-```
+The user will likely want to configure additional callbacks. Some useful
+examples are given below.
 
-To learn more about the params for prediction:
-```
-python udtube.py predict --help
-```
+The
+[`ModelCheckpoint`](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.ModelCheckpoint.html)
+callback generates the checkpoints which give the highest validation accuracy. A
+sample YAML snippet is given below.
 
-## Research Done with UDTube
-- Yakubov, Daniel, "How Do We Learn What We Cannot Say?" (2024). CUNY Academic Works.
-https://academicworks.cuny.edu/gc_etds/5622
+    trainer:
+      callbacks:
+        - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+        init_args:
+          dirpath: /Users/Shinji/models/checkpoints
+          filename: "model-{epoch:03d}-{val_loss:.4f}"
+          monitor: val_loss
+          verbose: true
+      ...
 
-## Contributing
-Fork and Pull! 
+Note that without this, UDTube will not generate checkpoints! Adjust the
+`dirpath` argument as needed.
 
+The
+[`LearningRateMonitor`](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.LearningRateMonitor.html)
+callback records learning rates; this is useful when working with multiple
+optimizers and/or schedulers, as we do here. A sample YAML snippet is given
+below.
+
+    trainer:
+      callbacks:
+      - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+        init_args:
+          logging_interval: epoch
+      ...
+
+The
+[`EarlyStopping`](https://lightning.ai/docs/pytorch/stable/common/early_stopping.html)
+callback enables early stopping based on a monitored quantity and a fixed
+"patience". A sample YAML snipppet with a patience of 10 is given below.
+
+    trainer:
+      callbacks:
+      - class_path: lightning.pytorch.callbacks.EarlyStopping
+        init_args:
+          monitor: val_loss
+          patience: 10
+          verbose: true
+      ...
+
+Adjust the `patience` parameter as needed.
+
+All three of these features are enabled in the [sample configuration
+files](configs) we provide.
+
+#### Logging
+
+By default, UDTube performs some minimal logging to standard error and uses
+progress bars to keep track of progress during each epoch. However, one can
+enable additional logging faculties during training, using a similar syntax to
+the one we saw above for callbacks.
+
+The
+[`CSVLogger`](https://lightning.ai/docs/pytorch/stable/extensions/generated/lightning.pytorch.loggers.CSVLogger.html)
+logs all monitored quantities to a CSV file. A sample configuration is given
+below.
+
+    trainer:
+      logger:
+        - class_path: lightning.pytorch.loggers.CSVLogger
+          init_args:
+            save_dir: /Users/Shinji/models
+      ...
+       
+
+Adjust the `save_dir` argument as needed.
+
+The
+[`WandbLogger`](https://lightning.ai/docs/pytorch/stable/extensions/generated/lightning.pytorch.loggers.WandbLogger.html)
+works similarly to the `CSVLogger`, but sends the data to the third-party
+website [Weights & Biases](https://wandb.ai/site), where it can be used to
+generate charts or share artifacts. A sample configuration is given below.
+
+    trainer:
+      logger:
+      - class_path: lightning.pytorch.loggers.wandb.WandbLogger
+        init_args:
+          entity: NERV
+          project: unit1
+          save_dir: /Users/Shinji/models
+      ...
+
+Adjust the `entity`, `project`, and `save_dir` arguments as needed; note that
+this functionality requires a working account with Weights & Biases.
+
+#### Other options
+
+By default, UDTube attempts to model all four tasks; one can disable the
+language-specific tagging task using `model: use_xpos: false`, and so on.
+
+Dropout probability is specified using `model: dropout: ...`.
+
+The encoder has multiple layers. The input to the classifier consists of just
+the last few layers mean-pooled together. The number of layers used for
+mean-pooling is specified using `model: pooling_layers: ...`.
+
+By default, lemmatization uses reverse-edit scripts. This is appropriate for
+predominantly suffixal languages, which are thought to represent the majority of
+the world's languages. If working with a predominantly prefixal language,
+disable this with `model: reverse_edits: false`.
+
+The following YAML snippet shows the default architectural arguments.
+
+    model:
+        dropout: 0.5
+        encoder: google-bert/bert-base-multilingual-cased
+        pooling_layers: 4
+        reverse_edits: true
+        use_upos: true
+        use_xpos: true
+        use_lemma: true
+        use_feats: true
+        ...
+      
+
+Batch size is specified using `data: batch_size: ...` and defaults to 32.
+
+There are a number of ways to specify how long a model should train for. For
+example, the following YAML snippet specifies that training should run for 100
+epochs or 6 wall-clock hours, whichever comes first.
+
+    trainer:
+      max_epochs: 100
+      max_time: 00:06:00:00
+      ...
+
+### Validation (`validate`)
+
+In `validation` mode, one runs the validation step over labeled validation data
+(specified as `data: val: path/to/validation.conllu`) using a previously trained
+checkpoint (`--ckpt_path path/to/checkpoint.ckpt` from the command line),
+recording total loss and per-task accuracies. In practice this is mostly usefulf
+or debugging.
+
+This mode is invoked using the `validate` subcommand, like so:
+
+    udtube validate --config path/to/config.yaml --ckpt_path path/to/checkpoint.ckpt
+
+### Evaluation (`test`)
+
+In `test` mode, we compute accuracy over held-out test data (specified as
+`data: test: path/to/test.conllu`) using a previously trained checkpoint
+(`--ckpt_path path/to/checkpoint.ckpt` from the command line); it differs from
+`validation` mode in that it uses the `test` file rather than the `val` file and
+it does not compute loss.
+
+This mode is invoked using the `test` subcommand, like so:
+
+    udtube test --config path/to/config.yaml --ckpt_path path/to/checkpoint.ckpt
+
+### Inference (`predict`)
+
+In `predict` mode, a previously trained model checkpoint
+(`model: ckpt_path: path/to/checkpoint.ckpt`) is used to label a CoNLL-U file
+using a previously trained checkpoint (`ckpt_path path/to/checkpoint.ckpt` from
+the command line). To make this work, one must also specify a custom callback
+which handles conversion to CoNLL-U. The following YAML snippet shows this in
+use.
+
+    trainer:
+      callbacks:
+      - class_path: udtube.callbacks.PredictionWriter
+        init_args:
+          predictions: /Users/Shinji/predictions.conllu
+          model_dir: /Users/Shinji/models
+    ...
+
+Note that specifying this callback when not running in `predict` mode will do
+nothing other than create an empty text file.
+
+The following caveats apply:
+
+-   In `predict mode` UDTube loads the file to be labeled incrementally (i.e.,
+    one sentence at a time) so this can be used with very large files.
+-   The target task fields are overriden if their heads are active.
+-   Use [`scripts/pretokenize.py`](scripts/pretokenize.py) to convert raw text
+    files to CoNLL-U input files.
+
+This mode is invoked using the `predict` subcommand, like so:
+
+    udtube predict --config path/to/config.yaml --ckpt_path path/to/checkpoint.ckpt
+
+## Additional scripts
+
+See [`scripts/README.md`](scripts/README.md) for details on provided scripts not
+mention above.
+
+## License
+
+UDTube is distributed under an [Apache 2.0 license](LICENSE.txt).
+
+## Contribution
+
+We welcome contributions using the fork-and-pull model.
+
+## References
+
+If you use UDTube in your research, we would appreciate it if you cited the
+following document, which describes the model:
+
+Yakubov, D. 2024. [How do we learn what we cannot
+say?](https://academicworks.cuny.edu/gc_etds/5622/) Master's thesis, CUNY
+Graduate Center.
