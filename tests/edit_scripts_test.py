@@ -5,7 +5,7 @@ import unittest
 from udtube.data import edit_scripts
 
 
-class EScriptTest(unittest.TestCase):
+class EditScriptTest(unittest.TestCase):
     def assertValid(
         self, istring: str, ostring: str, script: edit_scripts.EditScript
     ) -> None:
