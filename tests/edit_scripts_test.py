@@ -13,7 +13,7 @@ class EditScriptTest(unittest.TestCase):
         exp_ostring = script.apply(istring)
         self.assertEqual(ostring, exp_ostring)
 
-    def testEmpty(self):
+    def test_empty(self):
         token = ""
         script = edit_scripts.EditScript(token, token)
         self.assertEqual(str(script), "")
@@ -22,7 +22,7 @@ class EditScriptTest(unittest.TestCase):
         self.assertEqual(str(rscript), "")
         self.assertValid(token, token, rscript)
 
-    def testIdentity(self):
+    def test_identity(self):
         token = "identify"
         script = edit_scripts.EditScript(token, token)
         self.assertEqual(str(script), "")
@@ -35,19 +35,19 @@ class EditScriptTest(unittest.TestCase):
         self.assertValid(token, token, script)
         self.assertValid(token, token, rscript)
 
-    def testPrefixation(self):
+    def test_prefixation(self):
         before = "umibig"
         after = "ibig"
         script = edit_scripts.EditScript(before, after)
         self.assertValid(before, after, script)
 
-    def testInfixation(self):
+    def test_infixation(self):
         before = "lipad"
         after = "lumipad"
         script = edit_scripts.EditScript(before, after)
         self.assertValid(before, after, script)
 
-    def testStemChange(self):
+    def test_stem_change(self):
         before = "Väter"
         after = "Vater"
         script = edit_scripts.EditScript(before, after)
@@ -55,13 +55,13 @@ class EditScriptTest(unittest.TestCase):
         rscript = edit_scripts.ReverseEditScript(before, after)
         self.assertValid(before, after, rscript)
 
-    def testStemChangeWithSuffixation(self):
+    def test_stem_change_with_suffixation(self):
         before = "Bäume"
         after = "Baum"
         rscript = edit_scripts.ReverseEditScript(before, after)
         self.assertValid(before, after, rscript)
 
-    def testSuffixation(self):
+    def test_suffixation(self):
         before = "столов"
         after = "стол"
         rscript = edit_scripts.ReverseEditScript(before, after)
@@ -69,7 +69,7 @@ class EditScriptTest(unittest.TestCase):
         # Works despite length mismatch.
         self.assertValid("градусов", "градус", rscript)
 
-    def testSpanishExample(self):
+    def test_spanish_example(self):
         # After Chrupała et al. 2008, p. 2362.
         before = "pidieron"
         after = "pedir"
