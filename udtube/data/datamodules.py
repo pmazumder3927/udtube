@@ -70,7 +70,6 @@ class DataModule(lightning.LightningDataModule):
         use_feats: bool = defaults.USE_FEATS,
         # Other.
         batch_size: int = defaults.BATCH_SIZE,
-        index: Optional[indexes.Index] = None,
     ):
         super().__init__()
         self.train = train
@@ -83,8 +82,13 @@ class DataModule(lightning.LightningDataModule):
         self.use_lemma = use_lemma
         self.use_feats = use_feats
         self.batch_size = batch_size
-        # FIXME I need to be able to load the index from a file too.
-        self.index = index if index else self._make_index(model_dir)
+        # If the training data is specified, it is used to create (or recreate)
+        # the index; if not specified it is read from the model directory.
+        self.index = (
+            self._make_index(model_dir)
+            if self.train
+            else indexes.Index.read(model_dir)
+        )
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(
             encoder, clean_up_tokenization_spaces=False
         )

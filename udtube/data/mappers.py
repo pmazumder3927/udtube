@@ -33,7 +33,6 @@ class LemmaMapper:
         """Applies the lemma tag to a form."""
         rule = self.edit_script.fromtag(tag)
         return rule.apply(form.casefold())
-        return self.upos is not None
 
 
 @dataclasses.dataclass
