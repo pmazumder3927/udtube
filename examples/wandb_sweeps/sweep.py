@@ -115,7 +115,11 @@ def main(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
-    cli.config_logging()
+    logging.basicConfig(
+        format="%(filename)s %(levelname)s: %(asctime)s - %(message)s",
+        datefmt="%d-%b-%y %H:%M:%S",
+        level="INFO",
+    )
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sweep_id", required=True, help="ID for the sweep.")
     parser.add_argument(

@@ -43,15 +43,12 @@ class UDTubeCLI(cli.LightningCLI):
         )
 
 
-def config_logging() -> None:
+def main() -> None:
     logging.basicConfig(
         format="%(filename)s %(levelname)s: %(asctime)s - %(message)s",
         datefmt="%d-%b-%y %H:%M:%S",
         level="INFO",
     )
-
-
-def main() -> None:
     UDTubeCLI(
         models.UDTube,
         data.DataModule,
@@ -60,5 +57,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    config_logging()
     main()

@@ -4,8 +4,8 @@ This directory contains example scripts for running a hyperparameter sweep with
 [Weights & Biases](https://wandb.ai/site).
 
 -   [`grid.yaml`](grid.yaml) contains just one possible hyperparameter grid,
-    designed for random search and Russian data; edit that file directly to
-    build a hyperparameter grid appropriate for your problem.
+    designed for random search; edit that file directly to build a
+    hyperparameter grid appropriate for your problem.
 -   Consider also running Bayesian search (`method: bayes`) instead of random
     search; see
     [here](https://docs.wandb.ai/guides/sweeps/define-sweep-configuration#configuration-keys)
@@ -28,7 +28,8 @@ Execute the following to create and run the sweep; here `${ENTITY}` and
 
     # Creates a sweep; save the sweep ID as ${SWEEP_ID} for later.
     wandb sweep --entity "${ENTITY}" --project "${PROJECT}" grid.yaml
-    # Runs the sweep itself.
+    # Runs the sweep itself using hyperparameters from the the sweep and
+    # additional fixed parameters from a UDTube config file.
     ./sweep.py --entity "${ENTITY}" --project "${PROJECT}" \
          --sweep_id "${SWEEP_ID}" --count "${COUNT}" --config syntagrus.yaml
 
