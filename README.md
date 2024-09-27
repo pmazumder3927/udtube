@@ -350,6 +350,11 @@ This mode is invoked using the `predict` subcommand, like so:
 
     udtube predict --config path/to/config.yaml --ckpt_path path/to/checkpoint.ckpt
 
+## Examples
+
+See [`examples`](examples/README.md) for some worked examples including
+hyperparameter sweeping with [Weights & Biases](https://wandb.ai/site).
+
 ## Additional scripts
 
 See [`scripts/README.md`](scripts/README.md) for details on provided scripts not
