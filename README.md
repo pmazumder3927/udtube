@@ -77,7 +77,13 @@ The following caveats apply:
 ## Usage
 
 The `udtube` command-line tool uses a subcommand interface, with the four
-following modes.
+following modes. To see the full set of options available with each
+subcommand, use the `--print_config` flag. For example:
+
+    udtube fit --print_config
+
+will show all configuration options (and their default values) for the
+`fit` subcommand.
 
 ### Training (`fit`)
 
