@@ -87,7 +87,8 @@ def _recursive_insert(config: Dict[str, Any], key: str, value: Any) -> None:
 def main(args: argparse.Namespace) -> None:
     with open(args.config, "r") as source:
         config = yaml.safe_load(source)
-    # TODO: manually enable W&B logger?
+    # TODO: Consider enabling the W&B logger; we are not sure if things will
+    # unless this is configured.
     temp_config = tempfile.NamedTemporaryFile(mode="w", suffix=".yaml")
     # This makes ARGV look like an ordinary fit call so we don't have to
     # make a shell call to start UDTube.
