@@ -70,7 +70,11 @@ def _recursive_insert(config: Dict[str, Any], key: str, value: Any) -> None:
     *most, last = key.split(".")
     ptr = config
     for piece in most:
-        ptr = ptr[piece]
+        try:
+            ptr = ptr[piece]
+        except KeyError:
+            ptr[piece] = {}
+            ptr = ptr[piece]
     if last in ptr:
         logging.debug(
             "Overriding configuration argument %s with W&B sweep value: %r",

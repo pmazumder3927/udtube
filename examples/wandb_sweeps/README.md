@@ -12,7 +12,7 @@ This directory contains example scripts for running a hyperparameter sweep with
     for more information.
 -   When running [`sweep.py`](sweep.py) you must provide the `--entity`,
     `--project` and `--sweep_id`; arguments not being tuned should be passed
-    using the `--config` file but note that hyperparameters set by the sweep 
+    using the `--config` file but note that hyperparameters set by the sweep
     will override those specified in the `--config`.
 -   By default `random` and `bayes` search run indefinitely, until they are
     killed. To specify a fixed number of samples, provide the `--count` argument
@@ -30,7 +30,7 @@ Execute the following to create and run the sweep; here `${ENTITY}` and
     wandb sweep --entity "${ENTITY}" --project "${PROJECT}" grid.yaml
     # Runs the sweep itself.
     ./sweep.py --entity "${ENTITY}" --project "${PROJECT}" \
-         --sweep_id "${SWEEP_ID}" --count "${COUNT}" --config ...
+         --sweep_id "${SWEEP_ID}" --count "${COUNT}" --config syntagrus.yaml
 
 Then, one can retrieve the results as follows:
 
