@@ -11,8 +11,6 @@ from . import data, models
 class PredictionWriter(callbacks.BasePredictionWriter):
     """Writes predictions in CoNLL-U format.
 
-    Fields not related to the four heads, and
-
     Args:
         predictions: path for the predictions file.
     """
