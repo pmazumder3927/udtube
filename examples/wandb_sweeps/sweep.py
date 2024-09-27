@@ -2,32 +2,39 @@
 """Runs a W&B sweep."""
 
 import argparse
+import functools
 import logging
+import sys
+import tempfile
 import traceback
 import warnings
 
-import torch
-import wandb
+from typing import Any, Dict, TextIO
 
+import torch
+import yaml
 from udtube import cli
+
+import wandb
 
 warnings.filterwarnings("ignore", ".*is a wandb run already in progress.*")
 
 
-def train_sweep(args: argparse.Namespace) -> None:
+def train_sweep(config: Dict[str, Any], temp_config: TextIO) -> None:
     """Runs a single training run.
 
-    The wandb config data used here comes from the environment.
-
     Args:
-        args (argparse.Namespace).
+        config: path to UDTube YAML config file.
+        temp_config: temporary configuration file handle.
     """
-    wandb.init()
-    arglist = [
-        f"--{key} {value!r}" for key, value in dict(wandb.config).items()
-    ]
+    populate_config(config, temp_config)
+    run_sweep()
+
+
+def run_sweep() -> None:
+    """Actually runs the sweep."""
     try:
-        cli.fit_for_sweep(arglist)
+        cli.main()
     except RuntimeError as error:
         # TODO: consider specializing this further if a solution to
         # https://github.com/pytorch/pytorch/issues/48365 is accepted.
@@ -37,14 +44,62 @@ def train_sweep(args: argparse.Namespace) -> None:
         torch.cuda.empty_cache()
 
 
+def populate_config(config: Dict[str, Any], temp_config: TextIO) -> None:
+    """Populates temporary configuration file.
+
+    The wandb config data used here comes from the environment.
+
+    Args:
+        config: path to UDTube YAML config file.
+        temp_config: temporary configuration file handle.
+    """
+    wandb.init()
+    for key, value in wandb.config.items():
+        _recursive_insert(config, key, value)
+    yaml.dump(config, temp_config)
+
+
+def _recursive_insert(config: Dict[str, Any], key: str, value: Any) -> None:
+    """Recursively inserts values into a nested dictionary.
+
+    Args:
+        config: the config dictionary.
+        key: a string with the arguments separated by ".".
+        value: the value to insert.
+    """
+    *most, last = key.split(".")
+    ptr = config
+    for piece in most:
+        ptr = ptr[piece]
+    if last in ptr:
+        logging.debug(
+            "Overriding configuration argument %s with W&B sweep value: %r",
+            key,
+            value,
+        )
+    ptr[last] = value
+
+
 def main(args: argparse.Namespace) -> None:
+    with open(args.config, "r") as source:
+        config = yaml.safe_load(source)
     # TODO: manually enable W&B logger?
+    temp_config = tempfile.NamedTemporaryFile(mode="w", suffix=".yaml")
+    # This makes ARGV look like an ordinary fit call so we don't have to
+    # make a shell call to start UDTube.
+    sys.argv = [
+        sys.argv[0],
+        "fit",
+        "--config",
+        temp_config.name,
+        *sys.argv[1:],
+    ]
     try:
         wandb.agent(
             sweep_id=args.sweep_id,
             entity=args.entity,
             project=args.project,
-            function=train_sweep,
+            function=functools.partial(train_sweep, config, temp_config),
             count=args.count,
         )
     except Exception:
@@ -66,4 +121,9 @@ if __name__ == "__main__":
         "--project", required=True, help="The project of the sweep."
     )
     parser.add_argument("--count", type=int, help="Number of runs to perform.")
-    main(parser.parser_args())
+    parser.add_argument("--config", required=True)
+    # We pass the known args to main but remove them from ARGV.
+    # See: https://docs.python.org/3/library/argparse.html#partial-parsing
+    # This allows the user to override config arguments with CLI arguments.
+    args, sys.argv[1:] = parser.parse_known_args()
+    main(args)

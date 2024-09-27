@@ -1,7 +1,6 @@
 """Command-line interface."""
 
 import logging
-from typing import Optional
 
 from lightning.pytorch import cli
 
@@ -53,24 +52,13 @@ def config_logging() -> None:
 
 
 def main() -> None:
-    config_logging()
     UDTubeCLI(
         models.UDTube,
         data.DataModule,
         auto_configure_optimizers=False,
     )
-
-
-def fit_for_sweep(args: Optional[ArgsType] = None) -> None:
-    UDTubeCLI(
-        models.UDTube,
-        data.DataModule,
-        auto_configure_optimizers=False,
-        args=args,
-        run=False,
-    )
-    cli.trainer.fit(cli.model)
 
 
 if __name__ == "__main__":
+    config_logging()
     main()

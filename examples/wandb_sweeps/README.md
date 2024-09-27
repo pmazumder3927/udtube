@@ -27,7 +27,7 @@ Execute the following to create and run the sweep; here `${ENTITY}` and
 `${PROJECT}` are assumed to be pre-specified environmental variables.
 
     # Creates a sweep; save the sweep ID as ${SWEEP_ID} for later.
-    wandb sweep --entity "${ENTITY}" --project "${PROJECT}" config.yaml
+    wandb sweep --entity "${ENTITY}" --project "${PROJECT}" grid.yaml
     # Runs the sweep itself.
     ./sweep.py --entity "${ENTITY}" --project "${PROJECT}" \
          --sweep_id "${SWEEP_ID}" --count "${COUNT}" --config ...
