@@ -46,6 +46,8 @@ parameters:
     distribution: uniform
     min: .1
     max: .9
+  model.classifier_scheduler.init_args.patience:
+    value: 5
   data.batch_size:
     values:
       - 8
