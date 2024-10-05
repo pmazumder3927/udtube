@@ -192,6 +192,7 @@ class DataModule(lightning.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=1,
+            persistent_workers=True,
         )
 
     def val_dataloader(self) -> data.DataLoader:
@@ -205,6 +206,7 @@ class DataModule(lightning.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=1,
+            persistent_workers=True,
         )
 
     def predict_dataloader(self) -> data.DataLoader:
@@ -219,6 +221,7 @@ class DataModule(lightning.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=1,
+            persistent_workers=True,
         )
 
     def test_dataloader(self) -> data.DataLoader:
@@ -232,6 +235,7 @@ class DataModule(lightning.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=1,
+            persistent_workers=True,
         )
 
     def _conllu_map_dataset(self, source: str) -> datasets.ConlluMapDataset:
