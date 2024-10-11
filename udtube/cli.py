@@ -2,7 +2,7 @@
 
 import logging
 
-from lightning.pytorch import cli
+from lightning.pytorch import callbacks as pytorch_callbacks, cli
 
 from . import callbacks, data, models
 
@@ -16,14 +16,20 @@ class UDTubeCLI(cli.LightningCLI):
 
     Use with `--help` to see full set of options."""
 
-    @staticmethod
-    def add_arguments_to_parser(parser: cli.LightningArgumentParser) -> None:
-        parser.add_argument(
-            "--predict_path",
-            help="Path for predicted CoNLL-U file (predict " "mode only)",
+    def add_arguments_to_parser(
+        self, parser: cli.LightningArgumentParser
+    ) -> None:
+        parser.add_lightning_class_args(
+            pytorch_callbacks.ModelCheckpoint,
+            "checkpoint",
+        )
+        parser.add_lightning_class_args(
+            callbacks.PredictionWriter,
+            "prediction",
         )
         # Links.
         parser.link_arguments("model.encoder", "data.encoder")
+        parser.link_arguments("data.model_dir", "prediction.model_dir")
         parser.link_arguments("data.model_dir", "trainer.default_root_dir")
         parser.link_arguments("model.reverse_edits", "data.reverse_edits")
         parser.link_arguments(
@@ -46,18 +52,6 @@ class UDTubeCLI(cli.LightningCLI):
             "model.feats_out_size",
             apply_on="instantiate",
         )
-
-    def before_instantiate_classes(self) -> None:
-        # Automatically adds the prediction callback.
-        if self.subcommand == "predict":
-            if self.config.predict.predict_path is None:
-                raise Error("predict_path not specified")
-            self.trainer_defaults["callbacks"] = [
-                callbacks.PredictionWriter(
-                    self.config.predict.predict_path,
-                    self.config.predict.data.model_dir,
-                )
-            ]
 
 
 def main() -> None:

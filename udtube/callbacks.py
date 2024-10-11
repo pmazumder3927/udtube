@@ -1,5 +1,6 @@
 """Custom callbacks."""
 
+import sys
 from typing import Optional, Sequence, TextIO
 
 from lightning.pytorch import callbacks, trainer
@@ -12,18 +13,25 @@ class PredictionWriter(callbacks.BasePredictionWriter):
     """Writes predictions in CoNLL-U format.
 
     Args:
-        predictions: path for the predictions file.
+        predict_path: Path for the predictions file.
+        model_dir: Path for checkpoints, indexes, and logs.
     """
 
     sink: TextIO
     mapper: data.Mapper
 
-    def __init__(self, predictions: str, model_dir: str):
+    def __init__(
+        self,
+        predict_path: str = "",  # If not filled in, stdout will be used.
+        model_dir: str = "",  # Dummy value filled in by a link.
+    ):
         super().__init__("batch")
-        self.sink = open(predictions, "w")
+        self.sink = open(predict_path, "w") if predict_path else sys.stdout
+        assert model_dir, "no model_dir specified"
         self.mapper = data.Mapper.read(model_dir)
 
     def __del__(self):
+        # This appears to be harmless on sys.stdout.
         self.sink.close()
 
     # Required API.

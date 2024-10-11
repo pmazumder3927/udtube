@@ -61,7 +61,7 @@ class UDTube(lightning.LightningModule):
         encoder_scheduler: cli.LRSchedulerCallable = defaults.SCHEDULER,
         classifier_optimizer: cli.OptimizerCallable = defaults.OPTIMIZER,
         classifier_scheduler: cli.LRSchedulerCallable = defaults.SCHEDULER,
-        # `2` is a dummy value here; it will be set by the data set object.
+        # Dummy values which will be filled in via links.
         upos_out_size: int = 2,
         xpos_out_size: int = 2,
         lemma_out_size: int = 2,
