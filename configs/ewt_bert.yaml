@@ -5,7 +5,7 @@ trainer:
   callbacks:
     - class_path: udtube.callbacks.PredictionWriter
       init_args:
-        predictions: /Users/Shinji/UD_English-EWT/predictions.conllu
+        path: /Users/Shinji/UD_English-EWT/predictions.conllu
         model_dir: /Users/Shinji/UD_English-EWT/models
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:

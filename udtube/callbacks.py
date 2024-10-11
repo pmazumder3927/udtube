@@ -12,15 +12,15 @@ class PredictionWriter(callbacks.BasePredictionWriter):
     """Writes predictions in CoNLL-U format.
 
     Args:
-        predictions: path for the predictions file.
+        path: path for the predictions file.
     """
 
     sink: TextIO
     mapper: data.Mapper
 
-    def __init__(self, predictions: str, model_dir: str):
+    def __init__(self, path: str, model_dir: str):
         super().__init__("batch")
-        self.sink = open(predictions, "w")
+        self.sink = open(path, "w")
         self.mapper = data.Mapper.read(model_dir)
 
     def __del__(self):

@@ -5,7 +5,7 @@ trainer:
   callbacks:
     - class_path: udtube.callbacks.PredictionWriter
       init_args:
-        predictions: /Users/Shinji/UD_Russian-SynTagRus/predictions.conllu
+        path: /Users/Shinji/UD_Russian-SynTagRus/predictions.conllu
         model_dir: /Users/Shinji/UD_Russian-SynTagRus/models
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
