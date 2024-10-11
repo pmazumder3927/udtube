@@ -8,7 +8,7 @@ import transformers
 from torch.utils import data
 
 from .. import defaults
-from . import collators, datasets, indexes, mappers, parsers
+from . import collators, conllu, datasets, indexes, mappers
 
 
 class Error(Exception):
@@ -119,9 +119,9 @@ class DataModule(lightning.LightningDataModule):
         lemma_vocabulary = set() if self.use_lemma else None
         feats_vocabulary = set() if self.use_feats else None
         lemma_mapper = mappers.LemmaMapper(self.reverse_edits)
-        for tokenlist in parsers.parse(self.train):
-            # We don't need to collect the upos vocabulary because "u" stands
-            # for "universal" here.
+        for tokenlist in conllu.parse(self.train):
+            # We don't need to collect the upos vocabulary because "u"
+            # stands for "universal" here.
             if self.use_xpos:
                 xpos_vocabulary.update(token["xpos"] for token in tokenlist)
             if self.use_lemma:
@@ -213,10 +213,7 @@ class DataModule(lightning.LightningDataModule):
         return data.DataLoader(
             # This one uses an iterative data loader instead.
             datasets.ConlluIterDataset(self.predict),
-            collate_fn=collators.Collator(
-                self.tokenizer,
-                self.index,
-            ),
+            collate_fn=collators.Collator(self.tokenizer, self.index),
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=1,
@@ -237,9 +234,9 @@ class DataModule(lightning.LightningDataModule):
             persistent_workers=True,
         )
 
-    def _conllu_map_dataset(self, source: str) -> datasets.ConlluMapDataset:
+    def _conllu_map_dataset(self, path: str) -> datasets.ConlluMapDataset:
         return datasets.ConlluMapDataset(
-            list(parsers.parse(source)),
+            list(conllu.parse(path)),
             mappers.Mapper(self.index),
             self.use_upos,
             self.use_xpos,

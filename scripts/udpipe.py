@@ -8,9 +8,6 @@ import spacy_udpipe
 from udtube import data
 
 
-BLANK = "_"
-
-
 def main(args: argparse.Namespace) -> None:
     spacy_udpipe.download(args.langcode)
     model = spacy_udpipe.load(args.langcode)
@@ -26,8 +23,7 @@ def main(args: argparse.Namespace) -> None:
                 input_token["lemma"] = result_token.lemma_
                 input_token["feats"] = str(result_token.morph)
                 tokenlist[i] = input_token
-            # Prevents it from adding an extra newline.
-            print(tokenlist.serialize(), file=sink, end="")
+            print(tokenlist.serialize(), file=sink)
 
 
 if __name__ == "__main__":

@@ -82,6 +82,5 @@ class PredictionWriter(callbacks.BasePredictionWriter):
                 feats_hat = self.mapper.decode_feats(y_feats_hat[i, :])
                 for j, feats in enumerate(feats_hat[: len(tokenlist)]):
                     tokenlist[j]["feats"] = feats
-            # Prevents it from adding an extra newline.
-            print(tokenlist.serialize(), file=self.sink, end="")
+            print(tokenlist.serialize(), file=self.sink)
         self.sink.flush()

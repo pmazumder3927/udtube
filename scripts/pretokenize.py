@@ -3,8 +3,8 @@
 
 import argparse
 
-import conllu
 import spacy_udpipe
+from udtube import data
 
 BLANK = "_"
 
@@ -17,7 +17,7 @@ def main(args: argparse.Namespace) -> None:
         open(args.conllu, "w") as sink,
     ):
         for sentence in tokenize(source.read()).sents:
-            tokenlist = conllu.TokenList(
+            tokenlist = data.TokenList(
                 [
                     {
                         "id": index,
@@ -36,8 +36,7 @@ def main(args: argparse.Namespace) -> None:
                 ],
                 metadata={"text": sentence},
             )
-            # Prevents it from adding an extra newline.
-            print(tokenlist.serialize(), file=sink, end="")
+            print(tokenlist.serialize(), file=sink)
 
 
 if __name__ == "__main__":
