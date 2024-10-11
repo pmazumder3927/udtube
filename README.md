@@ -77,13 +77,13 @@ The following caveats apply:
 ## Usage
 
 The `udtube` command-line tool uses a subcommand interface, with the four
-following modes. To see the full set of options available with each
-subcommand, use the `--print_config` flag. For example:
+following modes. To see the full set of options available with each subcommand,
+use the `--print_config` flag. For example:
 
     udtube fit --print_config
 
-will show all configuration options (and their default values) for the
-`fit` subcommand.
+will show all configuration options (and their default values) for the `fit`
+subcommand.
 
 ### Training (`fit`)
 
@@ -135,6 +135,7 @@ principle. It uses the Adam optimizer for both encoder and classifier, but uses
 a lower learning rate for the encoder with a linear warm-up and a higher
 learning rate for the classifier.
 
+    ...
     model:
       encoder_optimizer:
         class_path: torch.optim.Adam
@@ -155,8 +156,8 @@ learning rate for the classifier.
           factor: 0.1
       ...
 
-To use a fixed learning rate for one or the other layer, specify
-`class_path: udtube.schedulers.DummyScheduler`.
+The default scheduler is `udtube.schedulers.DummyScheduler`, which keeps
+learning rate fixed to its initial value.
 
 #### Callbacks
 
@@ -168,6 +169,7 @@ The
 callback generates the checkpoints which give the highest validation accuracy. A
 sample YAML snippet is given below.
 
+    ...
     trainer:
       callbacks:
         - class_path: lightning.pytorch.callbacks.ModelCheckpoint
@@ -187,6 +189,7 @@ callback records learning rates; this is useful when working with multiple
 optimizers and/or schedulers, as we do here. A sample YAML snippet is given
 below.
 
+    ...
     trainer:
       callbacks:
       - class_path: lightning.pytorch.callbacks.LearningRateMonitor
@@ -199,6 +202,7 @@ The
 callback enables early stopping based on a monitored quantity and a fixed
 "patience". A sample YAML snipppet with a patience of 10 is given below.
 
+    ...
     trainer:
       callbacks:
       - class_path: lightning.pytorch.callbacks.EarlyStopping
@@ -225,6 +229,7 @@ The
 logs all monitored quantities to a CSV file. A sample configuration is given
 below.
 
+    ...
     trainer:
       logger:
         - class_path: lightning.pytorch.loggers.CSVLogger
@@ -241,6 +246,7 @@ works similarly to the `CSVLogger`, but sends the data to the third-party
 website [Weights & Biases](https://wandb.ai/site), where it can be used to
 generate charts or share artifacts. A sample configuration is given below.
 
+    ...
     trainer:
       logger:
       - class_path: lightning.pytorch.loggers.wandb.WandbLogger
@@ -271,6 +277,7 @@ disable this with `model: reverse_edits: false`.
 
 The following YAML snippet shows the default architectural arguments.
 
+    ...
     model:
         dropout: 0.5
         encoder: google-bert/bert-base-multilingual-cased
@@ -289,6 +296,7 @@ There are a number of ways to specify how long a model should train for. For
 example, the following YAML snippet specifies that training should run for 100
 epochs or 6 wall-clock hours, whichever comes first.
 
+    ...
     trainer:
       max_epochs: 100
       max_time: 00:06:00:00
@@ -323,20 +331,12 @@ This mode is invoked using the `test` subcommand, like so:
 In `predict` mode, a previously trained model checkpoint
 (`model: ckpt_path: path/to/checkpoint.ckpt`) is used to label a CoNLL-U file
 using a previously trained checkpoint (`ckpt_path path/to/checkpoint.ckpt` from
-the command line). To make this work, one must also specify a custom callback
-which handles conversion to CoNLL-U. The following YAML snippet shows this in
-use.
+the command line). One must specify the path where the predictions will be
+written.
 
-    trainer:
-      callbacks:
-      - class_path: udtube.callbacks.PredictionWriter
-        init_args:
-          predictions: /Users/Shinji/predictions.conllu
-          model_dir: /Users/Shinji/models
     ...
-
-Note that specifying this callback when not running in `predict` mode will do
-nothing other than create an empty text file.
+    predict_path: /Users/Shinji/predictions.conllu
+    ...
 
 The following caveats apply:
 

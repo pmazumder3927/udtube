@@ -3,10 +3,6 @@ trainer:
   max_epochs: 100
   max_time: 00:06:00:00
   callbacks:
-    - class_path: udtube.callbacks.PredictionWriter
-      init_args:
-        predictions: /Users/Shinji/UD_Russian-SynTagRus/predictions.conllu
-        model_dir: /Users/Shinji/UD_Russian-SynTagRus/models
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
         dirpath: /Users/Shinji/UD_Russian-SynTagRus/models/checkpoints
