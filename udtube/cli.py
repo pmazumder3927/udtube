@@ -4,7 +4,11 @@ import logging
 
 from lightning.pytorch import cli
 
-from . import data, models
+from . import callbacks, data, models
+
+
+class Error(Exception):
+    pass
 
 
 class UDTubeCLI(cli.LightningCLI):
@@ -15,7 +19,8 @@ class UDTubeCLI(cli.LightningCLI):
     @staticmethod
     def add_arguments_to_parser(parser: cli.LightningArgumentParser) -> None:
         parser.add_argument(
-            "--predictions", help="Path for predictions .conllu file"
+            "--predict_path",
+            help="Path for predicted CoNLL-U file (predict " "mode only)",
         )
         # Links.
         parser.link_arguments("model.encoder", "data.encoder")
@@ -41,6 +46,18 @@ class UDTubeCLI(cli.LightningCLI):
             "model.feats_out_size",
             apply_on="instantiate",
         )
+
+    def before_instantiate_classes(self) -> None:
+        # Automatically adds the prediction callback.
+        if self.subcommand == "predict":
+            if self.config.predict.predict_path is None:
+                raise Error("predict_path not specified")
+            self.trainer_defaults["callbacks"] = [
+                callbacks.PredictionWriter(
+                    self.config.predict.predict_path,
+                    self.config.predict.data.model_dir,
+                )
+            ]
 
 
 def main() -> None:
