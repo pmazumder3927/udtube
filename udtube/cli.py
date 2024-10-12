@@ -4,11 +4,7 @@ import logging
 
 from lightning.pytorch import callbacks as pytorch_callbacks, cli
 
-from . import callbacks, data, models
-
-
-class Error(Exception):
-    pass
+from . import callbacks, data, models, trainers
 
 
 class UDTubeCLI(cli.LightningCLI):
@@ -64,6 +60,9 @@ def main() -> None:
         models.UDTube,
         data.DataModule,
         auto_configure_optimizers=False,
+        # Prevents prediction logits from accumulating in memory; see the
+        # documentation in `trainers.py` for more context.
+        trainer_class=trainers.Trainer,
     )
 
 
