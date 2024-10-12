@@ -159,29 +159,27 @@ learning rate for the classifier.
 The default scheduler is `udtube.schedulers.DummyScheduler`, which keeps
 learning rate fixed to its initial value.
 
+#### Checkpointing
+
+The
+[`ModelCheckpoint`](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.ModelCheckpoint.html)
+is used to control the generation of checkpoint files. A sample YAML snippet is
+given below.
+
+    ...
+    checkpoint:
+      filename: "model-{epoch:03d}-{val_loss:.4f}"
+      monitor: val_loss
+      verbose: true
+      ...
+
+Without some specification under `checkpoint:` UDTube will not generate
+checkpoints!
+
 #### Callbacks
 
 The user will likely want to configure additional callbacks. Some useful
 examples are given below.
-
-The
-[`ModelCheckpoint`](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.ModelCheckpoint.html)
-callback generates the checkpoints which give the highest validation accuracy. A
-sample YAML snippet is given below.
-
-    ...
-    trainer:
-      callbacks:
-        - class_path: lightning.pytorch.callbacks.ModelCheckpoint
-        init_args:
-          dirpath: /Users/Shinji/models/checkpoints
-          filename: "model-{epoch:03d}-{val_loss:.4f}"
-          monitor: val_loss
-          verbose: true
-      ...
-
-Note that without this, UDTube will not generate checkpoints! Adjust the
-`dirpath` argument as needed.
 
 The
 [`LearningRateMonitor`](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.LearningRateMonitor.html)
@@ -279,15 +277,15 @@ The following YAML snippet shows the default architectural arguments.
 
     ...
     model:
-        dropout: 0.5
-        encoder: google-bert/bert-base-multilingual-cased
-        pooling_layers: 4
-        reverse_edits: true
-        use_upos: true
-        use_xpos: true
-        use_lemma: true
-        use_feats: true
-        ...
+      dropout: 0.5
+      encoder: google-bert/bert-base-multilingual-cased
+      pooling_layers: 4
+      reverse_edits: true
+      use_upos: true
+      use_xpos: true
+      use_lemma: true
+      use_feats: true
+      ...
       
 
 Batch size is specified using `data: batch_size: ...` and defaults to 32.
@@ -329,19 +327,22 @@ This mode is invoked using the `test` subcommand, like so:
 ### Inference (`predict`)
 
 In `predict` mode, a previously trained model checkpoint
-(`model: ckpt_path: path/to/checkpoint.ckpt`) is used to label a CoNLL-U file
-using a previously trained checkpoint (`ckpt_path path/to/checkpoint.ckpt` from
-the command line). One must specify the path where the predictions will be
+(`--ckpt_path path/to/checkpoint.ckpt` from the command line) is used to label a
+CoNLL-U file. One must also specify the path where the predictions will be
 written.
 
     ...
-    predict_path: /Users/Shinji/predictions.conllu
+    predict:
+      path: /Users/Shinji/predictions.conllu
     ...
 
-The following caveats apply:
+Here are some additional details:
 
--   In `predict mode` UDTube loads the file to be labeled incrementally (i.e.,
+-   In `predict` mode UDTube loads the file to be labeled incrementally (i.e.,
     one sentence at a time) so this can be used with very large files.
+-   In `predict` mode, if no path for the predictions is specified, stdout will
+    be used. If using this in conjunction with \> or \|, add
+    `--trainer.enable_progress_bar false` on the command line.
 -   The target task fields are overriden if their heads are active.
 -   Use [`scripts/pretokenize.py`](scripts/pretokenize.py) to convert raw text
     files to CoNLL-U input files.

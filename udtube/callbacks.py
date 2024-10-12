@@ -12,25 +12,24 @@ from . import data, models
 class PredictionWriter(callbacks.BasePredictionWriter):
     """Writes predictions in CoNLL-U format.
 
+    If path is not specified, stdout is used. If using this in conjunction
+    with > or |, add --trainer.enable_progress_bar false.
+
     Args:
-        predict_path: Path for the predictions file.
+        path: Path for the predictions file.
         model_dir: Path for checkpoints, indexes, and logs.
     """
 
     sink: TextIO
     mapper: data.Mapper
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 0749511 (Day's work)
     def __init__(
         self,
-        predict_path: str = "",  # If not filled in, stdout will be used.
+        path: Optional[str] = None,  # If not filled in, stdout will be used.
         model_dir: str = "",  # Dummy value filled in by a link.
     ):
         super().__init__("batch")
-        self.sink = open(predict_path, "w") if predict_path else sys.stdout
+        self.sink = open(path, "w") if path else sys.stdout
         assert model_dir, "no model_dir specified"
         self.mapper = data.Mapper.read(model_dir)
 
