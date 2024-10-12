@@ -61,11 +61,10 @@ class UDTube(lightning.LightningModule):
         encoder_scheduler: cli.LRSchedulerCallable = defaults.SCHEDULER,
         classifier_optimizer: cli.OptimizerCallable = defaults.OPTIMIZER,
         classifier_scheduler: cli.LRSchedulerCallable = defaults.SCHEDULER,
-        # Dummy values which will be filled in via links.
-        upos_out_size: int = 2,
-        xpos_out_size: int = 2,
-        lemma_out_size: int = 2,
-        feats_out_size: int = 2,
+        upos_out_size: int = 2,  # Dummy value filled in via link.
+        xpos_out_size: int = 2,  # Dummy value filled in via link.
+        lemma_out_size: int = 2,  # Dummy value filled in via link.
+        feats_out_size: int = 2,  # Dummy value filled in via link.
     ):
         super().__init__()
         # See what this disables here:
