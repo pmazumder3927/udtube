@@ -1,7 +1,7 @@
 """CoNLL-U file parser
 
 This is roughly compatible with the third-party package `conllu`, though it
-only has features we care about, and supports streaming inputs."""
+only has features we care about."""
 
 import re
 

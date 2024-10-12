@@ -13,13 +13,13 @@ class PredictionWriter(callbacks.BasePredictionWriter):
     """Writes predictions in CoNLL-U format.
 
     Args:
-        predict_path: Path for the predictions file.
-        model_dir: Path for checkpoints, indexes, and logs.
+        path: path for the predictions file.
     """
 
     sink: TextIO
     mapper: data.Mapper
 
+<<<<<<< HEAD
     def __init__(
         self,
         predict_path: str = "",  # If not filled in, stdout will be used.
