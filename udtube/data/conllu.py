@@ -59,10 +59,10 @@ class TokenList:
     def __iter__(self) -> Iterator[Dict[str, str]]:
         return iter(self.tokens)
 
-    def __setitem__(self, index: int, value: Dict) -> None:
+    def __setitem__(self, index: int, value: Dict[str, str]) -> None:
         self.tokens[index] = value
 
-    def append(self, token: Dict) -> None:
+    def append(self, token: Dict[str, str]) -> None:
         self.tokens.append(token)
 
 
@@ -123,5 +123,15 @@ def _parse_from_handle(handle: TextIO) -> Iterator[TokenList]:
 
 
 def parse_from_path(path: str) -> Iterator[TokenList]:
+    """Incrementally parses a CoNLL-U file from an file path.
+
+    This does not backtrack/rewind so it can be used with streaming inputs.
+
+    Args:
+        path: path to input CoNLL-U file.
+
+    Yields:
+        TokenLists.
+    """
     with open(path, "r") as source:
         yield from _parse_from_handle(source)
