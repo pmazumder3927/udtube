@@ -53,9 +53,9 @@ data:
   test: /Users/Shinji/UD_English-EWT/en_ewt-ud-test.conllu
   predict: /Users/Shinji/UD_English-EWT/en_ewt-ud-test.conllu
   batch_size: 32
+prediction:
+  predict_path: /Users/Shinji/UD_English-EWT/predictions.conllu
 checkpoint:
   filename: "model-{epoch:03d}-{val_loss:.4f}"
   monitor: val_loss
   verbose: true
-prediction:
-  path: /Users/Shinji/UD_English-EWT/predictions.conllu
