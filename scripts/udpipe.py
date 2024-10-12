@@ -12,7 +12,7 @@ def main(args: argparse.Namespace) -> None:
     spacy_udpipe.download(args.langcode)
     model = spacy_udpipe.load(args.langcode)
     with open(args.output, "w") as sink:
-        for tokenlist in data.parse(args.input):
+        for tokenlist in data.parse_from_path(args.input):
             # The model insists on retokenizing the data but this is harmless.
             result = model(tokenlist.metadata["text"])
             for i, (input_token, result_token) in enumerate(

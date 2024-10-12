@@ -18,7 +18,8 @@ def main(args: argparse.Namespace) -> None:
     correct_feats = 0
     total = 0
     for linenum, (gold_list, hypo_list) in enumerate(
-        zip(data.parse(args.gold), data.parse(args.hypo)), 1
+        zip(data.parse_from_path(args.gold), data.parse_from_path(args.hypo)),
+        1,
     ):
         if len(gold_list) != len(hypo_list):
             raise Error("Length mismatch on sentence %d", linenum)
