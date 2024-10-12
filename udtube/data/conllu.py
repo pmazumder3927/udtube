@@ -5,7 +5,7 @@ only has features we care about."""
 
 import re
 
-from typing import Dict, Iterable, Iterator, List
+from typing import Dict, Iterable, Iterator, List, TextIO
 
 
 # From: https://universaldependencies.org/format.html.
@@ -31,10 +31,10 @@ class TokenList:
         metadata: ordered dictionary of string/key pairs.
     """
 
-    tokens: List[Dict]
+    tokens: List[Dict[str, str]]
     metadata: Dict[str, str]
 
-    def __init__(self, tokens: Iterable[Dict], metadata=None):
+    def __init__(self, tokens: Iterable[Dict[str, str]], metadata=None):
         self.tokens = list(tokens)
         self.metadata = metadata if metadata is not None else {}
 
@@ -50,13 +50,13 @@ class TokenList:
             line_buf.append("\t".join(col_buf))
         return "\n".join(line_buf) + "\n"
 
-    def __getitem__(self, index: int) -> Dict:
+    def __getitem__(self, index: int) -> Dict[str, str]:
         return self.tokens[index]
 
     def __len__(self) -> int:
         return len(self.tokens)
 
-    def __iter__(self) -> Iterator[Dict]:
+    def __iter__(self) -> Iterator[Dict[str, str]]:
         return iter(self.tokens)
 
     def __setitem__(self, index: int, value: Dict) -> None:
@@ -66,30 +66,62 @@ class TokenList:
         self.tokens.append(token)
 
 
-def parse(path: str) -> Iterator[TokenList]:
-    """Incrementally parses a CoNLL-U file.
+# Parsing.
+
+
+def parse_from_string(buffer: str) -> TokenList:
+    """Parses a CoNLL-U sentence from a string.
 
     Args:
-        path: path to input CoNLL-U file.
+        buffer: string containing a serialized sentence.
+
+    Return:
+        TokenList.
+    """
+    # Unfortunately it wasn't obvious how to do this without
+    # repeating some of the logic in the following function.
+    metadata = {}
+    tokens = []
+    for line in buffer.splitlines():
+        line = line.strip()
+        mtch = re.fullmatch(r"#\s+(.+?)\s+=\s+(.*)", line)
+        if mtch:
+            metadata[mtch.group(1)] = mtch.group(2)
+        if not mtch:
+            tokens.append(dict(zip(_fieldnames, line.split("\t"))))
+    return TokenList(tokens, metadata)
+
+
+def _parse_from_handle(handle: TextIO) -> Iterator[TokenList]:
+    """Incrementally parses a CoNLL-U file from an file handle.
+
+    This does not backtrack/rewind so it can be used with streaming inputs.
+
+    Args:
+        handle: file handle opened for reading.
 
     Yields:
         TokenLists.
     """
     metadata_buf = {}
     token_buf = []
+    for line in handle:
+        line = line.strip()
+        if not line:
+            if token_buf or metadata_buf:
+                yield TokenList(token_buf.copy(), metadata_buf.copy())
+                metadata_buf.clear()
+                token_buf.clear()
+            continue
+        mtch = re.fullmatch(r"#\s+(.+?)\s+=\s+(.*)", line)
+        if mtch:
+            metadata_buf[mtch.group(1)] = mtch.group(2)
+        if not mtch:
+            token_buf.append(dict(zip(_fieldnames, line.split("\t"))))
+    if token_buf or metadata_buf:
+        yield TokenList(token_buf, metadata_buf)
+
+
+def parse_from_path(path: str) -> Iterator[TokenList]:
     with open(path, "r") as source:
-        for line in source:
-            line = line.strip()
-            if not line:
-                if token_buf or metadata_buf:
-                    yield TokenList(token_buf.copy(), metadata_buf.copy())
-                    metadata_buf.clear()
-                    token_buf.clear()
-                continue
-            match = re.fullmatch(r"#\s+(.+?)\s+=\s+(.*)", line)
-            if match:
-                metadata_buf[match.group(1)] = match.group(2)
-            if not match:
-                token_buf.append(dict(zip(_fieldnames, line.split("\t"))))
-        if token_buf or metadata_buf:
-            yield TokenList(token_buf, metadata_buf)
+        yield from _parse_from_handle(source)

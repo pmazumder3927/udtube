@@ -72,7 +72,7 @@ class ConlluIterDataset(data.IterableDataset):
     path: str
 
     def __iter__(self) -> Iterator[Item]:
-        for tokenlist in conllu.parse(self.path):
+        for tokenlist in conllu.parse_from_path(self.path):
             yield Item(tokenlist)
 
 

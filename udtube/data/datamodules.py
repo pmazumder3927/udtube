@@ -119,7 +119,7 @@ class DataModule(lightning.LightningDataModule):
         lemma_vocabulary = set() if self.use_lemma else None
         feats_vocabulary = set() if self.use_feats else None
         lemma_mapper = mappers.LemmaMapper(self.reverse_edits)
-        for tokenlist in conllu.parse(self.train):
+        for tokenlist in conllu.parse_from_path(self.train):
             # We don't need to collect the upos vocabulary because "u"
             # stands for "universal" here.
             if self.use_xpos:
@@ -236,7 +236,7 @@ class DataModule(lightning.LightningDataModule):
 
     def _conllu_map_dataset(self, path: str) -> datasets.ConlluMapDataset:
         return datasets.ConlluMapDataset(
-            list(conllu.parse(path)),
+            list(conllu.parse_from_path(path)),
             mappers.Mapper(self.index),
             self.use_upos,
             self.use_xpos,
