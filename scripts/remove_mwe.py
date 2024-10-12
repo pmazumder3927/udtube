@@ -11,9 +11,11 @@ def main(args: argparse.Namespace) -> None:
     sink_name = prefix + "-no_mwe" + ".conllu"
     with open(sink_name, "w") as sink:
         for tokenlist in data.parse(args.source):
-            tokenlist = tokenlist.filter(id=lambda x: not isinstance(x, tuple))
-            # Prevents it from adding an extra newline.
-            print(tokenlist.serialize(), file=sink, end="")
+            tokenlist = data.TokenList(
+                [token for token in tokenlist if "-" not in token["id"]],
+                metadata=tokenlist.metadata,
+            )
+            print(tokenlist.serialize(), file=sink)
 
 
 if __name__ == "__main__":

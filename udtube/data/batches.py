@@ -9,10 +9,11 @@ However, there is no need for padding at this stage.
 
 from typing import List, Optional
 
-import conllu
 import torch
 import transformers
 from torch import nn
+
+from . import conllu
 
 
 class Batch(nn.Module):

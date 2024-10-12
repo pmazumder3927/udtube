@@ -5,7 +5,6 @@
 * ConlluMapDataset is a labeled dataset, loaded greedily.
 """
 
-import conllu
 import dataclasses
 from typing import Iterator, List, Optional
 
@@ -13,7 +12,7 @@ import torch
 from torch import nn
 from torch.utils import data
 
-from . import mappers, parsers
+from . import conllu, mappers
 from .. import defaults
 
 
@@ -67,13 +66,13 @@ class ConlluIterDataset(data.IterableDataset):
     CoNLL-U fields other than `text` are simply ignored.
 
     Args:
-        conllu_file: path to the input CoNLL-U file.
+        path: path to input CoNLL-U file.
     """
 
-    conllu_file: str
+    path: str
 
-    def __iter__(self) -> Iterator[str]:
-        for tokenlist in parsers.parse(self.conllu_file):
+    def __iter__(self) -> Iterator[Item]:
+        for tokenlist in conllu.parse_from_path(self.path):
             yield Item(tokenlist)
 
 
