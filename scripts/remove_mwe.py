@@ -10,7 +10,7 @@ def main(args: argparse.Namespace) -> None:
     prefix = args.source.removesuffix(".conllu")
     sink_name = prefix + "-no_mwe" + ".conllu"
     with open(sink_name, "w") as sink:
-        for tokenlist in data.parse(args.source):
+        for tokenlist in data.parse_from_path(args.source):
             tokenlist = data.TokenList(
                 [token for token in tokenlist if "-" not in token["id"]],
                 metadata=tokenlist.metadata,
