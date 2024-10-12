@@ -9,7 +9,7 @@ from udtube import data
 def main(args: argparse.Namespace) -> None:
     prefix = args.source.removesuffix(".conllu")
     sink_name = prefix + "-no_mwe" + ".conllu"
-    with open(sink_name, "r") as sink:
+    with open(sink_name, "w") as sink:
         for tokenlist in data.parse(args.source):
             tokenlist = data.TokenList(
                 [token for token in tokenlist if "-" not in token["id"]],
