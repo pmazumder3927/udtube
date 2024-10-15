@@ -32,7 +32,7 @@ class TokenList:
     """
 
     tokens: List[Dict[str, str]]
-    metadata: Dict[str, str]
+    metadata: Dict[str, Optional[str]]
 
     def __init__(self, tokens: Iterable[Dict[str, str]], metadata=None):
         self.tokens = list(tokens)
@@ -42,7 +42,10 @@ class TokenList:
         """Serializes the TokenList."""
         line_buf = []
         for key, value in self.metadata.items():
-            line_buf.append(f"# {key}: {value}")
+            if value is not None:
+                line_buf.append(f"# {key}: {value}")
+            else:
+                line_buf.append(f"# {key}")
         for token in self.tokens:
             col_buf = []
             for key in _fieldnames:
@@ -84,9 +87,9 @@ def parse_from_string(buffer: str) -> TokenList:
     tokens = []
     for line in buffer.splitlines():
         line = line.strip()
-        mtch = re.fullmatch(r"#\s+(.+?)\s+=\s+(.*)", line)
+        mtch = re.fullmatch(r"#\s+(.+?)(\s+=\s+(.*))?", line)
         if mtch:
-            metadata[mtch.group(1)] = mtch.group(2)
+            metadata[mtch.group(1)] = mtch.group(3)
         if not mtch:
             tokens.append(dict(zip(_fieldnames, line.split("\t"))))
     return TokenList(tokens, metadata)
@@ -113,7 +116,7 @@ def _parse_from_handle(handle: TextIO) -> Iterator[TokenList]:
                 metadata_buf.clear()
                 token_buf.clear()
             continue
-        mtch = re.fullmatch(r"#\s+(.+?)\s+=\s+(.*)", line)
+        mtch = re.fullmatch(r"#\s+(.+?)(\s+=\s+(.*))?", line)
         if mtch:
             metadata_buf[mtch.group(1)] = mtch.group(2)
         if not mtch:
