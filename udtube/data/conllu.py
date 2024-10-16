@@ -32,7 +32,7 @@ class TokenList:
     """
 
     tokens: List[Dict[str, str]]
-    metadata: Dict[str, str]
+    metadata: Dict[str, Optional[str]]
 
     def __init__(self, tokens: List[Dict[str, str]], metadata=None):
         self.tokens = tokens
@@ -140,7 +140,9 @@ def _parse_from_handle(handle: TextIO) -> Iterator[TokenList]:
 
 
 def parse_from_path(path: str) -> Iterator[TokenList]:
-    """Incrementally parses a CoNLL-U file.
+    """Incrementally parses a CoNLL-U file from an file path.
+
+    This does not backtrack/rewind so it can be used with streaming inputs.
 
     Args:
         path: path to input CoNLL-U file.

@@ -24,19 +24,18 @@ class DataModule(lightning.LightningDataModule):
     errors with large datasets.
 
     Args:
-        model_dir: path for checkpoints, indexes, and logs.
-        predict: path to the prediction CoNLL-U file.
-        test: path to the test CoNLL-U file.
-        train: path to training CoNLL-U file.
-        val: path to validation CoNLL-U file.
-        encoder: name of encoder on Hugging Face (for the tokenizer).
-        reverse_edits: enables reverse (suffixal) edit scripts.
-        use_upos: enables the universal POS tagging task.
-        use_xpos: enables the language-specific POS tagging task.
-        use_lemma: enables the lemmatization task.
-        use_feats: enables the morphological feature tagging task.
-        batch_size: batch size.
-        index: an optional pre-computed index.
+        model_dir: Path for checkpoints, indexes, and logs.
+        predict: Path to a CoNLL-U file for prediction.
+        test: Path to a test CoNLL-U file for testing.
+        train: Path to a CoNLL-U file for training.
+        val: Path to a CoNLL-U file for validation.
+        encoder: Full name of a Hugging Face encoder.
+        reverse_edits: Enables reverse (suffixal) edit scripts.
+        use_upos: Enables the universal POS tagging task.
+        use_xpos: Enables the language-specific POS tagging task.
+        use_lemma: Enables the lemmatization task.
+        use_feats: Enables the morphological feature tagging task.
+        batch_size: Batch size.
     """
 
     predict: Optional[str]
@@ -132,7 +131,7 @@ class DataModule(lightning.LightningDataModule):
                     )
             if self.use_feats:
                 feats_vocabulary.update(token["feats"] for token in tokenlist)
-        result = indexes.Index(
+        index = indexes.Index(
             reverse_edits=self.reverse_edits,
             upos=(
                 indexes.Vocabulary(self.UPOS_VOCABULARY)
@@ -158,8 +157,8 @@ class DataModule(lightning.LightningDataModule):
             os.mkdir(model_dir)
         except FileExistsError:
             pass
-        result.write(model_dir)
-        return result
+        index.write(model_dir)
+        return index
 
     # Properties.
 

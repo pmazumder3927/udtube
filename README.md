@@ -79,13 +79,13 @@ The following caveats apply:
 ## Usage
 
 The `udtube` command-line tool uses a subcommand interface, with the four
-following modes. To see the full set of options available with each
-subcommand, use the `--print_config` flag. For example:
+following modes. To see the full set of options available with each subcommand,
+use the `--print_config` flag. For example:
 
     udtube fit --print_config
 
-will show all configuration options (and their default values) for the
-`fit` subcommand.
+will show all configuration options (and their default values) for the `fit`
+subcommand.
 
 ### Training (`fit`)
 
@@ -137,6 +137,7 @@ principle. It uses the Adam optimizer for both encoder and classifier, but uses
 a lower learning rate for the encoder with a linear warm-up and a higher
 learning rate for the classifier.
 
+    ...
     model:
       encoder_optimizer:
         class_path: torch.optim.Adam
@@ -157,8 +158,25 @@ learning rate for the classifier.
           factor: 0.1
       ...
 
-To use a fixed learning rate for one or the other layer, specify
-`class_path: udtube.schedulers.DummyScheduler`.
+The default scheduler is `udtube.schedulers.DummyScheduler`, which keeps
+learning rate fixed to its initial value.
+
+#### Checkpointing
+
+The
+[`ModelCheckpoint`](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.ModelCheckpoint.html)
+is used to control the generation of checkpoint files. A sample YAML snippet is
+given below.
+
+    ...
+    checkpoint:
+      filename: "model-{epoch:03d}-{val_loss:.4f}"
+      monitor: val_loss
+      verbose: true
+      ...
+
+Without some specification under `checkpoint:` UDTube will not generate
+checkpoints!
 
 #### Callbacks
 
@@ -166,29 +184,12 @@ The user will likely want to configure additional callbacks. Some useful
 examples are given below.
 
 The
-[`ModelCheckpoint`](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.ModelCheckpoint.html)
-callback generates the checkpoints which give the highest validation accuracy. A
-sample YAML snippet is given below.
-
-    trainer:
-      callbacks:
-        - class_path: lightning.pytorch.callbacks.ModelCheckpoint
-        init_args:
-          dirpath: /Users/Shinji/models/checkpoints
-          filename: "model-{epoch:03d}-{val_loss:.4f}"
-          monitor: val_loss
-          verbose: true
-      ...
-
-Note that without this, UDTube will not generate checkpoints! Adjust the
-`dirpath` argument as needed.
-
-The
 [`LearningRateMonitor`](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.LearningRateMonitor.html)
 callback records learning rates; this is useful when working with multiple
 optimizers and/or schedulers, as we do here. A sample YAML snippet is given
 below.
 
+    ...
     trainer:
       callbacks:
       - class_path: lightning.pytorch.callbacks.LearningRateMonitor
@@ -201,6 +202,7 @@ The
 callback enables early stopping based on a monitored quantity and a fixed
 "patience". A sample YAML snipppet with a patience of 10 is given below.
 
+    ...
     trainer:
       callbacks:
       - class_path: lightning.pytorch.callbacks.EarlyStopping
@@ -227,6 +229,7 @@ The
 logs all monitored quantities to a CSV file. A sample configuration is given
 below.
 
+    ...
     trainer:
       logger:
         - class_path: lightning.pytorch.loggers.CSVLogger
@@ -243,6 +246,7 @@ works similarly to the `CSVLogger`, but sends the data to the third-party
 website [Weights & Biases](https://wandb.ai/site), where it can be used to
 generate charts or share artifacts. A sample configuration is given below.
 
+    ...
     trainer:
       logger:
       - class_path: lightning.pytorch.loggers.wandb.WandbLogger
@@ -273,16 +277,17 @@ disable this with `model: reverse_edits: false`.
 
 The following YAML snippet shows the default architectural arguments.
 
+    ...
     model:
-        dropout: 0.5
-        encoder: google-bert/bert-base-multilingual-cased
-        pooling_layers: 4
-        reverse_edits: true
-        use_upos: true
-        use_xpos: true
-        use_lemma: true
-        use_feats: true
-        ...
+      dropout: 0.5
+      encoder: google-bert/bert-base-multilingual-cased
+      pooling_layers: 4
+      reverse_edits: true
+      use_upos: true
+      use_xpos: true
+      use_lemma: true
+      use_feats: true
+      ...
       
 
 Batch size is specified using `data: batch_size: ...` and defaults to 32.
@@ -291,6 +296,7 @@ There are a number of ways to specify how long a model should train for. For
 example, the following YAML snippet specifies that training should run for 100
 epochs or 6 wall-clock hours, whichever comes first.
 
+    ...
     trainer:
       max_epochs: 100
       max_time: 00:06:00:00
@@ -323,27 +329,22 @@ This mode is invoked using the `test` subcommand, like so:
 ### Inference (`predict`)
 
 In `predict` mode, a previously trained model checkpoint
-(`model: ckpt_path: path/to/checkpoint.ckpt`) is used to label a CoNLL-U file
-using a previously trained checkpoint (`ckpt_path path/to/checkpoint.ckpt` from
-the command line). To make this work, one must also specify a custom callback
-which handles conversion to CoNLL-U. The following YAML snippet shows this in
-use.
+(`--ckpt_path path/to/checkpoint.ckpt` from the command line) is used to label a
+CoNLL-U file. One must also specify the path where the predictions will be
+written.
 
-    trainer:
-      callbacks:
-      - class_path: udtube.callbacks.PredictionWriter
-        init_args:
-          predictions: /Users/Shinji/predictions.conllu
-          model_dir: /Users/Shinji/models
+    ...
+    predict:
+      path: /Users/Shinji/predictions.conllu
     ...
 
-Note that specifying this callback when not running in `predict` mode will do
-nothing other than create an empty text file.
+Here are some additional details:
 
-The following caveats apply:
-
--   In `predict mode` UDTube loads the file to be labeled incrementally (i.e.,
+-   In `predict` mode UDTube loads the file to be labeled incrementally (i.e.,
     one sentence at a time) so this can be used with very large files.
+-   In `predict` mode, if no path for the predictions is specified, stdout will
+    be used. If using this in conjunction with \> or \|, add
+    `--trainer.enable_progress_bar false` on the command line.
 -   The target task fields are overriden if their heads are active.
 -   Use [`scripts/pretokenize.py`](scripts/pretokenize.py) to convert raw text
     files to CoNLL-U input files.

@@ -2,9 +2,9 @@
 
 import logging
 
-from lightning.pytorch import cli
+from lightning.pytorch import callbacks as pytorch_callbacks, cli
 
-from . import data, models, trainers
+from . import callbacks, data, models, trainers
 
 
 class UDTubeCLI(cli.LightningCLI):
@@ -12,13 +12,20 @@ class UDTubeCLI(cli.LightningCLI):
 
     Use with `--help` to see full set of options."""
 
-    @staticmethod
-    def add_arguments_to_parser(parser: cli.LightningArgumentParser) -> None:
-        parser.add_argument(
-            "--predictions", help="Path for predictions .conllu file"
+    def add_arguments_to_parser(
+        self, parser: cli.LightningArgumentParser
+    ) -> None:
+        parser.add_lightning_class_args(
+            pytorch_callbacks.ModelCheckpoint,
+            "checkpoint",
+        )
+        parser.add_lightning_class_args(
+            callbacks.PredictionWriter,
+            "prediction",
         )
         # Links.
         parser.link_arguments("model.encoder", "data.encoder")
+        parser.link_arguments("data.model_dir", "prediction.model_dir")
         parser.link_arguments("data.model_dir", "trainer.default_root_dir")
         parser.link_arguments("model.reverse_edits", "data.reverse_edits")
         parser.link_arguments(

@@ -3,16 +3,6 @@ trainer:
   max_epochs: 100
   max_time: 00:06:00:00
   callbacks:
-    - class_path: udtube.callbacks.PredictionWriter
-      init_args:
-        path: /Users/Shinji/UD_Russian-SynTagRus/predictions.conllu
-        model_dir: /Users/Shinji/UD_Russian-SynTagRus/models
-    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
-      init_args:
-        dirpath: /Users/Shinji/UD_Russian-SynTagRus/models/checkpoints
-        filename: "model-{epoch:03d}-{val_loss:.4f}"
-        monitor: val_loss
-        verbose: true
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor
       init_args:
         logging_interval: epoch
@@ -63,3 +53,9 @@ data:
   test: /Users/Shinji/UD_Russian-SynTagRus/ru_syntagrus-ud-test.conllu
   predict: /Users/Shinji/UD_Russian-SynTagRus/ru_syntagrus-ud-test.conllu
   batch_size: 32
+checkpoint:
+  filename: "model-{epoch:03d}-{val_loss:.4f}"
+  monitor: val_loss
+  verbose: true
+prediction:
+  path: /Users/Shinji/UD_Russian-SynTagRus/predictions.conllu
