@@ -127,7 +127,7 @@ class ParseTest(unittest.TestCase):
         cls.path.close()
 
     def test_parse(self):
-        parser = data.parse(self.path.name)
+        parser = data.parse_from_path(self.path.name)
         s1 = next(parser)
         self.assertEqual(s1.metadata["text"], "From the AP comes this story :")
         self.assertEqual(len(s1), 7)

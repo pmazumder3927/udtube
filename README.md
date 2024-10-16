@@ -1,5 +1,7 @@
 # UDTube (beta)
 
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/CUNY-CL/udtube/tree/master.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/CUNY-CL/udtube/tree/master)
+
 UDTube is a neural morphological analyzer based on
 [PyTorch](https://pytorch.org/), [Lightning](https://lightning.ai/), and
 [Hugging Face transformers](https://huggingface.co/docs/transformers/en/index).
