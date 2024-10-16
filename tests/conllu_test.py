@@ -83,6 +83,7 @@ class ParseTest(unittest.TestCase):
         cls.path = tempfile.NamedTemporaryFile(mode="w", suffix=".conllu")
         print(
             """
+# newpar
 # newdoc id = weblog-blogspot.com_nominations_20041117172713_ENG_20041117_172713
 # sent_id = weblog-blogspot.com_nominations_20041117172713_ENG_20041117_172713-0001
 # newpar id = weblog-blogspot.com_nominations_20041117172713_ENG_20041117_172713-p0001
@@ -127,8 +128,9 @@ class ParseTest(unittest.TestCase):
         cls.path.close()
 
     def test_parse(self):
-        parser = data.parse(self.path.name)
+        parser = data.parse_from_path(self.path.name)
         s1 = next(parser)
+        self.assertIsNone(s1.metadata["newpar"])
         self.assertEqual(s1.metadata["text"], "From the AP comes this story :")
         self.assertEqual(len(s1), 7)
         self.assertEqual(
