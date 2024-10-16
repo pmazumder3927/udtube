@@ -1,5 +1,6 @@
 """Unit tests for CoNLL-U file parsing."""
 
+import io
 import tempfile
 import unittest
 
@@ -78,15 +79,8 @@ class TokenListTest(unittest.TestCase):
 
 class ParseTest(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.path = tempfile.NamedTemporaryFile(mode="w", suffix=".conllu")
-        print(
-            """
-# newpar
-# newdoc id = weblog-blogspot.com_nominations_20041117172713_ENG_20041117_172713
+    STRING = """# newpar
 # sent_id = weblog-blogspot.com_nominations_20041117172713_ENG_20041117_172713-0001
-# newpar id = weblog-blogspot.com_nominations_20041117172713_ENG_20041117_172713-p0001
 # text = From the AP comes this story :
 1	From	from	ADP	IN	_	3	case	3:case	_
 2	the	the	DET	DT	Definite=Def|PronType=Art	3	det	3:det	_
@@ -97,7 +91,6 @@ class ParseTest(unittest.TestCase):
 7	:	:	PUNCT	:	_	4	punct	4:punct	_
 
 # sent_id = weblog-blogspot.com_nominations_20041117172713_ENG_20041117_172713-0002
-# newpar id = weblog-blogspot.com_nominations_20041117172713_ENG_20041117_172713-p0002
 # text = President Bush on Tuesday nominated two individuals to replace retiring jurists on federal courts in the Washington area.
 1	President	President	PROPN	NNP	Number=Sing	5	nsubj	5:nsubj	_
 2	Bush	Bush	PROPN	NNP	Number=Sing	1	flat	1:flat	_
@@ -118,9 +111,13 @@ class ParseTest(unittest.TestCase):
 17	Washington	Washington	PROPN	NNP	Number=Sing	18	compound	18:compound	_
 18	area	area	NOUN	NN	Number=Sing	14	nmod	14:nmod:in	SpaceAfter=No
 19	.	.	PUNCT	.	_	5	punct	5:punct	_
-        """.strip(),  # noqa: E501
-            file=cls.path,
-        )
+
+"""  # noqa: E501
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.path = tempfile.NamedTemporaryFile(mode="w", suffix=".conllu")
+        print(cls.STRING, file=cls.path)
         cls.path.flush()
 
     @classmethod
@@ -141,6 +138,12 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(len(s2), 19)
         with self.assertRaises(StopIteration):
             next(parser)
+
+    def test_roundtrip(self):
+        buf = io.StringIO()
+        for tokenlist in data.parse_from_path(self.path.name):
+            print(tokenlist.serialize(), file=buf)
+        self.assertEqual(self.STRING, buf.getvalue())
 
 
 if __name__ == "__main__":

@@ -43,7 +43,7 @@ class TokenList:
         line_buf = []
         for key, value in self.metadata.items():
             if value:
-                line_buf.append(f"# {key}: {value}")
+                line_buf.append(f"# {key} = {value}")
             else:  # `newpar` etc.
                 line_buf.append(f"# {key}")
         for token in self.tokens:
