@@ -8,8 +8,6 @@ Therefore, we subclass the trainer to override this default and then use this
 as the trainer class in the CLI.
 """
 
-from typing import Optional
-
 from lightning.pytorch import trainer
 
 

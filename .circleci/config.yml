@@ -48,10 +48,10 @@ workflows:
     jobs:
       - pre-build:
           name: black
-          command-run: black --line-length=79 --check .
+          command-run: black --line-length 79 --check .
       - pre-build:
           name: flake8
-          command-run: flake8 .
+          command-run: flake8 --ignore E203 .
       - pre-build:
           name: twine
           command-run: |
