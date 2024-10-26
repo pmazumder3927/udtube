@@ -50,7 +50,7 @@ class TokenList:
             col_buf = []
             for key in _fieldnames:
                 col_buf.append(token.get(key, "_"))
-            line_buf.append("\t".join(col_buf))
+            line_buf.append("\t".join(str(cell) for cell in col_buf))
         return "\n".join(line_buf) + "\n"
 
     def __getitem__(self, index: int) -> Dict[str, str]:
