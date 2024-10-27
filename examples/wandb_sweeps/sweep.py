@@ -47,18 +47,19 @@ def run_sweep(argv: List[str]) -> None:
         logging.error("Subprocess error: %s", error)
 
 
-def populate_config(config: Dict[str, Any], temp_config: TextIO) -> None:
+def populate_config(config: Dict[str, Any], temp_config_handle: TextIO) -> None:
     """Populates temporary configuration file.
 
     The wandb config data used here comes from the environment.
 
     Args:
         config: path to UDTube YAML config file.
-        temp_config: temporary configuration file handle.
+        temp_config_handle: temporary configuration file handle.
     """
+    wandb.init()
     for key, value in wandb.config.items():
         _recursive_insert(config, key, value)
-    yaml.dump(config, temp_config)
+    yaml.dump(config, temp_config_handle)
 
 
 def _recursive_insert(config: Dict[str, Any], key: str, value: Any) -> None:
@@ -87,7 +88,6 @@ def _recursive_insert(config: Dict[str, Any], key: str, value: Any) -> None:
 
 
 def main(args: argparse.Namespace) -> None:
-    wandb.init()
     with open(args.config, "r") as source:
         config = yaml.safe_load(source)
     # TODO: Consider enabling the W&B logger; we are not sure if things will
