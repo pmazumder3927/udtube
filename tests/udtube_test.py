@@ -33,11 +33,8 @@ class UDTubeTest(unittest.TestCase):
 
     @parameterized.expand(
         [
-            # TODO: commented out to test CircleCI test resource limitations.
-            # ("el", True),
             ("en", True),
-            # TODO: ditto.
-            # ("ru", False),  # Russian doesn't have XPOS.
+            ("ru", False),  # Russian doesn't have XPOS.
         ]
     )
     def test_model(self, langcode: str, use_xpos: bool):
