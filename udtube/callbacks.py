@@ -34,8 +34,8 @@ class PredictionWriter(callbacks.BasePredictionWriter):
         self.mapper = data.Mapper.read(model_dir)
 
     def __del__(self):
-        # This appears to be harmless on sys.stdout.
-        self.sink.close()
+        if self.sink is not sys.stdout:
+            self.sink.close()
 
     # Required API.
 

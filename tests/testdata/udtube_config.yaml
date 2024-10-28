@@ -1,0 +1,10 @@
+checkpoint:
+  save_last: 'link'  # Gives us a standard name.
+  monitor: val_loss
+data:
+  batch_size: 5  # 2 batches per epoch.
+trainer:
+  accelerator: cpu  # Because that's what CircleCI has.
+  enable_progress_bar: false
+  max_epochs: 5
+seed_everything: 42
