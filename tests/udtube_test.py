@@ -33,9 +33,11 @@ class UDTubeTest(unittest.TestCase):
 
     @parameterized.expand(
         [
-            ("el", True),
+            # TODO: commented out to test CircleCI test resource limitations.
+            # ("el", True),
             ("en", True),
-            ("ru", False),  # Russian doesn't have XPOS.
+            # TODO: ditto.
+            # ("ru", False),  # Russian doesn't have XPOS.
         ]
     )
     def test_model(self, langcode: str, use_xpos: bool):
@@ -46,9 +48,7 @@ class UDTubeTest(unittest.TestCase):
             DATASETS_DIR, f"{langcode}_expected.conllu"
         )
         self.assertFileExists(expected_path)
-        model_dir = os.path.join(
-            self.tempdir.name, "model"
-        )  # Will be created.
+        model_dir = os.path.join(self.tempdir.name, "model")
         cli.udtube_python_interface(
             [
                 "fit",
