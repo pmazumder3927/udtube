@@ -33,8 +33,6 @@ class UDTubeTest(unittest.TestCase):
 
     @parameterized.expand(
         [
-            # TODO: commented out to test CircleCI test resource limitations.
-            # ("el", True),
             ("en", True),
             ("ru", False),  # Russian doesn't have XPOS.
         ]
