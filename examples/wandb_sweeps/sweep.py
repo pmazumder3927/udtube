@@ -4,59 +4,64 @@
 import argparse
 import functools
 import logging
+import subprocess
 import sys
 import tempfile
 import traceback
 import warnings
 
-from typing import Any, Dict, TextIO
+from typing import Any, Dict, List, TextIO
 
-import torch
 import yaml
-from udtube import cli
-
 import wandb
 
 warnings.filterwarnings("ignore", ".*is a wandb run already in progress.*")
 
 
-def train_sweep(config: Dict[str, Any], temp_config: TextIO) -> None:
+def train_sweep(
+    config: Dict[str, Any], temp_config: TextIO, argv: List[str]
+) -> None:
     """Runs a single training run.
 
     Args:
         config: path to UDTube YAML config file.
         temp_config: temporary configuration file handle.
+        argv: command-line arguments.
     """
     populate_config(config, temp_config)
-    run_sweep()
+    run_sweep(argv)
 
 
-def run_sweep() -> None:
-    """Actually runs the sweep."""
+def run_sweep(argv: List[str]) -> None:
+    """Actually runs the sweep.
+
+    Args:
+        argv: command-line arguments.
+
+    We encapsulate each run by using a separate subprocess, which ought to
+    ensure that memory is returned (etc.).
+    """
     try:
-        cli.main()
-    except RuntimeError as error:
-        # TODO: consider specializing this further if a solution to
-        # https://github.com/pytorch/pytorch/issues/48365 is accepted.
-        logging.error("Runtime error: %s", error)
-    finally:
-        # Clears the CUDA cache.
-        torch.cuda.empty_cache()
+        subprocess.check_call(argv)
+    except subprocess.CalledProcessError as error:
+        logging.error("Subprocess error: %s", error)
 
 
-def populate_config(config: Dict[str, Any], temp_config: TextIO) -> None:
+def populate_config(
+    config: Dict[str, Any], temp_config_handle: TextIO
+) -> None:
     """Populates temporary configuration file.
 
     The wandb config data used here comes from the environment.
 
     Args:
         config: path to UDTube YAML config file.
-        temp_config: temporary configuration file handle.
+        temp_config_handle: temporary configuration file handle.
     """
     wandb.init()
     for key, value in wandb.config.items():
         _recursive_insert(config, key, value)
-    yaml.dump(config, temp_config)
+    yaml.dump(config, temp_config_handle)
 
 
 def _recursive_insert(config: Dict[str, Any], key: str, value: Any) -> None:
@@ -90,21 +95,13 @@ def main(args: argparse.Namespace) -> None:
     # TODO: Consider enabling the W&B logger; we are not sure if things will
     # unless this is configured.
     temp_config = tempfile.NamedTemporaryFile(mode="w", suffix=".yaml")
-    # This makes ARGV look like an ordinary fit call so we don't have to
-    # make a shell call to start UDTube.
-    sys.argv = [
-        sys.argv[0],
-        "fit",
-        "--config",
-        temp_config.name,
-        *sys.argv[1:],
-    ]
+    argv = ["udtube", "fit", "--config", temp_config.name, *sys.argv[1:]]
     try:
         wandb.agent(
             sweep_id=args.sweep_id,
             entity=args.entity,
             project=args.project,
-            function=functools.partial(train_sweep, config, temp_config),
+            function=functools.partial(train_sweep, config, temp_config, argv),
             count=args.count,
         )
     except Exception:
