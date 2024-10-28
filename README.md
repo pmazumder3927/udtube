@@ -1,5 +1,9 @@
 # UDTube (beta)
 
+[![PyPI
+version](https://badge.fury.io/py/udtube.svg)](https://pypi.org/project/udtube)
+[![Supported Python
+versions](https://img.shields.io/pypi/pyversions/wikipron.svg)](https://pypi.org/project/udtube)
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/CUNY-CL/udtube/tree/master.svg?style=svg&circle-token=CCIPRJ_4V98VzpnERYSUaGFAkxu7v_70eea48ab82c8f19e4babbaa55a64855a80415bd)](https://dl.circleci.com/status-badge/redirect/gh/CUNY-CL/udtube/tree/master)
 
 UDTube is a neural morphological analyzer based on
