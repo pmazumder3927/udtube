@@ -47,7 +47,9 @@ def run_sweep(argv: List[str]) -> None:
         logging.error("Subprocess error: %s", error)
 
 
-def populate_config(config: Dict[str, Any], temp_config_handle: TextIO) -> None:
+def populate_config(
+    config: Dict[str, Any], temp_config_handle: TextIO
+) -> None:
     """Populates temporary configuration file.
 
     The wandb config data used here comes from the environment.
