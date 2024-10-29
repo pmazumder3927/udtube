@@ -55,7 +55,8 @@ Dependencies project](https://universaldependencies.org/).
 UDTube can perform up to four morphological tasks simultaneously:
 
 -   Lemmatization is performed using the `LEMMA` field and [edit
-    scripts](https://aclanthology.org/P14-2111/).
+    scripts](https://aclanthology.org/P14-2111/): enable with `data: 
+    use_lemma: true`.
 
 -   [Universal part-of-speech
     tagging](https://universaldependencies.org/u/pos/index.html) is performed
