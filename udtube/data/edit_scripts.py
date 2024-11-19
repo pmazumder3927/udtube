@@ -36,7 +36,6 @@ class EditScript:
     SEP = "|"
 
     def __init__(self, istring: str, ostring: str):
-        self._ops = []
         matcher = difflib.SequenceMatcher(a=istring, b=ostring, autojunk=False)
         table: Dict[int, EditOp] = {}
         for tag, ix, iy, ox, oy in matcher.get_opcodes():
@@ -51,7 +50,6 @@ class EditScript:
                     table[i] = op
         self._ops = []
         if not table:
-            self._ops = []
             return
         for i in range(max(table.keys()) + 1):
             self._ops.append(table.get(i, EditOp()))
