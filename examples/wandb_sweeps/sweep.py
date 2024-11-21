@@ -40,7 +40,7 @@ def run_sweep(argv: List[str]) -> int:
         argv: command-line arguments.
 
     Returns:
-        int: The exit code from the subprocess. 0 for success, non-zero for failure.
+        int: The exit code from the subprocess. 0 for success.
 
     We encapsulate each run by using a separate subprocess, which ought to
     ensure that memory is returned (etc.).
@@ -53,21 +53,21 @@ def run_sweep(argv: List[str]) -> int:
             line = process.stderr.readline()
             if line:
                 # Decode bytes and strip any trailing whitespace
-                error_msg = line.decode('utf-8').rstrip()
+                error_msg = line.decode("utf-8").rstrip()
                 if error_msg:  # Only log non-empty messages
                     logging.info(error_msg)
 
             # Check if process has finished
-            if line == b'' and process.poll() is not None:
+            if line == b"" and process.poll() is not None:
                 break
 
         if process.returncode != 0:
-            error_msg = f"Subprocess returned non-zero exit status {process.returncode}"
+            error_msg = f"Subprocess' exit status {process.returncode}"
             logging.error(error_msg)
 
         return process.returncode
 
-    except Exception as e:
+    except Exception:
         error_msg = f"Full traceback: {traceback.format_exc()}"
         logging.error(error_msg)
         return 1
