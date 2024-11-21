@@ -29,22 +29,48 @@ def train_sweep(
         argv: command-line arguments.
     """
     populate_config(config, temp_config)
-    run_sweep(argv)
+    exit_code = run_sweep(argv)
+    wandb.finish(exit_code=exit_code)
 
 
-def run_sweep(argv: List[str]) -> None:
+def run_sweep(argv: List[str]) -> int:
     """Actually runs the sweep.
 
     Args:
         argv: command-line arguments.
 
+    Returns:
+        int: The exit code from the subprocess. 0 for success, non-zero for failure.
+
     We encapsulate each run by using a separate subprocess, which ought to
     ensure that memory is returned (etc.).
     """
     try:
-        subprocess.check_call(argv)
-    except subprocess.CalledProcessError as error:
-        logging.error("Subprocess error: %s", error)
+        process = subprocess.Popen(argv, stderr=subprocess.PIPE)
+
+        while True:
+            # Read stderr
+            line = process.stderr.readline()
+            if line:
+                # Decode bytes and strip any trailing whitespace
+                error_msg = line.decode('utf-8').rstrip()
+                if error_msg:  # Only log non-empty messages
+                    logging.info(error_msg)
+
+            # Check if process has finished
+            if line == b'' and process.poll() is not None:
+                break
+
+        if process.returncode != 0:
+            error_msg = f"Subprocess returned non-zero exit status {process.returncode}"
+            logging.error(error_msg)
+
+        return process.returncode
+
+    except Exception as e:
+        error_msg = f"Full traceback: {traceback.format_exc()}"
+        logging.error(error_msg)
+        return 1
 
 
 def populate_config(
@@ -107,9 +133,7 @@ def main(args: argparse.Namespace) -> None:
     except Exception:
         # Exits gracefully, so W&B logs the error.
         logging.fatal(traceback.format_exc())
-        exit(1)
-    finally:
-        wandb.finish()
+        wandb.finish(exit_code=1)
 
 
 if __name__ == "__main__":
