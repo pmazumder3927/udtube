@@ -7,6 +7,7 @@ import logging
 import subprocess
 import sys
 import tempfile
+import time
 import traceback
 import warnings
 
@@ -29,48 +30,31 @@ def train_sweep(
         argv: command-line arguments.
     """
     populate_config(config, temp_config)
-    exit_code = run_sweep(argv)
-    wandb.finish(exit_code=exit_code)
+    run_sweep(argv)
 
 
-def run_sweep(argv: List[str]) -> int:
+def run_sweep(argv: List[str]) -> None:
     """Actually runs the sweep.
 
     Args:
         argv: command-line arguments.
 
-    Returns:
-        int: The exit code from the subprocess. 0 for success.
-
     We encapsulate each run by using a separate subprocess, which ought to
     ensure that memory is returned (etc.).
     """
-    try:
-        process = subprocess.Popen(argv, stderr=subprocess.PIPE)
+    process = subprocess.Popen(argv, stderr=subprocess.PIPE, text=True)
+    # subprocess.Popen is nonblocking, so the while loop waits for
+    # the subprocess to finish.
+    while True:
+        line = process.stderr.readline().rstrip()
+        logging.info(line)
+        time.sleep(0.25)
+        if line == "" and process.poll() is not None:
+            break
+    if process.returncode != 0:
+        logging.error(f"Subprocess return code: {process.returncode}")
 
-        while True:
-            # Read stderr
-            line = process.stderr.readline()
-            if line:
-                # Decode bytes and strip any trailing whitespace
-                error_msg = line.decode("utf-8").rstrip()
-                if error_msg:  # Only log non-empty messages
-                    logging.info(error_msg)
-
-            # Check if process has finished
-            if line == b"" and process.poll() is not None:
-                break
-
-        if process.returncode != 0:
-            error_msg = f"Subprocess' exit status {process.returncode}"
-            logging.error(error_msg)
-
-        return process.returncode
-
-    except Exception:
-        error_msg = f"Full traceback: {traceback.format_exc()}"
-        logging.error(error_msg)
-        return 1
+    wandb.finish(process.returncode)
 
 
 def populate_config(
@@ -134,6 +118,7 @@ def main(args: argparse.Namespace) -> None:
         # Exits gracefully, so W&B logs the error.
         logging.fatal(traceback.format_exc())
         wandb.finish(exit_code=1)
+        exit(1)
 
 
 if __name__ == "__main__":
