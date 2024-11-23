@@ -45,15 +45,11 @@ def run_sweep(argv: List[str]) -> None:
     process = subprocess.Popen(argv, stderr=subprocess.PIPE, text=True)
     # subprocess.Popen is nonblocking, so the while loop waits for
     # the subprocess to finish.
-    while True:
-        line = process.stderr.readline().rstrip()
-        logging.info(line)
+    while process.poll() is None:
+        logging.info(process.stderr.readline().rstrip())
         time.sleep(0.25)
-        if line == "" and process.poll() is not None:
-            break
     if process.returncode != 0:
         logging.error(f"Subprocess return code: {process.returncode}")
-
     wandb.finish(process.returncode)
 
 
