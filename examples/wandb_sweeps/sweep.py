@@ -7,7 +7,6 @@ import logging
 import subprocess
 import sys
 import tempfile
-import time
 import traceback
 import warnings
 
@@ -43,14 +42,11 @@ def run_sweep(argv: List[str]) -> None:
     ensure that memory is returned (etc.).
     """
     process = subprocess.Popen(argv, stderr=subprocess.PIPE, text=True)
-    # subprocess.Popen is nonblocking, so the while loop waits for
-    # the subprocess to finish.
-    while process.poll() is None:
-        logging.info(process.stderr.readline().rstrip())
-        time.sleep(0.25)
-    if process.returncode != 0:
-        logging.error(f"Subprocess return code: {process.returncode}")
-    wandb.finish(process.returncode)
+    for line in process.stderr:
+        logging.info(line.rstrip())
+    return_code = process.wait()
+    logging.info(f"subprocess finished with return code: {return_code}")
+    wandb.finish(return_code)
 
 
 def populate_config(
