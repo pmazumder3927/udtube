@@ -100,10 +100,6 @@ class Index:
 
     # Serialization.
 
-    @staticmethod
-    def path(model_dir: str) -> str:
-        return f"{model_dir}/index.pkl"
-
     @classmethod
     def read(cls, model_dir: str) -> Index:
         """Loads index.
@@ -116,11 +112,15 @@ class Index:
         """
         index = cls.__new__(cls)
         with open(cls.path(model_dir), "rb") as source:
-            dictionary = pickle.load(source)
-        for key, value in dictionary.items():
-            setattr(index, key, value)
+            for key, value in pickle.load(source):
+                setattr(index, key, value)
         return index
 
     def write(self, model_dir: str) -> None:
         with open(self.path(model_dir), "wb") as sink:
             pickle.dump(vars(self), sink)
+
+    @staticmethod
+    def path(model_dir: str) -> str:
+        return f"{model_dir}/index.pkl"
+
