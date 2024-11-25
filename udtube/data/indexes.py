@@ -92,33 +92,13 @@ class Index:
         feats: optional vocabulary for morphological tagging.
     """
 
-    # TODO(#3): other things (multiword table?) can also be stashed here.
-
     reverse_edits: bool = defaults.REVERSE_EDITS
     upos: Optional[Vocabulary] = None
     xpos: Optional[Vocabulary] = None
     lemma: Optional[Vocabulary] = None
     feats: Optional[Vocabulary] = None
 
-    # Properties.
-
-    def use_upos(self) -> bool:
-        return self.upos is not None
-
-    def use_xpos(self) -> bool:
-        return self.xpos is not None
-
-    def use_lemma(self) -> bool:
-        return self.lemma is not None
-
-    def use_feats(self) -> bool:
-        return self.feats is not None
-
     # Serialization.
-
-    @staticmethod
-    def path(model_dir: str) -> str:
-        return f"{model_dir}/index.pkl"
 
     @classmethod
     def read(cls, model_dir: str) -> Index:
@@ -132,11 +112,14 @@ class Index:
         """
         index = cls.__new__(cls)
         with open(cls.path(model_dir), "rb") as source:
-            dictionary = pickle.load(source)
-        for key, value in dictionary.items():
-            setattr(index, key, value)
+            for key, value in pickle.load(source).items():
+                setattr(index, key, value)
         return index
 
     def write(self, model_dir: str) -> None:
         with open(self.path(model_dir), "wb") as sink:
             pickle.dump(vars(self), sink)
+
+    @staticmethod
+    def path(model_dir: str) -> str:
+        return f"{model_dir}/index.pkl"
