@@ -112,7 +112,7 @@ class Index:
         """
         index = cls.__new__(cls)
         with open(cls.path(model_dir), "rb") as source:
-            for key, value in pickle.load(source):
+            for key, value in pickle.load(source).items():
                 setattr(index, key, value)
         return index
 
