@@ -137,11 +137,11 @@ class Mapper:
         """Decodes a tensor.
 
         Args:
-            indices: 1d tensor of indices.
+            indices: tensor of indices.
             vocabulary: the vocabulary
 
         Yields:
-            List[str]: Lists of decoded strings.
+            List[str]: decoded symbols.
         """
         return [
             vocabulary.get_symbol(c)
@@ -153,10 +153,10 @@ class Mapper:
         """Decodes an upos tensor.
 
         Args:
-            indices: 1d tensor of indices.
+            indices: tensor of indices.
 
         Yields:
-            List[str]: Decoded upos tags.
+            List[str]: decoded upos tags.
         """
         return self._decode(indices, self.index.upos)
 
@@ -164,10 +164,10 @@ class Mapper:
         """Decodes an xpos tensor.
 
         Args:
-            indices: 1d tensor of indices.
+            indices: tensor of indices.
 
         Yields:
-            List[str]: Decoded xpos tags.
+            List[str]: decoded xpos tags.
         """
         return self._decode(indices, self.index.xpos)
 
@@ -178,10 +178,10 @@ class Mapper:
 
         Args:
             forms: iterable of wordforms.
-            indices: 1d tensor of indices.
+            indices: tensor of indices.
 
         Yields:
-            List[str]: Decoded lemmas.
+            List[str]: decoded lemmas.
         """
         return [
             self.lemma_mapper.lemmatize(form, tag)
@@ -194,9 +194,9 @@ class Mapper:
         """Decodes a morphological features tensor.
 
         Args:
-            indices: 1d tensor of indices.
+            indices: tensor of indices.
 
         Yields:
-            List[str]]: Decoded morphological features.
+            List[str]: decoded morphological features.
         """
         return self._decode(indices, self.index.feats)
