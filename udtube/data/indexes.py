@@ -92,27 +92,11 @@ class Index:
         feats: optional vocabulary for morphological tagging.
     """
 
-    # TODO(#3): other things (multiword table?) can also be stashed here.
-
     reverse_edits: bool = defaults.REVERSE_EDITS
     upos: Optional[Vocabulary] = None
     xpos: Optional[Vocabulary] = None
     lemma: Optional[Vocabulary] = None
     feats: Optional[Vocabulary] = None
-
-    # Properties.
-
-    def use_upos(self) -> bool:
-        return self.upos is not None
-
-    def use_xpos(self) -> bool:
-        return self.xpos is not None
-
-    def use_lemma(self) -> bool:
-        return self.lemma is not None
-
-    def use_feats(self) -> bool:
-        return self.feats is not None
 
     # Serialization.
 
