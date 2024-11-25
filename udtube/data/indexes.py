@@ -123,4 +123,3 @@ class Index:
     @staticmethod
     def path(model_dir: str) -> str:
         return f"{model_dir}/index.pkl"
-
