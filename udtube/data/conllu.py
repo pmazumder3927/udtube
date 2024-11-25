@@ -1,4 +1,4 @@
-"""CoNLL-U file parser
+"""CoNLL-U file parser.
 
 This is roughly compatible with the third-party package `conllu`, though it
 only has features we care about."""
