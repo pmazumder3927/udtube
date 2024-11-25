@@ -41,10 +41,10 @@ def run_sweep(argv: List[str]) -> None:
     We encapsulate each run by using a separate subprocess, which ought to
     ensure that memory is returned (etc.).
     """
-    try:
-        subprocess.check_call(argv)
-    except subprocess.CalledProcessError as error:
-        logging.error("Subprocess error: %s", error)
+    process = subprocess.Popen(argv, stderr=subprocess.PIPE, text=True)
+    for line in process.stderr:
+        logging.info(line.rstrip())
+    wandb.finish(exit_code=process.wait())
 
 
 def populate_config(
@@ -107,9 +107,8 @@ def main(args: argparse.Namespace) -> None:
     except Exception:
         # Exits gracefully, so W&B logs the error.
         logging.fatal(traceback.format_exc())
+        wandb.finish(exit_code=1)
         exit(1)
-    finally:
-        wandb.finish()
 
 
 if __name__ == "__main__":
