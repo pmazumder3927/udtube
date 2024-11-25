@@ -44,9 +44,7 @@ def run_sweep(argv: List[str]) -> None:
     process = subprocess.Popen(argv, stderr=subprocess.PIPE, text=True)
     for line in process.stderr:
         logging.info(line.rstrip())
-    return_code = process.wait()
-    logging.info(f"subprocess finished with return code: {return_code}")
-    wandb.finish(return_code)
+    wandb.finish(exit_code=process.wait())
 
 
 def populate_config(
