@@ -41,9 +41,8 @@ class Mapper:
 
     index: indexes.Index  # Usually copied from the DataModule.
 
-    def __init__(self, index: indexes.Index):
-        self.index = index
-        self.lemma_mapper = LemmaMapper(index.reverse_edits)
+    def __post_init__(self):
+        self.lemma_mapper = LemmaMapper(self.index.reverse_edits)
 
     @classmethod
     def read(cls, model_dir: str) -> Mapper:
