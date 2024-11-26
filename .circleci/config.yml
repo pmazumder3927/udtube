@@ -11,7 +11,7 @@ jobs:
     steps:
       - checkout
       - run:
-          command: pip install -r requirements.txt
+          command: poetry install
       - run:
           command: << parameters.command-run >>
 
@@ -29,16 +29,16 @@ jobs:
       - run:
           name: Build source distribution and install package from it
           command: |
-              pip install -r requirements.txt && \
+              poetry install && \
               python -m build && \
               pip install dist/`ls dist/ | grep .whl`
       - run:
           name: Show installed Python packages
-          command: pip list -v
+          command: poetry show
       - run:
           name: Run tests
           command: |
-              pytest -vv tests --junitxml /tmp/testxml/report.xml
+              poetry run pytest -vv tests --junitxml /tmp/testxml/report.xml
       - store_test_results:
           path: /tmp/testxml/
 
