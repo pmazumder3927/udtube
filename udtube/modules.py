@@ -241,7 +241,7 @@ class UDTubeClassifier(lightning.LightningModule):
         """Computes logits for each of the classification heads.
 
         This takes the contextual word encodings and then computes the logits
-        for each of the active classification heads.This yields logits of the
+        for each of the active classification heads. This yields logits of the
         shape N x L x C. Loss and accuracy functions expect N x C x L, so we
         permute to produce this shape.
 
