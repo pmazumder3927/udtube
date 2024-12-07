@@ -48,16 +48,16 @@ workflows:
     jobs:
       - pre-build:
           name: black
-          command-run: black --line-length 79 --check .
+          command-run: poetry run black --line-length 79 --check .
       - pre-build:
           name: flake8
-          command-run: flake8 --ignore E203 .
+          command-run: poetry run flake8 --ignore E203 .
       - pre-build:
           name: twine
           command-run: |
             poetry build && \
-            twine check dist/`ls dist/ | grep .tar.gz` && \
-            twine check dist/`ls dist/ | grep .whl`
+            poetry run twine check dist/`ls dist/ | grep .tar.gz` && \
+            poetry run twine check dist/`ls dist/ | grep .whl`
       - build-python:
           requires:
             - black
