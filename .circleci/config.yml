@@ -11,7 +11,7 @@ jobs:
     steps:
       - checkout
       - run:
-          command: poetry install
+          command: poetry install --with=dev,test
       - run:
           command: << parameters.command-run >>
 
@@ -29,7 +29,7 @@ jobs:
       - run:
           name: Build source distribution and install package from it
           command: |
-              poetry install && \
+              poetry install --with=dev,test && \
               poetry build && \
               poetry add dist/$(ls dist/ | grep .whl)
       - run:
