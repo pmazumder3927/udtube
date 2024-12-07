@@ -30,8 +30,8 @@ jobs:
           name: Build source distribution and install package from it
           command: |
               poetry install && \
-              python -m build && \
-              pip install dist/`ls dist/ | grep .whl`
+              poetry build && \
+              poetry add dist/$(ls dist/ | grep .whl)
       - run:
           name: Show installed Python packages
           command: poetry show
