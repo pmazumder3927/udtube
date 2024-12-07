@@ -31,7 +31,7 @@ jobs:
           command: |
               poetry install --with=dev,test && \
               poetry build && \
-              poetry add dist/$(ls dist/ | grep .whl)
+              pip install dist/$(ls dist/ | grep .whl)
       - run:
           name: Show installed Python packages
           command: poetry show
