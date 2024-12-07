@@ -35,7 +35,7 @@ To install UDTube and its dependencies, run the following command:
 
     poetry install
 
-Note you'll have to have [poetry](https://python-poetry.org/docs/) installed
+Note you'll have to have [poetry](https://python-poetry.org/docs/) installed.
 
 ## File formats
 
