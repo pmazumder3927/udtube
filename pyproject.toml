@@ -10,7 +10,7 @@ name = "udtube"
 version = "0.1.0"
 description = "Neural morphological analysis"
 readme = "README.md"
-license = "Apache 2.0"
+license = "Apache-2.0"
 authors = [
     "Daniel Yakubov <danielyak98@gmail.com>",
     "Kyle Gorman <kylebgorman@gmail.com"
@@ -50,7 +50,7 @@ optional = true
 black = "^24.4.2"
 flake8 = "^7.1.0"
 build = "^1.2.1"
-twine = "^4.0.2"
+twine = "^6.0.0"
 wandb = "^0.18.0"
 
 [tool.poetry.group.test]
