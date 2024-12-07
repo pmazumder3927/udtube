@@ -55,7 +55,7 @@ workflows:
       - pre-build:
           name: twine
           command-run: |
-            python -m build && \
+            poetry build && \
             twine check dist/`ls dist/ | grep .tar.gz` && \
             twine check dist/`ls dist/ | grep .whl`
       - build-python:
