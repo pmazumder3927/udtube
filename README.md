@@ -1,9 +1,5 @@
 # UDTube (beta)
 
-[![PyPI
-version](https://badge.fury.io/py/udtube.svg)](https://pypi.org/project/udtube)
-[![Supported Python
-versions](https://img.shields.io/pypi/pyversions/wikipron.svg)](https://pypi.org/project/udtube)
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/CUNY-CL/udtube/tree/master.svg?style=svg&circle-token=CCIPRJ_4V98VzpnERYSUaGFAkxu7v_70eea48ab82c8f19e4babbaa55a64855a80415bd)](https://dl.circleci.com/status-badge/redirect/gh/CUNY-CL/udtube/tree/master)
 
 UDTube is a neural morphological analyzer based on
@@ -37,7 +33,9 @@ also be specified using POSIX-style command-line flags.
 
 To install UDTube and its dependencies, run the following command:
 
-    pip install .
+    poetry install
+
+Note you'll have to have [poetry](https://python-poetry.org/docs/) installed.
 
 ## File formats
 
@@ -55,8 +53,7 @@ Dependencies project](https://universaldependencies.org/).
 UDTube can perform up to four morphological tasks simultaneously:
 
 -   Lemmatization is performed using the `LEMMA` field and [edit
-    scripts](https://aclanthology.org/P14-2111/): enable with `data: 
-    use_lemma: true`.
+    scripts](https://aclanthology.org/P14-2111/).
 
 -   [Universal part-of-speech
     tagging](https://universaldependencies.org/u/pos/index.html) is performed
