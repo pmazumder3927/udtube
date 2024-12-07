@@ -76,10 +76,7 @@ class PredictionWriter(callbacks.BasePredictionWriter):
                     [token["form"] for token in tokenlist],
                     y_lemma_hat[i, :],
                 )
-                # `zip` should have already cut off the padding, so
-                # subscripting is not necessary here.
-                assert len(lemma_hat) == len(tokenlist)
-                for j, lemma in enumerate(lemma_hat):
+                for j, lemma in enumerate(lemma_hat[: len(tokenlist)]):
                     tokenlist[j]["lemma"] = lemma
             if y_feats_hat is not None:
                 feats_hat = self.mapper.decode_feats(y_feats_hat[i, :])

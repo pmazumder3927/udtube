@@ -153,10 +153,7 @@ class DataModule(lightning.LightningDataModule):
             ),
         )
         # Writes it to the model directory.
-        try:
-            os.mkdir(model_dir)
-        except FileExistsError:
-            pass
+        os.makedirs(model_dir, exist_ok=True)
         index.write(model_dir)
         return index
 

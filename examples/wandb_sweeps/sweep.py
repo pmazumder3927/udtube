@@ -113,7 +113,7 @@ def main(args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     logging.basicConfig(
-        format="%(filename)s %(levelname)s: %(asctime)s - %(message)s",
+        format="%(levelname)s: %(asctime)s - %(message)s",
         datefmt="%d-%b-%y %H:%M:%S",
         level="INFO",
     )
