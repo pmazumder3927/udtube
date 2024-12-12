@@ -145,10 +145,9 @@ class Mapper:
         """
         symbols = []
         for idx in indices:
-            if idx == special.END_IDX:
+            if idx == special.PAD_IDX:
                 return symbols
-            elif not special.issymbol(idx):
-                symbols.append(vocabulary.get_symbol(idx))
+            symbols.append(vocabulary.get_symbol(idx))
         return symbols
 
     def decode_upos(self, indices: torch.Tensor) -> List[str]:
