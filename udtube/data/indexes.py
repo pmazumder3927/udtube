@@ -29,7 +29,7 @@ class Vocabulary:
 
     def __init__(self, vocabulary: Iterable[str]):
         # TODO: consider storing this in-class for logging purposes.
-        self._index2symbol = special.SPECIALS + sorted(vocabulary)
+        self._index2symbol = special.SPECIAL + sorted(vocabulary)
         self._symbol2index = {c: i for i, c in enumerate(self._index2symbol)}
 
     def __len__(self) -> int:
@@ -58,24 +58,6 @@ class Vocabulary:
             str.
         """
         return self._index2symbol[index]
-
-    # Specials.
-
-    @property
-    def pad_idx(self) -> int:
-        return self._symbol2index[special.PAD]
-
-    @property
-    def unk_idx(self) -> int:
-        return self._symbol2index[special.UNK]
-
-    @property
-    def blank_idx(self) -> int:
-        return self._symbol2index[special.BLANK]
-
-    @property
-    def special_idx(self) -> Set[int]:
-        return {self.unk_idx, self.pad_idx, self.blank_idx}
 
 
 @dataclasses.dataclass
