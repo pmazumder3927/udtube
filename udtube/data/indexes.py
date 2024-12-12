@@ -46,7 +46,7 @@ class Vocabulary:
         Returns:
             int.
         """
-        return self._symbol2index.get(lookup, self.unk_idx)
+        return self._symbol2index.get(lookup, special.UNK_IDX)
 
     def get_symbol(self, index: int) -> str:
         """Looks up symbol by index.
