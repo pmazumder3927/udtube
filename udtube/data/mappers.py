@@ -8,7 +8,7 @@ from typing import Iterable, List
 import torch
 
 from . import edit_scripts, indexes
-from .. import defaults
+from .. import defaults, special
 
 
 @dataclasses.dataclass

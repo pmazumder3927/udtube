@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 import pickle
-from typing import Dict, Iterable, List, Optional, Set
+from typing import Dict, Iterable, List, Optional
 
 from .. import defaults, special
 
