@@ -15,10 +15,9 @@ trainer:
     - class_path: lightning.pytorch.loggers.CSVLogger
       init_args:
         save_dir: /Users/Shinji/UD_Russian-SynTagRus/models
-    - class_path: lightning.pytorch.loggers.wandb.WandbLogger
+    - class_path: lightning.pytorch.loggers.WandbLogger
       init_args:
-        entity: NERV
-        project: unit1
+        project: syntagrus
         save_dir: /Users/Shinji/UD_Russian-SynTagRus/models
 data:
   model_dir: /Users/Shinji/UD_Russian-SynTagRus/models

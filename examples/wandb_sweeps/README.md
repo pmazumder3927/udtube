@@ -26,12 +26,26 @@ here](https://docs.wandb.ai/guides/sweeps).
 Execute the following to create and run the sweep; here `${ENTITY}` and
 `${PROJECT}` are assumed to be pre-specified environmental variables.
 
+In the following example, targeting the Russian SynTagRus corpus, we have two
+separate YAML configuration files prepared. The first,
+[`configs/syntagrus_grid.yaml`](configs/syntagrus_grid.yaml), specifies the
+hyperparameter grid (it may also contain constant values, if desired), and the
+second, [`configs/syntagrus_tune.yaml`](configs/syntagrus_tune.yaml), specifies
+any constants needed during the sweep, such as trainer arguments or data paths.
+
     # Creates a sweep; save the sweep ID as ${SWEEP_ID} for later.
-    wandb sweep --entity "${ENTITY}" --project "${PROJECT}" grid.yaml
+    wandb sweep \
+        --entity "${ENTITY}" \
+        --project "${PROJECT}" \
+        configs/syntagrus_grid.yaml
     # Runs the sweep itself using hyperparameters from the the sweep and
     # additional fixed parameters from a UDTube config file.
-    ./sweep.py --entity "${ENTITY}" --project "${PROJECT}" \
-         --sweep_id "${SWEEP_ID}" --count "${COUNT}" --config syntagrus.yaml
+    ./sweep.py \
+         --entity "${ENTITY}" \
+         --project "${PROJECT}" \
+         --sweep_id "${SWEEP_ID}" \
+         --count "${COUNT}" \
+         --config config/syntagrus_tune.yaml
 
 Then, one can retrieve the results as follows:
 
