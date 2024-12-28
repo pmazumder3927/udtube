@@ -1,7 +1,7 @@
 seed_everything: 1995
 trainer:
   max_epochs: 100
-  max_time: 00:12:00:00
+  max_time: 00:03:00:00
   callbacks:
     - class_path: lightning.pytorch.callbacks.LearningRateMonitor
       init_args:
@@ -14,12 +14,12 @@ trainer:
   logger:
     - class_path: lightning.pytorch.loggers.CSVLogger
       init_args:
-        save_dir: /Users/Shinji/UD_Russian-SynTagRus/models
+        save_dir: /Users/Shinji/UD_Greek-GDT/models
     - class_path: lightning.pytorch.loggers.WandbLogger
       init_args:
-        project: unit1
-        save_dir: /Users/Shinji/UD_Russian-SynTagRus/models
+        project: gdt
+        save_dir: /Users/Shinji/UD_Greek-GDT/models
 data:
-  model_dir: /Users/Shinji/UD_Russian-SynTagRus/models
-  train: /Users/Shinji/UD_Russian-SynTagRus/ru_syntagrus-ud-train.conllu
-  val: /Users/Shinji/UD_Russian-SynTagRus/ru_syntagrus-ud-dev.conllu
+  model_dir: /Users/Shinji/UD_Greek-GDT/models
+  train: /Users/Shinji/UD_Greek-GDT/el_gdt-ud-train.conllu
+  val: /Users/Shinji/UD_Greek-GDT/el_gdt-ud-dev.conllu
