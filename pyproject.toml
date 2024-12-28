@@ -42,16 +42,16 @@ lightning = "^2.4.0"
 transformers = "^4.44.0"
 torch = "^2.4.0"
 torchmetrics = "^1.4.0.post0"
+wandb = "^0.18.0"
 
 [tool.poetry.group.dev]
 optional = true
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.4.2"
-flake8 = "^7.1.0"
 build = "^1.2.1"
+flake8 = "^7.1.0"
 twine = "^6.0.0"
-wandb = "^0.18.0"
 
 [tool.poetry.group.test]
 optional = true
