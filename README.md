@@ -251,15 +251,14 @@ generate charts or share artifacts. A sample configuration is given below.
     ...
     trainer:
       logger:
-      - class_path: lightning.pytorch.loggers.wandb.WandbLogger
+      - class_path: lightning.pytorch.loggers.WandbLogger
         init_args:
-          entity: NERV
           project: unit1
           save_dir: /Users/Shinji/models
       ...
 
-Adjust the `entity`, `project`, and `save_dir` arguments as needed; note that
-this functionality requires a working account with Weights & Biases.
+Adjust the `project` and `save_dir` arguments as needed; note that this
+functionality requires a working account with Weights & Biases.
 
 #### Other options
 
