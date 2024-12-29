@@ -49,20 +49,6 @@ class UDTubeTest(unittest.TestCase):
         )
         self.assertNonEmptyFileExists(expected_path)
         model_dir = os.path.join(self.tempdir.name, "models")
-        print(
-            " ".join(
-                [
-                    "fit",
-                    f"--config={CONFIG_PATH}",
-                    f"--data.model_dir={model_dir}",
-                    f"--data.train={train_path}",
-                    # We are trying to overfit on the training data.
-                    f"--data.val={train_path}",
-                    f"--model.encoder={encoder}",
-                    f"--model.use_xpos={use_xpos}",
-                ]
-            )
-        )
         cli.udtube_python_interface(
             [
                 "fit",
