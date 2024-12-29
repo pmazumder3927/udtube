@@ -99,8 +99,7 @@ class UDTubeTest(unittest.TestCase):
         self.assertNonEmptyFileExists(predicted_path)
         diff = self._diff(predicted_path, expected_path)
         self.assertEqual(diff, [], f"Prediction differences found:\n{diff}")
-        # Tests (i.e., evaluates) on "expected" data, which is logged.
-        tested_path = os.path.join(self.tempdir.name, f"{langcode}_.conllu")
+        # Tests (i.e., evaluates) on "expected" data; the results are logged.
         cli.udtube_python_interface(
             [
                 "test",
