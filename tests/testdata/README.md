@@ -22,6 +22,14 @@ expected data files:
         --model.encoder=google-bert/bert-base-cased \
         --model.use_xpos=True \
         > tests/testdata/en_expected.conllu 
+    udtube test \
+        --ckpt_path=models/lightning_logs/version_0/checkpoints/last.ckpt \
+        --config=tests/testdata/udtube_config.yaml \
+        --data.model_dir=models \
+        --data.test=tests/testdata/en_train.conllu \
+        --model.encoder=google-bert/bert-base-cased \
+        --model.use_xpos=True \
+        > tests/testdata/en_expected.test
     rm -rf models
     udtube fit \
         --config=tests/testdata/udtube_config.yaml \
@@ -38,4 +46,12 @@ expected data files:
         --model.encoder=DeepPavlov/rubert-base-cased \
         --model.use_xpos=False \
         > tests/testdata/ru_expected.conllu 
+    udtube test \
+        --ckpt_path=models/lightning_logs/version_0/checkpoints/last.ckpt \
+        --config=tests/testdata/udtube_config.yaml \
+        --data.model_dir=models \
+        --data.test=tests/testdata/ru_train.conllu \
+        --model.encoder=DeepPavlov/rubert-base-cased \
+        --model.use_xpos=False \
+        > tests/testdata/ru_expected.test 
     rm -rf models
