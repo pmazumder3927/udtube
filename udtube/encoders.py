@@ -24,7 +24,7 @@ SUPPORTED_ENCODERS = {
     "DeepPavlov/rubert": {"dropout": "hidden_dropout_prob"},
     "FacebookAI/roberta": {"dropout": "hidden_dropout_prob"},
     "FacebookAI/xlm-roberta": {"dropout": "hidden_dropout_prob"},
-    "distilbert/distilbert": {},  # FIXME.
+    "distilbert/distilbert": {},
     "flaubert/flaubert": {},
     "google-t5/t5": {"hidden_dropout_prob": "dropout_rate"},
     "dccuchile/bert-base-spanish": {"dropout": "hidden_dropout_prob"},
