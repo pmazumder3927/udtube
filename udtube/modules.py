@@ -131,7 +131,9 @@ class UDTubeEncoder(lightning.LightningModule):
         max_length = self.encoder.config.max_position_embeddings
         if actual_length > max_length:
             logging.warning(
-                "Truncating sequence from %d to %d", actual_length, max_length,
+                "Truncating sequence from %d to %d",
+                actual_length,
+                max_length,
             )
             batch.tokens.input_ids = batch.tokens.input_ids[:max_length]
             batch.tokens.attention_mask = batch.tokens.attention_mask[
