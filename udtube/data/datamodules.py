@@ -89,7 +89,11 @@ class DataModule(lightning.LightningDataModule):
             else indexes.Index.read(model_dir)
         )
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(
-            encoder, clean_up_tokenization_spaces=False
+            encoder,
+            # These options are not available on all tokenizers but seem to be
+            # ignored so they can be passed in safely.
+            clean_up_tokenization_spaces=False,
+            add_prefix_space=True,
         )
 
     # Based on: https://universaldependencies.org/u/pos/index.html.

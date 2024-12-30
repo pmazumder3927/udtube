@@ -37,7 +37,9 @@ class UDTubeEncoder(lightning.LightningModule):
     ):
         super().__init__()
         self.dropout_layer = nn.Dropout(dropout)
-        self.encoder = encoders.load(encoder, dropout)
+        # TODO: Any parameters referenced in the remappings in
+        # encoders.SUPPORTED_ENCODERS need to be passed as kwargs here.
+        self.encoder = encoders.load(encoder, dropout=dropout)
         self.pooling_layers = pooling_layers
 
     # Properties.
@@ -129,7 +131,9 @@ class UDTubeEncoder(lightning.LightningModule):
         max_length = self.encoder.config.max_position_embeddings
         if actual_length > max_length:
             logging.warning(
-                "Truncating sequence from %d to %d", actual_length, max_length
+                "Truncating sequence from %d to %d",
+                actual_length,
+                max_length,
             )
             batch.tokens.input_ids = batch.tokens.input_ids[:max_length]
             batch.tokens.attention_mask = batch.tokens.attention_mask[
