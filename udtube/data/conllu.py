@@ -31,8 +31,9 @@ class TokenList(collections.UserList):
     optional associated metadata.
 
     Args:
-        tokens: List of tokens.
-        metadata: ordered dictionary of string/key pairs.
+        tokens (Iterable[Dict[str, str]]): List of tokens.
+        metadata (Dict[str, Optional[str]], optional): ordered dictionary of
+            string/key pairs.
     """
 
     metadata: Dict[str, Optional[str]]
