@@ -59,7 +59,6 @@ class UDTubeTest(unittest.TestCase):
     def test_model(self, langcode: str, encoder: str, use_xpos: bool):
         # Fits model.
         train_path = os.path.join(TESTDATA_DIR, f"{langcode}_train.conllu")
-        self.assertNonEmptyFileExists(train_path)
         model_dir = os.path.join(self.tempdir.name, "models")
         cli.udtube_python_interface(
             [
@@ -97,6 +96,7 @@ class UDTubeTest(unittest.TestCase):
                 f"--prediction.path={predicted_path}",
             ]
         )
+        self.assertNonEmptyFileExists(predicted_path)
         self.assertFileIdentity(predicted_path, expected_path)
         # Evaluates on "expected" data.
         evaluated_path = os.path.join(
@@ -119,6 +119,7 @@ class UDTubeTest(unittest.TestCase):
         expected_path = os.path.join(
             self.tempdir.name, f"{langcode}_evaluated.test"
         )
+        self.assertNonEmptyFileExists(evaluated_path)
         self.assertFileIdentity(evaluated_path, expected_path)
 
 
