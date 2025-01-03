@@ -24,10 +24,10 @@ SUPPORTED_ENCODERS = {
     "DeepPavlov/rubert": {"dropout": "hidden_dropout_prob"},
     "FacebookAI/roberta": {"dropout": "hidden_dropout_prob"},
     "FacebookAI/xlm-roberta": {"dropout": "hidden_dropout_prob"},
+    "dccuchile/bert-base-spanish": {"dropout": "hidden_dropout_prob"},
     "distilbert/distilbert": {},
     "flaubert/flaubert": {},
     "google-t5/t5": {"hidden_dropout_prob": "dropout_rate"},
-    "dccuchile/bert-base-spanish": {"dropout": "hidden_dropout_prob"},
     "google-bert/bert": {"dropout": "hidden_dropout_prob"},
     "nlpaueb/bert-base-greek": {"dropout": "hidden_dropout_prob"},
 }
