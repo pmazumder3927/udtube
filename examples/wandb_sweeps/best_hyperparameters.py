@@ -38,11 +38,8 @@ def main(args: argparse.Namespace) -> None:
         if hasattr(defaults, key_upper):
             if getattr(defaults, key_upper) == value:
                 continue
-        if (
-            key.endswith("_cls")
-            or key.endswith("_idx")
-            or key.endswith("vocab_size")
-        ):
+        excluded_suffixes = ["_cls", "_idx", "vocab_size"]
+        if any(key.endswith(suffix) for suffix in excluded_suffixes):
             continue
         if value is None:
             continue
