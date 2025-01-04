@@ -47,6 +47,7 @@ def main(args: argparse.Namespace) -> None:
         config[key] = value
     print(yaml.dump(config, default_flow_style=False, sort_keys=False))
 
+
 if __name__ == "__main__":
     logging.basicConfig(format="%(levelname)s: %(message)s", level="INFO")
     parser = argparse.ArgumentParser(description=__doc__)
