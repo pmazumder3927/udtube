@@ -3,6 +3,7 @@
 
 import argparse
 import logging
+import yaml
 
 import wandb
 
@@ -20,7 +21,7 @@ def main(args: argparse.Namespace) -> None:
     best_run = sweep.best_run()
     logging.info("Best run URL: %s", best_run.url)
     # Sorting for stability.
-    args = []
+    config = {}
     for key, value in sorted(best_run.config.items()):
         # Exclusions:
         #
@@ -43,9 +44,8 @@ def main(args: argparse.Namespace) -> None:
             continue
         if value is None:
             continue
-        args.append((key, value))
-    print(" ".join(f"--{key} {value}" for key, value in args))
-
+        config[key] = value
+    print(yaml.dump(config, default_flow_style=False, sort_keys=False))
 
 if __name__ == "__main__":
     logging.basicConfig(format="%(levelname)s: %(message)s", level="INFO")
