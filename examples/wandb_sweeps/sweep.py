@@ -9,11 +9,12 @@ import sys
 import tempfile
 import traceback
 import warnings
-
 from typing import Any, Dict, List, TextIO
 
-import yaml
 import wandb
+import yaml
+
+import util
 
 warnings.filterwarnings("ignore", ".*is a wandb run already in progress.*")
 
@@ -60,33 +61,8 @@ def populate_config(
     """
     wandb.init()
     for key, value in wandb.config.items():
-        _recursive_insert(config, key, value)
+        util.recursive_insert(config, key, value)
     yaml.dump(config, temp_config_handle)
-
-
-def _recursive_insert(config: Dict[str, Any], key: str, value: Any) -> None:
-    """Recursively inserts values into a nested dictionary.
-
-    Args:
-        config: the config dictionary.
-        key: a string with the arguments separated by ".".
-        value: the value to insert.
-    """
-    *most, last = key.split(".")
-    ptr = config
-    for piece in most:
-        try:
-            ptr = ptr[piece]
-        except KeyError:
-            ptr[piece] = {}
-            ptr = ptr[piece]
-    if last in ptr:
-        logging.debug(
-            "Overriding configuration argument %s with W&B sweep value: %r",
-            key,
-            value,
-        )
-    ptr[last] = value
 
 
 def main(args: argparse.Namespace) -> None:
