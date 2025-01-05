@@ -48,12 +48,12 @@ def dot_to_nested_dict(flat_dict: Dict[str, Any]) -> Dict[str, Any]:
 
         # Handle model-prefixed or allowed category keys
         if (
-            key.startswith("model.")
-            or any(
+            key.startswith("model.") or
+            any(
                 key.startswith(f"{cat}.")
                 for cat in ALLOWED_TOP_LEVEL_CATEGORIES
-            )
-            or key in ALLOWED_TOP_LEVEL_CATEGORIES
+            ) or
+            key in ALLOWED_TOP_LEVEL_CATEGORIES
         ):
             sweep._recursive_insert(nested, key, value)
 
