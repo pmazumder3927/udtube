@@ -3,16 +3,61 @@
 
 import argparse
 import logging
+from typing import Any, Dict
 import yaml
 
 import wandb
+import sweep
 
-from udtube import defaults
-
-# Expand as needed.
-FLAGS_TO_IGNORE = frozenset(
-    ["eval_metrics", "local_run_dir", "n_model_params"]
+# Top-level categories allowed in Lightning CLI configs
+ALLOWED_TOP_LEVEL_CATEGORIES = frozenset(
+    ["data", "model", "trainer", "checkpoint", "prediction"]
 )
+
+
+def dot_to_nested_dict(flat_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert dot notation dictionary to nested dictionary and handle configs.
+
+    Uses recursive insertion for clean nested dictionary creation while
+    maintaining proper structure for optimizer/scheduler configs and enforcing
+    allowed categories.
+    """
+    nested = {}
+
+    for key, value in flat_dict.items():
+        # Handle model-related top-level keys
+        if key in {"dropout", "encoder", "pooling_layers", "use_xpos"}:
+            sweep._recursive_insert(nested, f"model.{key}", value)
+            continue
+
+        # Handle optimizer/scheduler configs
+        if key.startswith(("classifier_", "encoder_")):
+            prefix, remainder = key.split("_", 1)
+            model_key = f"model.{prefix}_{remainder}"
+            if isinstance(value, dict):
+                if "class_path" in value:
+                    sweep._recursive_insert(nested, model_key, value)
+                else:
+                    current = nested.setdefault("model", {})
+                    current = current.setdefault(
+                        f"{prefix}_{remainder}",
+                        {},
+                    )
+                    current.update(value)
+            continue
+
+        # Handle model-prefixed or allowed category keys
+        if (
+            key.startswith("model.")
+            or any(
+                key.startswith(f"{cat}.")
+                for cat in ALLOWED_TOP_LEVEL_CATEGORIES
+            )
+            or key in ALLOWED_TOP_LEVEL_CATEGORIES
+        ):
+            sweep._recursive_insert(nested, key, value)
+
+    return nested
 
 
 def main(args: argparse.Namespace) -> None:
@@ -20,31 +65,16 @@ def main(args: argparse.Namespace) -> None:
     sweep = api.sweep(f"{args.entity}/{args.project}/{args.sweep_id}")
     best_run = sweep.best_run()
     logging.info("Best run URL: %s", best_run.url)
-    # Sorting for stability.
-    config = {}
-    for key, value in sorted(best_run.config.items()):
-        # Exclusions:
-        #
-        # * Explicitly ignored flags
-        # * Keys with "/" is for redundant parameters in the scheduler.
-        # * Key/value pairs that are defaults can be omitted.
-        # * Keys ending in "_cls", "_idx", and "vocab_size" are set
-        #   automatically.
-        # * None values are defaults definitionally.
-        if key in FLAGS_TO_IGNORE:
-            continue
-        if "/" in key:
-            continue
-        key_upper = key.upper()
-        if hasattr(defaults, key_upper):
-            if getattr(defaults, key_upper) == value:
-                continue
-        excluded_suffixes = ["_cls", "_idx", "vocab_size"]
-        if any(key.endswith(suffix) for suffix in excluded_suffixes):
-            continue
-        if value is None:
-            continue
-        config[key] = value
+
+    # Get all config values from best run
+    flat_config = {
+        key: value
+        for key, value in sorted(best_run.config.items())
+        if value is not None and "/" not in key
+    }
+
+    # Convert to nested dictionary structure
+    config = dot_to_nested_dict(flat_config)
     print(yaml.dump(config, default_flow_style=False, sort_keys=False))
 
 
