@@ -34,7 +34,7 @@ class PredictionWriter(callbacks.BasePredictionWriter):
         self.path = path
         self.sink = sys.stdout
         assert model_dir, "no model_dir specified"
-        self.mapper = data.Mapper.read(self.model_dir)
+        self.mapper = data.Mapper.read(model_dir)
 
     # Required API.
 
