@@ -29,6 +29,20 @@ class IDTest(unittest.TestCase):
         mwe = conllu.ID(2, 3)
         self.assertEqual(mwe, conllu.ID.parse_from_string(str(mwe)))
 
+    def test_mwe_non_equivalence(self):
+        mwe1 = conllu.ID(2, 3)
+        mwe2 = conllu.ID(3, 4)
+        self.assertNotEqual(mwe1, mwe2)
+
+    def test_mwe_swe_not_equivalence(self):
+        mwe = conllu.ID(2, 3)
+        swe = conllu.ID(2)
+        self.assertNotEqual(mwe, swe)
+
+    def test_bad_parse(self):
+        with self.assertRaises(conllu.Error):
+            conllu.ID.parse_from_string("2:3")
+
 
 class TokenTest(unittest.TestCase):
 
