@@ -3,19 +3,19 @@
 
 import argparse
 
-from udtube import data
+from udtube.data import conllu
 
 
 def main(args: argparse.Namespace) -> None:
     prefix = args.source.removesuffix(".conllu")
     sink_name = prefix + "-no_mwe" + ".conllu"
     with open(sink_name, "w") as sink:
-        for tokenlist in data.parse_from_path(args.source):
-            tokenlist = data.TokenList(
-                [token for token in tokenlist if "-" not in token["id"]],
+        for tokenlist in conllu.parse_from_path(args.source):
+            tokenlist = conllu.TokenList(
+                (token for token in tokenlist if not token.is_mwe),
                 metadata=tokenlist.metadata,
             )
-            print(tokenlist.serialize(), file=sink)
+            print(tokenlist, file=sink)
 
 
 if __name__ == "__main__":

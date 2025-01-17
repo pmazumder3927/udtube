@@ -77,7 +77,7 @@ class Collator:
     def __call__(self, itemlist: List[datasets.Item]) -> batches.Batch:
         return batches.Batch(
             tokenlists=[item.tokenlist for item in itemlist],
-            tokens=self.tokenizer([item.tokens for item in itemlist]),
+            tokens=self.tokenizer([item.get_tokens() for item in itemlist]),
             # Looks ugly, but this just pads and stacks data for whatever
             # classification tasks are enabled.
             upos=(

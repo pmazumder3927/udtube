@@ -4,7 +4,7 @@
 import argparse
 
 import spacy_udpipe
-from udtube import data
+from udtube.data import conllu
 
 BLANK = "_"
 
@@ -17,26 +17,25 @@ def main(args: argparse.Namespace) -> None:
         open(args.conllu, "w") as sink,
     ):
         for sentence in tokenize(source.read()).sents:
-            tokenlist = data.TokenList(
+            tokenlist = conllu.TokenList(
                 [
-                    {
-                        "id": index,
-                        "form": token.text,
-                        # Fills in the other fields.
-                        "lemma": BLANK,
-                        "upos": BLANK,
-                        "xpos": BLANK,
-                        "feats": BLANK,
-                        "head": BLANK,
-                        "deprel": BLANK,
-                        "deps": BLANK,
-                        "misc": BLANK,
-                    }
-                    for index, token in enumerate(sentence, 1)
+                    conllu.Token(
+                        id_=conllu.ID(id_),
+                        form=token.text,
+                        lemma=BLANK,
+                        upos=BLANK,
+                        xpos=BLANK,
+                        feats=BLANK,
+                        head=BLANK,
+                        deprel=BLANK,
+                        deps=BLANK,
+                        misc=BLANK,
+                    )
+                    for id_, token in enumerate(sentence, 1)
                 ],
                 metadata={"text": sentence},
             )
-            print(tokenlist.serialize(), file=sink)
+            print(tokenlist, file=sink)
 
 
 if __name__ == "__main__":

@@ -66,21 +66,21 @@ class PredictionWriter(callbacks.BasePredictionWriter):
             if y_upos_hat is not None:
                 upos_hat = self.mapper.decode_upos(y_upos_hat[i, :])
                 for j, upos in enumerate(upos_hat[: len(tokenlist)]):
-                    tokenlist[j]["upos"] = upos
+                    tokenlist[j].upos = upos
             if y_xpos_hat is not None:
                 xpos_hat = self.mapper.decode_xpos(y_xpos_hat[i, :])
                 for j, xpos in enumerate(xpos_hat[: len(tokenlist)]):
-                    tokenlist[j]["xpos"] = xpos
+                    tokenlist[j].xpos = xpos
             if y_lemma_hat is not None:
                 lemma_hat = self.mapper.decode_lemma(
-                    [token["form"] for token in tokenlist],
+                    [token.form for token in tokenlist],
                     y_lemma_hat[i, :],
                 )
                 for j, lemma in enumerate(lemma_hat[: len(tokenlist)]):
-                    tokenlist[j]["lemma"] = lemma
+                    tokenlist[j].lemma = lemma
             if y_feats_hat is not None:
                 feats_hat = self.mapper.decode_feats(y_feats_hat[i, :])
                 for j, feats in enumerate(feats_hat[: len(tokenlist)]):
-                    tokenlist[j]["feats"] = feats
-            print(tokenlist.serialize(), file=self.sink)
+                    tokenlist[j].feats = feats
+            print(tokenlist, file=self.sink)
         self.sink.flush()
