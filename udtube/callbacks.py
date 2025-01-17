@@ -3,6 +3,7 @@
 import sys
 from typing import Optional, Sequence, TextIO
 
+import lightning
 from lightning.pytorch import callbacks, trainer
 import torch
 
@@ -20,6 +21,7 @@ class PredictionWriter(callbacks.BasePredictionWriter):
         model_dir: Path for checkpoints, indexes, and logs.
     """
 
+    path: Optional[str]
     sink: TextIO
     mapper: data.Mapper
 
@@ -29,11 +31,18 @@ class PredictionWriter(callbacks.BasePredictionWriter):
         model_dir: str = "",  # Dummy value filled in by a link.
     ):
         super().__init__("batch")
-        self.sink = open(path, "w") if path else sys.stdout
+        self.path = path
+        self.sink = sys.stdout
         assert model_dir, "no model_dir specified"
-        self.mapper = data.Mapper.read(model_dir)
+        self.mapper = data.Mapper.read(self.model_dir)
 
     # Required API.
+
+    def on_predict_start(self, trainer: trainer.Trainer, pl_module: lightning.LightningModule) -> None:
+        # Placing this here prevents the creation of an empty file just in case a prediction
+        # callback was specified but UDTube is not running in predict mode.
+        if self.path:
+            self.sink = open(self.path, "w")
 
     def write_on_batch_end(
         self,
@@ -80,3 +89,7 @@ class PredictionWriter(callbacks.BasePredictionWriter):
                     tokenlist[j]["feats"] = feats
             print(tokenlist.serialize(), file=self.sink)
         self.sink.flush()
+
+    def on_predict_end(self, trainer: trainer.Trainer, pl_module: lightning.LightningModule) -> None:
+        if self.sink is not sys.stdout:
+            self.sink.close()
