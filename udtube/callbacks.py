@@ -38,9 +38,12 @@ class PredictionWriter(callbacks.BasePredictionWriter):
 
     # Required API.
 
-    def on_predict_start(self, trainer: trainer.Trainer, pl_module: lightning.LightningModule) -> None:
-        # Placing this here prevents the creation of an empty file just in case a prediction
-        # callback was specified but UDTube is not running in predict mode.
+    def on_predict_start(
+        self, trainer: trainer.Trainer, pl_module: lightning.LightningModule
+    ) -> None:
+        # Placing this here prevents the creation of an empty file in the case
+        # where a prediction callback was specified but UDTube is not running
+        # in predict mode.
         if self.path:
             self.sink = open(self.path, "w")
 
@@ -90,6 +93,8 @@ class PredictionWriter(callbacks.BasePredictionWriter):
             print(tokenlist.serialize(), file=self.sink)
         self.sink.flush()
 
-    def on_predict_end(self, trainer: trainer.Trainer, pl_module: lightning.LightningModule) -> None:
+    def on_predict_end(
+        self, trainer: trainer.Trainer, pl_module: lightning.LightningModule
+    ) -> None:
         if self.sink is not sys.stdout:
             self.sink.close()
