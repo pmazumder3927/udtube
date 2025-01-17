@@ -6,7 +6,7 @@ or tags) of a sentence in the batch.
 """
 
 import logging
-from typing import List, Optional, Tuple
+from typing import Optional
 
 import lightning
 import torch
@@ -52,7 +52,7 @@ class UDTubeEncoder(lightning.LightningModule):
         self,
         embeddings: torch.Tensor,
         tokenized: transformers.BatchEncoding,
-    ) -> Tuple[torch.Tensor, List[List[str]]]:
+    ) -> torch.Tensor:
         """Groups subword embeddings to form word embeddings.
 
         This is necessary because each classifier head makes per-word

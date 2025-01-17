@@ -140,8 +140,7 @@ class TokenList(collections.UserList):
 
     def get_tokens(self) -> List[str]:
         """List of tokens to be fed into tokenizer."""
-        # FIXME exclude MWEs.
-        return [token.form for token in self]
+        return [token.form for token in self if not token.is_mwe]
 
 
 # Parsing.

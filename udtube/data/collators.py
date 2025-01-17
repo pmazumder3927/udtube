@@ -75,6 +75,8 @@ class Collator:
         )
 
     def __call__(self, itemlist: List[datasets.Item]) -> batches.Batch:
+        # Tokenlists preserve MWE information implicitly, but MWE tokens and
+        # associated tags are not present in the tensors.
         return batches.Batch(
             tokenlists=[item.tokenlist for item in itemlist],
             tokens=self.tokenizer([item.get_tokens() for item in itemlist]),

@@ -194,8 +194,7 @@ class TokenListTest(unittest.TestCase):
                 ),
             ],
         )
-        print(tokenlist.get_tokens())
-        # self.assertEqual(tokenlist.get_tokens(), ["Please", "do", "n't"])
+        self.assertEqual(tokenlist.get_tokens(), ["Please", "do", "n't"])
 
 
 class ParseTest(unittest.TestCase):
