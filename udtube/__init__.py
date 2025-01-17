@@ -1,9 +1,14 @@
-"""UDTube: a neural morphological analyzer."""
+"""UDTube: a neural morphological analyzer.
 
-# Silences some uninformative warnings.
+This module just silences some uninformative warnings.
+"""
+
+import os
 import warnings
 
-# Silences irrelevant warnings; these are more like "Did you know?"s.
+# Silences tokenizers warning about forking.
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 warnings.filterwarnings(
     "ignore", ".*does not have many workers which may be a bottleneck.*"
 )
