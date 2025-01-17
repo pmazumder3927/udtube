@@ -33,10 +33,6 @@ class PredictionWriter(callbacks.BasePredictionWriter):
         assert model_dir, "no model_dir specified"
         self.mapper = data.Mapper.read(model_dir)
 
-    def __del__(self):
-        if self.sink is not sys.stdout:
-            self.sink.close()
-
     # Required API.
 
     def write_on_batch_end(
