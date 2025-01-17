@@ -72,38 +72,42 @@ class PredictionWriter(callbacks.BasePredictionWriter):
         )
         for i, tokenlist in enumerate(batch.tokenlists):
             # Sentence-level decoding of the classification indices, followed
-            # by rewriting the fields in the tokenlist. Note that in when MWEs
-            # are present, the iterators with predicted tags from the
-            # classifier heads are shorter than the tokenlists, so we
-            # `continue` without advancing said iterators.
+            # by rewriting the fields in the tokenlist.
             if upos_hat is not None:
                 upos_it = self.mapper.decode_upos(upos_hat[i, :])
-                for token in tokenlist:
-                    if token.is_mwe:
-                        continue
-                    token.upos = next(upos_it)
+                self._fill_in_tags(tokenlist, "upos", upos_it)
             if xpos_hat is not None:
                 xpos_it = self.mapper.decode_xpos(xpos_hat[i, :])
-                for token in tokenlist:
-                    if token.is_mwe:
-                        continue
-                    token.xpos = next(xpos_it)
+                self._fill_in_tags(tokenlist, "xpos", xpos_it)
             if lemma_hat is not None:
                 lemma_it = self.mapper.decode_lemma(
                     tokenlist.get_tokens(), lemma_hat[i, :]
                 )
-                for token in tokenlist:
-                    if token.is_mwe:
-                        continue
-                    token.lemma = next(lemma_it)
+                self._fill_in_tags(tokenlist, "lemma", lemma_it)
             if feats_hat is not None:
                 feats_it = self.mapper.decode_feats(feats_hat[i, :])
-                for token in tokenlist:
-                    if token.is_mwe:
-                        continue
-                    token.feats = next(feats_it)
+                self._fill_in_tags(tokenlist, "feats", feats_it)
             print(tokenlist, file=self.sink)
         self.sink.flush()
+
+    @staticmethod
+    def _fill_in_tags(
+        tokenlist: data.TokenList, attr: str, tags: Iterator[str]
+    ) -> None:
+        """Helper method for copying tags into tokenlist.
+
+        Args:
+            tokenlist (data.TokenList): tokenlist to insert into.
+            attr (str): attribute on tokens where the tags should be inserted.
+            tags (Iterator[str]): tags to insert.
+        """
+        # Note that in when MWEs are present, the iterators with predicted tags
+        # from the classifier heads are shorter than the tokenlists, so we
+        # `continue` without advancing said iterators.
+        for token in tokenlist:
+            if token.is_mwe:
+                continue
+            setattr(token, attr, next(tags))
 
     def on_predict_end(
         self, trainer: trainer.Trainer, pl_module: lightning.LightningModule
