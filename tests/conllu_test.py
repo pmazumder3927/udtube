@@ -99,7 +99,7 @@ class TokenTest(unittest.TestCase):
     def make_swe_token() -> conllu.Token:
         return conllu.Token(
             conllu.ID(1),
-            "Plesae",
+            "Please",
             "please",
             "INTJ",
             "_",
