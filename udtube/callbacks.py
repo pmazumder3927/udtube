@@ -1,7 +1,7 @@
 """Custom callbacks."""
 
 import sys
-from typing import Optional, Sequence, TextIO
+from typing import Iterator, Optional, Sequence, TextIO
 
 import lightning
 from lightning.pytorch import callbacks, trainer
@@ -92,12 +92,12 @@ class PredictionWriter(callbacks.BasePredictionWriter):
 
     @staticmethod
     def _fill_in_tags(
-        tokenlist: data.TokenList, attr: str, tags: Iterator[str]
+        tokenlist: data.conllu.TokenList, attr: str, tags: Iterator[str]
     ) -> None:
         """Helper method for copying tags into tokenlist.
 
         Args:
-            tokenlist (data.TokenList): tokenlist to insert into.
+            tokenlist (data.conllu.TokenList): tokenlist to insert into.
             attr (str): attribute on tokens where the tags should be inserted.
             tags (Iterator[str]): tags to insert.
         """
