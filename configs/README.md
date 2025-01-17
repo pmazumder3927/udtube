@@ -14,7 +14,7 @@ Pre-trained encoders:
     (`google-bert/bert-base-cased`)](https://huggingface.co/google-bert/bert-base-cased)
 -   [mBERT
     (`google-bert/bert-base-multilingual-cased`)](https://huggingface.co/google-bert/bert-base-multilingual-cased)
--   [DistillBERT
+-   [DistilBERT
     (`distilbert/distilbert-base-cased`)](https://huggingface.co/distilbert/distilbert-base-cased)
 -   [RoBERTa
     (`FacebookAI/roberta-base`)](https://huggingface.co/FacebookAI/roberta-base)
