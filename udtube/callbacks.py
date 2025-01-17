@@ -72,7 +72,10 @@ class PredictionWriter(callbacks.BasePredictionWriter):
         )
         for i, tokenlist in enumerate(batch.tokenlists):
             # Sentence-level decoding of the classification indices, followed
-            # by rewriting the fields in the tokenlist.
+            # by rewriting the fields in the tokenlist. Note that in when MWEs
+            # are present, the iterators with predicted tags from the
+            # classifier heads are shorter than the tokenlists, so we
+            # `continue` without advancing said iterators.
             if upos_hat is not None:
                 upos_it = self.mapper.decode_upos(upos_hat[i, :])
                 for token in tokenlist:
