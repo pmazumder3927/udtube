@@ -66,7 +66,8 @@ class ID:
         return slice(self.lower, self.upper + 1)
 
 
-@dataclasses.dataclass(slots=True)
+# TODO: when dropping support for Python 3.9, add `slots=True`.
+@dataclasses.dataclass
 class Token:
     """Token object."""
 
