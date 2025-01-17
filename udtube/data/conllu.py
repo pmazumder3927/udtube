@@ -3,6 +3,8 @@
 This is roughly compatible with the third-party package `conllu`, though it
 only has features we care about."""
 
+from __future__ import annotations
+
 import collections
 import re
 
@@ -22,6 +24,72 @@ _fieldnames = [
     "deps",
     "misc",
 ]
+
+
+class Error(Exception):
+
+    pass
+
+
+class ID:
+    """Representation of a CoNLL-U sentence ID.
+
+    Most of the time this is just a single integer, but MWEs use two integers
+    to represent a span of tokens.
+
+    Args:
+        lower (int): the lower or sole index.
+        upper (int, optional): the upper index, for MWEs.
+    """
+
+    lower: int
+    upper: int
+
+    def __init__(self, lower: int, upper: Optional[int] = None):
+        self.lower = lower
+        # If upper not specified, we set it to lower + 1 so this behaves
+        # like an ordinary Python slice.
+        self.upper = self.lower + 1 if upper is None else upper
+
+    @classmethod
+    def parse_from_string(cls, string: str) -> ID:
+        if match := re.fullmatch(r"(\d+)-(\d+)", string):
+            return cls(int(match.group(1)), int(match.group(2)))
+        elif match := re.fullmatch(r"\d+", string):
+            return cls(int(match.group()))
+        else:
+            raise Error(f"Unable to parse ID {str}")
+
+    def __repr__(self) -> str:
+        if self.is_mwe:
+            return f"{self.__class__.__name__}({self.lower}, {self.upper})"
+        return f"{self.__class__.__name__}({self.lower})"
+
+    def __str__(self) -> str:
+        if self.is_mwe:
+            return f"{self.lower}-{self.upper}"
+        return str(self.lower)
+
+    def __len__(self) -> int:
+        return self.upper - self.lower
+
+    def __eq__(self, other: ID) -> bool:
+        return self.lower == other.lower and self.upper == other.upper
+
+    @property
+    def is_mwe(self) -> bool:
+        return len(self) > 1
+
+    def get_slice(self) -> slice:
+        return slice(self.lower, self.upper)
+
+
+# TODO: One could imagine other non-string representations of the other
+# columns in a CoNLL-U file but YAGNI so far.
+
+
+# class Token(collections.UserDict):
+#    """Token object."""
 
 
 class TokenList(collections.UserList):

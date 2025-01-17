@@ -4,16 +4,39 @@ import io
 import tempfile
 import unittest
 
-from udtube import data
+from udtube.data import conllu
+
+
+class IDTest(unittest.TestCase):
+
+    def test_swe(self):
+        swe = conllu.ID(3)
+        self.assertEqual(len(swe), 1)
+        self.assertFalse(swe.is_mwe)
+        self.assertEqual(str(swe), "3")
+
+    def test_swe_roundtrip(self):
+        swe = conllu.ID(3)
+        self.assertEqual(swe, conllu.ID.parse_from_string(str(swe)))
+
+    def test_mwe(self):
+        mwe = conllu.ID(2, 4)
+        self.assertEqual(len(mwe), 2)
+        self.assertTrue(mwe.is_mwe)
+        self.assertEqual(str(mwe), "2-4")
+
+    def test_mwe_roundtrip(self):
+        mwe = conllu.ID(2, 4)
+        self.assertEqual(mwe, conllu.ID.parse_from_string(str(mwe)))
 
 
 class TokenListTest(unittest.TestCase):
 
-    def make_empty_token_list(self) -> data.TokenList:
-        return data.TokenList([])
+    def make_empty_token_list(self) -> conllu.TokenList:
+        return conllu.TokenList([])
 
-    def make_singleton_token_list(self) -> data.TokenList:
-        return data.TokenList(
+    def make_singleton_token_list(self) -> conllu.TokenList:
+        return conllu.TokenList(
             [
                 {
                     "id": 1,
@@ -125,7 +148,7 @@ class ParseTest(unittest.TestCase):
         cls.path.close()
 
     def test_parse(self):
-        parser = data.parse_from_path(self.path.name)
+        parser = conllu.parse_from_path(self.path.name)
         s1 = next(parser)
         self.assertIsNone(s1.metadata["newpar"])
         self.assertEqual(s1.metadata["text"], "From the AP comes this story :")
@@ -141,7 +164,7 @@ class ParseTest(unittest.TestCase):
 
     def test_roundtrip(self):
         buf = io.StringIO()
-        for tokenlist in data.parse_from_path(self.path.name):
+        for tokenlist in conllu.parse_from_path(self.path.name):
             print(tokenlist.serialize(), file=buf)
         self.assertEqual(self.STRING, buf.getvalue())
 
