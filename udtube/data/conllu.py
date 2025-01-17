@@ -34,6 +34,8 @@ class ID:
     def __init__(self, lower: int, upper: Optional[int] = None):
         self.lower = lower
         self.upper = self.lower if upper is None else upper
+        if self.lower > self.upper:
+            raise Error(f"lower {lower} > upper {upper}")
 
     @classmethod
     def parse_from_string(cls, string: str) -> ID:
