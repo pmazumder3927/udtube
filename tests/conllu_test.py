@@ -34,7 +34,7 @@ class IDTest(unittest.TestCase):
         mwe2 = conllu.ID(3, 4)
         self.assertNotEqual(mwe1, mwe2)
 
-    def test_mwe_swe_not_equivalence(self):
+    def test_mwe_swe_non_equivalence(self):
         mwe = conllu.ID(2, 3)
         swe = conllu.ID(2)
         self.assertNotEqual(mwe, swe)
