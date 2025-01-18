@@ -7,7 +7,7 @@ include-package-data = false
 
 [tool.poetry]
 name = "udtube"
-version = "0.1.0"
+version = "0.1.1"
 description = "Neural morphological analysis"
 readme = "README.md"
 license = "Apache-2.0"
