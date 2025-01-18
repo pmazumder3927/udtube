@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Iterable, List
+from typing import Iterable, Iterator
 
 import torch
 
@@ -133,7 +133,7 @@ class Mapper:
     def _decode(
         indices: torch.Tensor,
         vocabulary: indexes.Vocabulary,
-    ) -> List[str]:
+    ) -> Iterator[str]:
         """Decodes a tensor.
 
         Args:
@@ -141,40 +141,38 @@ class Mapper:
             vocabulary: the vocabulary
 
         Yields:
-            List[str]: decoded symbols.
+            str: decoded symbols.
         """
-        symbols = []
         for idx in indices:
             if idx == special.PAD_IDX:
-                return symbols
-            symbols.append(vocabulary.get_symbol(idx))
-        return symbols
+                return
+            yield vocabulary.get_symbol(idx)
 
-    def decode_upos(self, indices: torch.Tensor) -> List[str]:
+    def decode_upos(self, indices: torch.Tensor) -> Iterator[str]:
         """Decodes an upos tensor.
 
         Args:
             indices: tensor of indices.
 
         Yields:
-            List[str]: decoded upos tags.
+            str: decoded upos tags.
         """
         return self._decode(indices, self.index.upos)
 
-    def decode_xpos(self, indices: torch.Tensor) -> List[str]:
+    def decode_xpos(self, indices: torch.Tensor) -> Iterator[str]:
         """Decodes an xpos tensor.
 
         Args:
             indices: tensor of indices.
 
         Yields:
-            List[str]: decoded xpos tags.
+            str: decoded xpos tags.
         """
         return self._decode(indices, self.index.xpos)
 
     def decode_lemma(
         self, forms: Iterable[str], indices: torch.Tensor
-    ) -> List[str]:
+    ) -> Iterator[str]:
         """Decodes a lemma tensor.
 
         Args:
@@ -182,22 +180,18 @@ class Mapper:
             indices: tensor of indices.
 
         Yields:
-            List[str]: decoded lemmas.
+            str: decoded lemmas.
         """
-        return [
-            self.lemma_mapper.lemmatize(form, tag)
-            for form, tag in zip(
-                forms, self._decode(indices, self.index.lemma)
-            )
-        ]
+        for form, tag in zip(forms, self._decode(indices, self.index.lemma)):
+            yield self.lemma_mapper.lemmatize(form, tag)
 
-    def decode_feats(self, indices: torch.Tensor) -> List[str]:
+    def decode_feats(self, indices: torch.Tensor) -> Iterator[str]:
         """Decodes a morphological features tensor.
 
         Args:
             indices: tensor of indices.
 
         Yields:
-            List[str]: decoded morphological features.
+            str: decoded morphological features.
         """
         return self._decode(indices, self.index.feats)

@@ -1,7 +1,7 @@
 """Custom callbacks."""
 
 import sys
-from typing import Optional, Sequence, TextIO
+from typing import Iterator, Optional, Sequence, TextIO
 
 import lightning
 from lightning.pytorch import callbacks, trainer
@@ -57,41 +57,57 @@ class PredictionWriter(callbacks.BasePredictionWriter):
         batch_idx: int,
         dataloader_idx: int,
     ) -> None:
-        y_upos_hat = (
+        # Batch-level argmax on the classification heads.
+        upos_hat = (
             torch.argmax(logits.upos, dim=1) if logits.use_upos else None
         )
-        y_xpos_hat = (
+        xpos_hat = (
             torch.argmax(logits.xpos, dim=1) if logits.use_xpos else None
         )
-        y_lemma_hat = (
+        lemma_hat = (
             torch.argmax(logits.lemma, dim=1) if logits.use_lemma else None
         )
-        y_feats_hat = (
+        feats_hat = (
             torch.argmax(logits.feats, dim=1) if logits.use_feats else None
         )
         for i, tokenlist in enumerate(batch.tokenlists):
-            # Edits the relevant fields in each tokenlist.
-            if y_upos_hat is not None:
-                upos_hat = self.mapper.decode_upos(y_upos_hat[i, :])
-                for j, upos in enumerate(upos_hat[: len(tokenlist)]):
-                    tokenlist[j]["upos"] = upos
-            if y_xpos_hat is not None:
-                xpos_hat = self.mapper.decode_xpos(y_xpos_hat[i, :])
-                for j, xpos in enumerate(xpos_hat[: len(tokenlist)]):
-                    tokenlist[j]["xpos"] = xpos
-            if y_lemma_hat is not None:
-                lemma_hat = self.mapper.decode_lemma(
-                    [token["form"] for token in tokenlist],
-                    y_lemma_hat[i, :],
+            # Sentence-level decoding of the classification indices, followed
+            # by rewriting the fields in the tokenlist.
+            if upos_hat is not None:
+                upos_it = self.mapper.decode_upos(upos_hat[i, :])
+                self._fill_in_tags(tokenlist, "upos", upos_it)
+            if xpos_hat is not None:
+                xpos_it = self.mapper.decode_xpos(xpos_hat[i, :])
+                self._fill_in_tags(tokenlist, "xpos", xpos_it)
+            if lemma_hat is not None:
+                lemma_it = self.mapper.decode_lemma(
+                    tokenlist.get_tokens(), lemma_hat[i, :]
                 )
-                for j, lemma in enumerate(lemma_hat[: len(tokenlist)]):
-                    tokenlist[j]["lemma"] = lemma
-            if y_feats_hat is not None:
-                feats_hat = self.mapper.decode_feats(y_feats_hat[i, :])
-                for j, feats in enumerate(feats_hat[: len(tokenlist)]):
-                    tokenlist[j]["feats"] = feats
-            print(tokenlist.serialize(), file=self.sink)
+                self._fill_in_tags(tokenlist, "lemma", lemma_it)
+            if feats_hat is not None:
+                feats_it = self.mapper.decode_feats(feats_hat[i, :])
+                self._fill_in_tags(tokenlist, "feats", feats_it)
+            print(tokenlist, file=self.sink)
         self.sink.flush()
+
+    @staticmethod
+    def _fill_in_tags(
+        tokenlist: data.conllu.TokenList, attr: str, tags: Iterator[str]
+    ) -> None:
+        """Helper method for copying tags into tokenlist.
+
+        Args:
+            tokenlist (data.conllu.TokenList): tokenlist to insert into.
+            attr (str): attribute on tokens where the tags should be inserted.
+            tags (Iterator[str]): tags to insert.
+        """
+        # Note that in when MWEs are present, the iterators with predicted tags
+        # from the classifier heads are shorter than the tokenlists, so we
+        # `continue` without advancing said iterators.
+        for token in tokenlist:
+            if token.is_mwe:
+                continue
+            setattr(token, attr, next(tags))
 
     def on_predict_end(
         self, trainer: trainer.Trainer, pl_module: lightning.LightningModule

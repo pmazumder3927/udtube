@@ -24,13 +24,13 @@ def main(args: argparse.Namespace) -> None:
         if len(gold_list) != len(hypo_list):
             raise Error("Length mismatch on sentence %d", linenum)
         for gold_tok, hypo_tok in zip(gold_list, hypo_list):
-            correct_upos += gold_tok["upos"] == hypo_tok["upos"]
-            correct_xpos += gold_tok["xpos"] == hypo_tok["xpos"]
+            correct_upos += gold_tok.upos == hypo_tok.upos
+            correct_xpos += gold_tok.xpos == hypo_tok.xpos
             # We do this case-insensitively.
             correct_lemma += (
-                gold_tok["lemma"].casefold() == hypo_tok["lemma"].casefold()
+                gold_tok.lemma.casefold() == hypo_tok.lemma.casefold()
             )
-            correct_feats += gold_tok["feats"] == hypo_tok["feats"]
+            correct_feats += gold_tok.feats == hypo_tok.feats
             total += 1
     # Expresses this as a percentage as per the community preference.
     logging.info("UPOS accuracy:\t%2.2f", 100 * correct_upos / total)

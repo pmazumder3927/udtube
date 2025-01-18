@@ -127,14 +127,14 @@ class DataModule(lightning.LightningDataModule):
             # We don't need to collect the upos vocabulary because "u"
             # stands for "universal" here.
             if self.use_xpos:
-                xpos_vocabulary.update(token["xpos"] for token in tokenlist)
+                xpos_vocabulary.update(token.xpos for token in tokenlist)
             if self.use_lemma:
                 for token in tokenlist:
                     lemma_vocabulary.add(
-                        lemma_mapper.tag(token["form"], token["lemma"])
+                        lemma_mapper.tag(token.form, token.lemma)
                     )
             if self.use_feats:
-                feats_vocabulary.update(token["feats"] for token in tokenlist)
+                feats_vocabulary.update(token.feats for token in tokenlist)
         index = indexes.Index(
             reverse_edits=self.reverse_edits,
             upos=(

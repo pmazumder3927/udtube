@@ -35,9 +35,8 @@ class Item(nn.Module):
         self.register_buffer("lemma", lemma)
         self.register_buffer("feats", feats)
 
-    @property
-    def tokens(self) -> List[str]:
-        return [token["form"] for token in self.tokenlist]
+    def get_tokens(self) -> List[str]:
+        return self.tokenlist.get_tokens()
 
     @property
     def use_upos(self) -> bool:
@@ -108,28 +107,36 @@ class ConlluMapDataset(data.Dataset):
             Item.
         """
         tokenlist = self.samples[idx]
+        # The tokenlist preserves MWE information implicitly, but MWE tokens
+        # and associated tags are not present in the tensors.
         return Item(
             tokenlist,
             upos=(
-                self.mapper.encode_upos(token["upos"] for token in tokenlist)
+                self.mapper.encode_upos(
+                    token.upos for token in tokenlist if not token.is_mwe
+                )
                 if self.use_upos
                 else None
             ),
             xpos=(
-                self.mapper.encode_xpos(token["xpos"] for token in tokenlist)
+                self.mapper.encode_xpos(
+                    token.xpos for token in tokenlist if not token.is_mwe
+                )
                 if self.use_xpos
                 else None
             ),
             lemma=(
                 self.mapper.encode_lemma(
-                    (token["form"] for token in tokenlist),
-                    (token["lemma"] for token in tokenlist),
+                    (token.form for token in tokenlist if not token.is_mwe),
+                    (token.lemma for token in tokenlist if not token.is_mwe),
                 )
                 if self.use_lemma
                 else None
             ),
             feats=(
-                self.mapper.encode_feats(token["feats"] for token in tokenlist)
+                self.mapper.encode_feats(
+                    token.feats for token in tokenlist if not token.is_mwe
+                )
                 if self.use_feats
                 else None
             ),

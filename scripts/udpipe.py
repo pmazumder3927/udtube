@@ -18,12 +18,12 @@ def main(args: argparse.Namespace) -> None:
             for i, (input_token, result_token) in enumerate(
                 zip(tokenlist, result)
             ):
-                input_token["upos"] = result_token.pos_
-                input_token["xpos"] = result_token.tag_
-                input_token["lemma"] = result_token.lemma_
-                input_token["feats"] = str(result_token.morph)
+                input_token.upos = result_token.pos_
+                input_token.xpos = result_token.tag_
+                input_token.lemma = result_token.lemma_
+                input_token.feats = str(result_token.morph)
                 tokenlist[i] = input_token
-            print(tokenlist.serialize(), file=sink)
+            print(tokenlist, file=sink)
 
 
 if __name__ == "__main__":

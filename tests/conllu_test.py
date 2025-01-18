@@ -4,77 +4,211 @@ import io
 import tempfile
 import unittest
 
-from udtube import data
+from udtube.data import conllu
+
+
+class IDTest(unittest.TestCase):
+
+    def test_swe(self):
+        swe = conllu.ID(3)
+        self.assertEqual(len(swe), 1)
+        self.assertFalse(swe.is_mwe)
+        self.assertEqual(str(swe), "3")
+
+    def test_swe_roundtrip(self):
+        swe = conllu.ID(3)
+        self.assertEqual(swe, conllu.ID.parse_from_string(str(swe)))
+
+    def test_mwe(self):
+        mwe = conllu.ID(2, 3)
+        self.assertEqual(len(mwe), 2)
+        self.assertTrue(mwe.is_mwe)
+        self.assertEqual(str(mwe), "2-3")
+
+    def test_mwe_roundtrip(self):
+        mwe = conllu.ID(2, 3)
+        self.assertEqual(mwe, conllu.ID.parse_from_string(str(mwe)))
+
+    def test_mwe_non_equivalence(self):
+        mwe1 = conllu.ID(2, 3)
+        mwe2 = conllu.ID(3, 4)
+        self.assertNotEqual(mwe1, mwe2)
+
+    def test_mwe_swe_non_equivalence(self):
+        mwe = conllu.ID(2, 3)
+        swe = conllu.ID(2)
+        self.assertNotEqual(mwe, swe)
+
+    def test_bad_parse(self):
+        with self.assertRaises(conllu.Error):
+            conllu.ID.parse_from_string("2:3")
+
+
+class TokenTest(unittest.TestCase):
+
+    @staticmethod
+    def make_swe_token() -> conllu.Token:
+        return conllu.Token(
+            conllu.ID(1),
+            "Please",
+            "please",
+            "INTJ",
+            "_",
+            "_",
+            "_",
+            "_",
+            "_",
+            "_",
+        )
+
+    @staticmethod
+    def make_mwe_token() -> conllu.Token:
+        return conllu.Token(
+            conllu.ID(2, 3),
+            "don't",
+            "_",
+            "_",
+            "_",
+            "_",
+            "_",
+            "_",
+            "_",
+            "_",
+        )
+
+    def test_swe(self):
+        swe = self.make_swe_token()
+        self.assertFalse(swe.is_mwe)
+
+    def test_swe_roundtrip(self):
+        swe = self.make_swe_token()
+        self.assertEqual(swe, conllu.Token.parse_from_string(str(swe)))
+
+    def test_mwe(self):
+        mwe = self.make_mwe_token()
+        self.assertTrue(mwe.is_mwe)
+
+    def test_mwe_roundtrip(self):
+        mwe = self.make_mwe_token()
+        self.assertEqual(mwe, conllu.Token.parse_from_string(str(mwe)))
 
 
 class TokenListTest(unittest.TestCase):
 
-    def make_empty_token_list(self) -> data.TokenList:
-        return data.TokenList([])
+    @staticmethod
+    def make_empty_token_list() -> conllu.TokenList:
+        return conllu.TokenList([])
 
-    def make_singleton_token_list(self) -> data.TokenList:
-        return data.TokenList(
+    @staticmethod
+    def make_singleton_token_list() -> conllu.TokenList:
+        return conllu.TokenList(
             [
-                {
-                    "id": 1,
-                    "form": "Hi",
-                    "lemma": "hi",
-                    "upos": "INTJ",
-                    "xpos": "_",
-                    "feats": "_",
-                    "head": "_",
-                    "deprel": "_",
-                    "deps": "_",
-                    "misc": "_",
-                }
+                conllu.Token(
+                    conllu.ID(1),
+                    "Hi",
+                    "hi",
+                    "INTJ",
+                    "_",
+                    "_",
+                    "_",
+                    "_",
+                    "_",
+                    "_",
+                )
             ],
             metadata={"text": "Hi"},
         )
 
     def test_empty_token_list(self):
-        tokens = self.make_empty_token_list()
-        self.assertEqual(len(tokens), 0)
-        self.assertIsNotNone(tokens.metadata)
+        tokenlist = self.make_empty_token_list()
+        self.assertEqual(len(tokenlist), 0)
+        self.assertIsNotNone(tokenlist.metadata)
 
     def test_singleton_token_list(self):
-        tokens = self.make_singleton_token_list()
-        self.assertEqual(len(tokens), 1)
-        self.assertIsNotNone(tokens.metadata)
+        tokenlist = self.make_singleton_token_list()
+        self.assertEqual(len(tokenlist), 1)
+        self.assertIsNotNone(tokenlist.metadata)
 
     def test_access(self):
-        tokens = self.make_singleton_token_list()
-        self.assertEqual(tokens[0]["form"], "Hi")
-        tokens.append(
-            {
-                "id": 2,
-                "form": "stranger",
-                "lemma": "stranger",
-                "upos": "NOUN",
-                "xpos": "_",
-                "feats": "_",
-                "head": "_",
-                "deprel": "_",
-                "deps": "_",
-                "misc": "_",
-            },
+        tokenlist = self.make_singleton_token_list()
+        self.assertEqual(tokenlist[0].form, "Hi")
+        tokenlist.append(
+            conllu.Token(
+                conllu.ID(2),
+                "stranger",
+                "stranger",
+                "NOUN",
+                "_",
+                "_",
+                "_",
+                "_",
+                "_",
+                "_",
+            )
         )
-        tokens.append(
-            {
-                "id": 3,
-                "form": ".",
-                "lemma": ".",
-                "upos": "PUNCT",
-                "xpos": "_",
-                "feats": "_",
-                "head": "_",
-                "deprel": "_",
-                "deps": "_",
-                "misc": "_",
-            },
+        tokenlist.append(
+            conllu.Token(
+                conllu.ID(3), ".", ".", "PUNCT", "_", "_", "_", "_", "_", "_"
+            )
         )
-        tokens.metadata["text"] += " stranger."
-        self.assertEqual(len(tokens), 3)
-        self.assertEqual(tokens[1]["form"], "stranger")
+        tokenlist.metadata["text"] += " stranger."
+        self.assertEqual(len(tokenlist), 3)
+        self.assertEqual(tokenlist[1].form, "stranger")
+
+    def test_mwe_tokens(self):
+        tokenlist = conllu.TokenList(
+            [
+                conllu.Token(
+                    conllu.ID(1),
+                    "Please",
+                    "please",
+                    "INTJ",
+                    "_",
+                    "_",
+                    "_",
+                    "_",
+                    "_",
+                    "_",
+                ),
+                conllu.Token(
+                    conllu.ID(2, 3),
+                    "don't",
+                    "_",
+                    "_",
+                    "_",
+                    "_",
+                    "_",
+                    "_",
+                    "_",
+                    "_",
+                ),
+                conllu.Token(
+                    conllu.ID(2),
+                    "do",
+                    "do",
+                    "AUX",
+                    "_",
+                    "_",
+                    "_",
+                    "_",
+                    "_",
+                    "_",
+                ),
+                conllu.Token(
+                    conllu.ID(3),
+                    "n't",
+                    "do",
+                    "PART",
+                    "_",
+                    "_",
+                    "_",
+                    "_",
+                    "_",
+                    "_",
+                ),
+            ],
+        )
+        self.assertEqual(tokenlist.get_tokens(), ["Please", "do", "n't"])
 
 
 class ParseTest(unittest.TestCase):
@@ -125,13 +259,13 @@ class ParseTest(unittest.TestCase):
         cls.path.close()
 
     def test_parse(self):
-        parser = data.parse_from_path(self.path.name)
+        parser = conllu.parse_from_path(self.path.name)
         s1 = next(parser)
         self.assertIsNone(s1.metadata["newpar"])
         self.assertEqual(s1.metadata["text"], "From the AP comes this story :")
         self.assertEqual(len(s1), 7)
         self.assertEqual(
-            [token["form"] for token in s1],
+            [token.form for token in s1],
             "From the AP comes this story :".split(),
         )
         s2 = next(parser)
@@ -141,8 +275,8 @@ class ParseTest(unittest.TestCase):
 
     def test_roundtrip(self):
         buf = io.StringIO()
-        for tokenlist in data.parse_from_path(self.path.name):
-            print(tokenlist.serialize(), file=buf)
+        for tokenlist in conllu.parse_from_path(self.path.name):
+            print(tokenlist, file=buf)
         self.assertEqual(self.STRING, buf.getvalue())
 
 
