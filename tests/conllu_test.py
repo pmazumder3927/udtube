@@ -64,59 +64,10 @@ class TokenTest(unittest.TestCase):
     @staticmethod
     def make_mwe_token() -> conllu.Token:
         return conllu.Token(
-            conllu.ID(2, 4),
+            conllu.ID(2, 3),
             "don't",
-            "please",
-            "INTJ",
             "_",
             "_",
-            "_",
-            "_",
-            "_",
-            "_",
-        )
-
-    def test_swe(self):
-        swe = self.make_swe_token()
-        self.assertFalse(swe.is_mwe)
-
-    def test_swe_roundtrip(self):
-        swe = self.make_swe_token()
-        self.assertEqual(swe, conllu.Token.parse_from_string(str(swe)))
-
-    def test_mwe(self):
-        mwe = self.make_mwe_token()
-        self.assertTrue(mwe.is_mwe)
-
-    def test_mwe_roundtrip(self):
-        mwe = self.make_mwe_token()
-        self.assertEqual(mwe, conllu.Token.parse_from_string(str(mwe)))
-
-
-class TokenTest(unittest.TestCase):
-
-    @staticmethod
-    def make_swe_token() -> conllu.Token:
-        return conllu.Token(
-            conllu.ID(1),
-            "Please",
-            "please",
-            "INTJ",
-            "_",
-            "_",
-            "_",
-            "_",
-            "_",
-            "_",
-        )
-
-    @staticmethod
-    def make_mwe_token() -> conllu.Token:
-        return conllu.Token(
-            conllu.ID(2, 4),
-            "don't",
-            "please",
-            "INTJ",
             "_",
             "_",
             "_",
