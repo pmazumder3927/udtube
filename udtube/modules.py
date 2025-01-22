@@ -16,6 +16,10 @@ from torch import nn
 from . import data, defaults, encoders
 
 
+class Error(Exception):
+    pass
+
+
 class UDTubeEncoder(lightning.LightningModule):
     """Encoder portion of the model.
 
@@ -176,21 +180,6 @@ class UDTubeClassifier(lightning.LightningModule):
     lemma_head: Optional[nn.Sequential]
     feats_head: Optional[nn.Sequential]
 
-    @staticmethod
-    def _make_head(hidden_size: int, out_size: int) -> nn.Sequential:
-        """Helper for generating heads.
-
-        Args:
-            out_size (int).
-
-        Returns:
-            A sequential linear layer.
-        """
-        return nn.Sequential(
-            nn.Linear(hidden_size, out_size),
-            nn.LeakyReLU(),
-        )
-
     def __init__(
         self,
         hidden_size: int,
@@ -208,6 +197,8 @@ class UDTubeClassifier(lightning.LightningModule):
         **kwargs,
     ):
         super().__init__()
+        if not (use_upos or use_xpos or use_lemma or use_feats):
+            raise Error("No classification heads enabled")
         self.upos_head = (
             self._make_head(hidden_size, upos_out_size) if use_upos else None
         )
@@ -219,6 +210,21 @@ class UDTubeClassifier(lightning.LightningModule):
         )
         self.feats_head = (
             self._make_head(hidden_size, feats_out_size) if use_feats else None
+        )
+
+    @staticmethod
+    def _make_head(hidden_size: int, out_size: int) -> nn.Sequential:
+        """Helper for generating heads.
+
+        Args:
+            out_size (int).
+
+        Returns:
+            A sequential linear layer.
+        """
+        return nn.Sequential(
+            nn.Linear(hidden_size, out_size),
+            nn.LeakyReLU(),
         )
 
     # Properties.
