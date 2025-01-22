@@ -10,8 +10,6 @@ import os
 import tempfile
 import unittest
 
-from parameterized import parameterized
-
 from udtube import cli
 
 # Directory the unit test is located in, relative to the working directory.
