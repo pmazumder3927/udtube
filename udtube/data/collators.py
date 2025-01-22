@@ -1,6 +1,8 @@
 """Collators."""
 
-from typing import List
+import dataclasses
+import logging
+from typing import Any, Iterable, List
 
 import torch
 from torch import nn
@@ -10,47 +12,100 @@ from .. import special
 from . import batches, datasets
 
 
-class Tokenizer:
-    """Helper for tokenization.
+class Error(Exception):
+    pass
 
-    Args:
-        tokenizer: transformer autotokenizer.
-    """
+
+@dataclasses.dataclass
+class Collator:
+    """Collator for CoNLL-U data."""
 
     tokenizer: transformers.AutoTokenizer
 
-    def __init__(self, tokenizer):
-        self.tokenizer = tokenizer
-
-    def __call__(self, tokens: List[List[str]]) -> transformers.BatchEncoding:
-        """Runs tokenizer.
-
-        Args:
-            tokens: a list of sentences, each a list of tokens.
-
-        Returns:
-            The BatchEncoding object.
-        """
-        return self.tokenizer(
-            tokens,
+    def __call__(self, itemlist: List[datasets.Item]) -> batches.Batch:
+        # Runs the tokenizer.
+        tokenized = self.tokenizer(
+            [item.get_tokens() for item in itemlist],
             padding="longest",
+            truncation=False,
             return_tensors="pt",
             is_split_into_words=True,
             add_special_tokens=False,
         )
+        actual_length = tokenized.input_ids.size(1)
+        max_length = self.tokenizer.model_max_length
+        if actual_length > max_length:
+            # By construction, a sequence is too long if the first element
+            # beyond the encoder's max length is not padding.
+            keep_items = tokenized.input_ids[:, max_length] == special.PAD_IDX
+            # Ideally we'd just shorten the tag tensors, but mapping subword
+            # tokens to tags is sufficiently complex that we don't know at
+            # this stage how many tags to keep or get rid of. Therefore we
+            # just discard these sentences.
+            logging.warning(
+                "Discarding %d sequence(s) exceeding the encoder's "
+                "maximum length (%d)",
+                torch.sum(~keep_items),
+                max_length,
+            )
+            itemlist = self._keep_list(itemlist, keep_items)
+            # It is possible but very unlikely that we will now have a
+            # completely empty batch. Since this will result in numerous errors
+            # downstream no matter what we do, we raise an error.
+            if not itemlist:
+                raise Error("Entire batch was truncated")
+            # Not all of these have setters, so we store pointers instead.
+            input_ids = tokenized.input_ids[keep_items, :max_length]
+            attention_mask = tokenized.attention_mask[keep_items, :max_length]
+            encodings = self._keep_list(tokenized.encodings, keep_items)
+        else:
+            # Grabs pointers.
+            input_ids = tokenized.input_ids
+            attention_mask = tokenized.attention_mask
+            encodings = tokenized.encodings
+        return batches.Batch(
+            tokenlists=[item.tokenlist for item in itemlist],
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            encodings=encodings,
+            # Pads and stacks data for whichever classification tasks are
+            # enabled.
+            upos=(
+                self.pad_tensors([item.upos for item in itemlist])
+                if itemlist[0].use_upos
+                else None
+            ),
+            xpos=(
+                self.pad_tensors([item.xpos for item in itemlist])
+                if itemlist[0].use_xpos
+                else None
+            ),
+            lemma=(
+                self.pad_tensors([item.lemma for item in itemlist])
+                if itemlist[0].use_lemma
+                else None
+            ),
+            feats=(
+                self.pad_tensors([item.feats for item in itemlist])
+                if itemlist[0].use_feats
+                else None
+            ),
+        )
 
+    @staticmethod
+    def _keep_list(items: List[Any], keep_items: Iterable[bool]) -> List[Any]:
+        """Simulates items[keep_items] for lists.
 
-class Collator:
-    """Collator for CoNLL-U data.
+        Args:
+            items: a list.
+            keep_items: an iterable where True indicates
+                that the corresponding element in `items` should be
+                preserved in the output.
 
-    It doesn't matter whether or not the data already has labels.
-
-    Args:
-        tokenizer: transformer autotokenizer.
-    """
-
-    def __init__(self, tokenizer: transformers.AutoTokenizer):
-        self.tokenizer = Tokenizer(tokenizer)
+        Returns:
+            A filtered list.
+        """
+        return [item for item, keep in zip(items, keep_items) if keep]
 
     @staticmethod
     def pad_tensors(
@@ -72,34 +127,4 @@ class Collator:
                 )
                 for tensor in tensorlist
             ]
-        )
-
-    def __call__(self, itemlist: List[datasets.Item]) -> batches.Batch:
-        # Tokenlists preserve MWE information implicitly, but MWE tokens and
-        # associated tags are not present in the tensors.
-        return batches.Batch(
-            tokenlists=[item.tokenlist for item in itemlist],
-            tokens=self.tokenizer([item.get_tokens() for item in itemlist]),
-            # Looks ugly, but this just pads and stacks data for whatever
-            # classification tasks are enabled.
-            upos=(
-                self.pad_tensors([item.upos for item in itemlist])
-                if itemlist[0].use_upos
-                else None
-            ),
-            xpos=(
-                self.pad_tensors([item.xpos for item in itemlist])
-                if itemlist[0].use_xpos
-                else None
-            ),
-            lemma=(
-                self.pad_tensors([item.lemma for item in itemlist])
-                if itemlist[0].use_lemma
-                else None
-            ),
-            feats=(
-                self.pad_tensors([item.feats for item in itemlist])
-                if itemlist[0].use_feats
-                else None
-            ),
         )
