@@ -197,7 +197,7 @@ class UDTubeClassifier(lightning.LightningModule):
         **kwargs,
     ):
         super().__init__()
-        if not (use_upos or use_xpos or use_lemma or use_feats):
+        if not any([use_upos, use_xpos, use_lemma, use_feats]):
             raise Error("No classification heads enabled")
         self.upos_head = (
             self._make_head(hidden_size, upos_out_size) if use_upos else None
