@@ -49,11 +49,14 @@ class Collator:
                 max_length,
             )
             itemlist = self._keep_list(itemlist, keep_items)
-            # It is possible but very unlikely that we will now have a
-            # completely empty batch. Since this will result in numerous errors
-            # downstream no matter what we do, we raise an error.
+            # In the very unlikely case that every sequence in the batch
+            # exceeds the length, we raise an error, since none of the
+            # subsequent steps can handle an empty batch.
             if not itemlist:
-                raise Error("Entire batch was truncated")
+                raise Error(
+                    "Every sequence in the batch exceeds the "
+                    f"encoder's maximum length {max_length}"
+                )
             # Not all of these have setters, so we store pointers instead.
             input_ids = tokenized.input_ids[keep_items, :max_length]
             attention_mask = tokenized.attention_mask[keep_items, :max_length]
