@@ -32,7 +32,7 @@ class LengthTest(unittest.TestCase):
     def tearDown(self):
         self.tempdir.cleanup()
 
-    def test_removing_long_sequences(self):
+    def test_truncation(self):
         # Fits the model for one epoch.
         model_dir = os.path.join(self.tempdir.name, "models")
         cli.udtube_python_interface(
