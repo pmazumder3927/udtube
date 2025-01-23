@@ -2,7 +2,7 @@ checkpoint:
   monitor: val_loss
   save_last: true
 data:
-  batch_size: 5  # 2 batches per epoch.
+  batch_size: 2
 model:
   encoder_optimizer:
     class_path: torch.optim.Adam
