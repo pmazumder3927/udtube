@@ -5,13 +5,13 @@ for a classification head, and L is the maximum length (in subwords, tokens,
 or tags) of a sentence in the batch.
 """
 
-import logging
-from typing import Optional
+from typing import List, Optional
 
 import lightning
+import tokenizers
 import torch
-import transformers
 from torch import nn
+import transformers
 
 from . import data, defaults, encoders
 
@@ -52,10 +52,42 @@ class UDTubeEncoder(lightning.LightningModule):
     def hidden_size(self) -> int:
         return self.encoder.config.hidden_size
 
+    def forward(
+        self,
+        batch: data.Batch,
+    ) -> torch.Tensor:
+        """Computes the contextual word-level encoding.
+
+        This discards over-long sequences (if necessary), computes the subword
+        encodings, stacks and mean-pools the pooling layers, applies dropout,
+        and then mean-pools the subwords that make up each word.
+
+        Args:
+            batch: a data batch.
+
+        Returns:
+            A contextual word-level encoding.
+        """
+        # We move these manually.
+        x = self.encoder(
+            batch.input_ids.to(self.device),
+            batch.attention_mask.to(self.device),
+        ).hidden_states
+        # Stacks the pooling layers.
+        x = torch.stack(x[-self.pooling_layers :])
+        # Averages them into one embedding layer; automatically squeezes the
+        # mean dimension.
+        x = torch.mean(x, dim=0)
+        # Applies dropout.
+        x = self.dropout_layer(x)
+        # Maps from subword embeddings to word-level embeddings.
+        x = self._group_embeddings(x, batch.encodings)
+        return x
+
     def _group_embeddings(
         self,
         embeddings: torch.Tensor,
-        tokenized: transformers.BatchEncoding,
+        encodings: List[tokenizers.Encoding],
     ) -> torch.Tensor:
         """Groups subword embeddings to form word embeddings.
 
@@ -65,14 +97,14 @@ class UDTubeEncoder(lightning.LightningModule):
 
         Args:
             embeddings: the embeddings tensor to pool.
-            tokens: the batch encoding.
+            encodings: the tokenizer encodings.
 
         Returns:
             The re-pooled embeddings tensor.
         """
         new_sentence_embeddings = []
         for sentence_encodings, sentence_embeddings in zip(
-            tokenized.encodings, embeddings
+            encodings, embeddings
         ):
             # This looks like an overly elaborate loop that could be a list
             # comprehension, but this is much faster.
@@ -113,51 +145,6 @@ class UDTubeEncoder(lightning.LightningModule):
                 for sentence_embedding in new_sentence_embeddings
             ]
         ).permute(0, 2, 1)
-
-    def forward(
-        self,
-        batch: data.Batch,
-    ) -> torch.Tensor:
-        """Computes the contextual word-level encoding.
-
-        This truncates (if necessary), computes the subword encodings,
-        stacks and mean-pools the pooling layers, applies dropout, and
-        then mean-pools the subwords that make up each word.
-
-        Args:
-            batch: a data batch.
-
-        Returns:
-            A contextual word-level encoding.
-        """
-        # If something is longer than an allowed sequence, we trim it down.
-        actual_length = batch.tokens.input_ids.shape[1]
-        max_length = self.encoder.config.max_position_embeddings
-        if actual_length > max_length:
-            logging.warning(
-                "Truncating sequence from %d to %d",
-                actual_length,
-                max_length,
-            )
-            batch.tokens.input_ids = batch.tokens.input_ids[:max_length]
-            batch.tokens.attention_mask = batch.tokens.attention_mask[
-                :max_length
-            ]
-        # We move these manually rather than moving the whole batch encoding.
-        x = self.encoder(
-            batch.tokens.input_ids.to(self.device),
-            batch.tokens.attention_mask.to(self.device),
-        ).hidden_states
-        # Stacks the pooling layers.
-        x = torch.stack(x[-self.pooling_layers :])
-        # Averages them into one embedding layer; automatically squeezes the
-        # mean dimension.
-        x = torch.mean(x, dim=0)
-        # Applies dropout.
-        x = self.dropout_layer(x)
-        # Maps from subword embeddings to word-level embeddings.
-        x = self._group_embeddings(x, batch.tokens)
-        return x
 
 
 class UDTubeClassifier(lightning.LightningModule):

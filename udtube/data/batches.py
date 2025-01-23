@@ -9,8 +9,8 @@ However, there is no need for padding at this stage.
 
 from typing import List, Optional
 
+import tokenizers
 import torch
-import transformers
 from torch import nn
 
 from . import conllu
@@ -31,7 +31,9 @@ class Batch(nn.Module):
     """
 
     tokenlists: List[conllu.TokenList]
-    tokens: transformers.BatchEncoding
+    input_ids: torch.Tensor
+    attention_mask: torch.Tensor
+    encodings: List[tokenizers.Encoding]
     upos: Optional[torch.Tensor]
     xpos: Optional[torch.Tensor]
     lemma: Optional[torch.Tensor]
@@ -40,7 +42,9 @@ class Batch(nn.Module):
     def __init__(
         self,
         tokenlists,
-        tokens,
+        input_ids,
+        attention_mask,
+        encodings,
         upos=None,
         xpos=None,
         lemma=None,
@@ -48,7 +52,9 @@ class Batch(nn.Module):
     ):
         super().__init__()
         self.tokenlists = tokenlists
-        self.tokens = tokens
+        self.register_buffer("input_ids", input_ids)
+        self.register_buffer("attention_mask", attention_mask)
+        self.encodings = encodings
         self.register_buffer("upos", upos)
         self.register_buffer("xpos", xpos)
         self.register_buffer("lemma", lemma)
