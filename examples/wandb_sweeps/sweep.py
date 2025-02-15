@@ -5,10 +5,10 @@ import argparse
 import functools
 import logging
 import subprocess
-import sys
 import tempfile
 import traceback
 import warnings
+
 from typing import Any, Dict, List, TextIO
 
 import wandb
@@ -19,10 +19,8 @@ import util
 warnings.filterwarnings("ignore", ".*is a wandb run already in progress.*")
 
 
-def train_sweep(
-    config: Dict[str, Any], temp_config: TextIO, argv: List[str]
-) -> None:
-    """Runs a single training run.
+def run(config: Dict[str, Any], temp_config: TextIO, argv: List[str]) -> None:
+    """A single training run.
 
     Args:
         config: path to UDTube YAML config file.
@@ -30,18 +28,6 @@ def train_sweep(
         argv: command-line arguments.
     """
     populate_config(config, temp_config)
-    run_sweep(argv)
-
-
-def run_sweep(argv: List[str]) -> None:
-    """Actually runs the sweep.
-
-    Args:
-        argv: command-line arguments.
-
-    We encapsulate each run by using a separate subprocess, which ought to
-    ensure that memory is returned (etc.).
-    """
     process = subprocess.Popen(argv, stderr=subprocess.PIPE, text=True)
     for line in process.stderr:
         logging.info(line.rstrip())
@@ -65,19 +51,19 @@ def populate_config(
     yaml.dump(config, temp_config_handle)
 
 
-def main(args: argparse.Namespace) -> None:
+def main(args: argparse.Namespace, argv: List[str]) -> None:
     with open(args.config, "r") as source:
         config = yaml.safe_load(source)
     # TODO: Consider enabling the W&B logger; we are not sure if things will
     # unless this is configured.
     temp_config = tempfile.NamedTemporaryFile(mode="w", suffix=".yaml")
-    argv = ["udtube", "fit", "--config", temp_config.name, *sys.argv[1:]]
+    argv = ["udtube", "fit", "--config", temp_config.name, *argv]
     try:
         wandb.agent(
             sweep_id=args.sweep_id,
             entity=args.entity,
             project=args.project,
-            function=functools.partial(train_sweep, config, temp_config, argv),
+            function=functools.partial(run, config, temp_config, argv),
             count=args.count,
         )
     except Exception:
@@ -103,8 +89,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--count", type=int, help="Number of runs to perform.")
     parser.add_argument("--config", required=True)
-    # We pass the known args to main but remove them from ARGV.
-    # See: https://docs.python.org/3/library/argparse.html#partial-parsing
-    # This allows the user to override config arguments with CLI arguments.
-    args, sys.argv[1:] = parser.parse_known_args()
-    main(args)
+    # We separate out the args declared above, which control the sweep itself,
+    # and all others, which are passed to the subprocess as is.
+    args, argv = parser.parse_known_args()
+    main(args, argv)
