@@ -143,8 +143,12 @@ class Mapper:
         Yields:
             str: decoded symbols.
         """
-        for idx in indices:
-            if idx == special.PAD_IDX:
+        for i, idx in enumerate(indices):
+            next_idx = indices[i + 1] if i < len(indices) - 1 else special.PAD_IDX
+            if idx == special.PAD_IDX and next_idx == special.PAD_IDX:
+                # We need some tolerance for misclassifying as padding, otherwise, this causes issues down the line
+                # TODO I think this can cheat metrics accidentally. This return affects _fill_in_tags,
+                # TODO cont. and if _fill_in_tags fails it seems we keep the default tags
                 return
             yield vocabulary.get_symbol(idx)
 

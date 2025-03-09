@@ -101,13 +101,17 @@ class PredictionWriter(callbacks.BasePredictionWriter):
             attr (str): attribute on tokens where the tags should be inserted.
             tags (Iterator[str]): tags to insert.
         """
-        # Note that in when MWEs are present, the iterators with predicted tags
+        # Note that when MWEs are present, the iterators with predicted tags
         # from the classifier heads are shorter than the tokenlists, so we
         # `continue` without advancing said iterators.
         for token in tokenlist:
             if token.is_mwe:
                 continue
-            setattr(token, attr, next(tags))
+            try:
+                setattr(token, attr, next(tags))
+            except StopIteration:
+                # this is needed, otherwise this error is caught in lightning and causes exit code 0...
+                return
 
     def on_predict_end(
         self, trainer: trainer.Trainer, pl_module: lightning.LightningModule

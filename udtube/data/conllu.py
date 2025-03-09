@@ -10,6 +10,7 @@ import dataclasses
 import re
 
 from typing import Dict, Iterable, Iterator, List, Optional, TextIO, Tuple
+from .. import special
 
 
 class Error(Exception):
@@ -182,9 +183,18 @@ class TokenList(collections.UserList):
             line_buf.append(str(token))
         return "\n".join(line_buf) + "\n"
 
+    @staticmethod
+    def _handle_whitespace_token(token: str) -> str:
+        if re.search("^\s$", token, flags=re.MULTILINE):
+            # We noticed a behavior with BERT that the form feed, \f does not map back to a token index
+            # (this extends to all white spaces) and messes with the length of the sequences,
+            # which is problematic downstream and causes unexpected errors, so to avoid that, we will use UNK
+            return special.UNK
+        return token
+
     def get_tokens(self) -> List[str]:
         """List of tokens to be fed into tokenizer."""
-        return [token.form for token in self if not token.is_mwe]
+        return [self._handle_whitespace_token(token.form) for token in self if not token.is_mwe]
 
 
 # Parsing.
