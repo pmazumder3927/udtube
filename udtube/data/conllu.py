@@ -186,9 +186,8 @@ class TokenList(collections.UserList):
     @staticmethod
     def _handle_whitespace_token(token: str) -> str:
         if re.search(r"^\s$", token, flags=re.MULTILINE):
-            # We noticed a behavior with BERT that the form feed, \f does not
-            # map back to a token index & this extends to all white spaces &
-            # affects length of the sequences, to avoid that, we will use UNK
+            # With BERT, form feed `\f` does not map back to a token index. 
+            # UNK is thus substituted.
             return special.UNK
         return token
 
