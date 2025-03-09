@@ -1,5 +1,6 @@
 """Custom callbacks."""
 
+import logging
 import sys
 from typing import Iterator, Optional, Sequence, TextIO
 
@@ -111,7 +112,9 @@ class PredictionWriter(callbacks.BasePredictionWriter):
                 setattr(token, attr, next(tags))
             except StopIteration:
                 # this is needed, otherwise this error is caught in lightning and causes exit code 0...
-                return
+                logging.error(f"There is a mismatch in length between the tags and tokenlist. attr: {attr}\n"
+                              f" tokenlist: {tokenlist}")
+                continue
 
     def on_predict_end(
         self, trainer: trainer.Trainer, pl_module: lightning.LightningModule
