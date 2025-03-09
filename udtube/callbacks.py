@@ -111,10 +111,11 @@ class PredictionWriter(callbacks.BasePredictionWriter):
             try:
                 setattr(token, attr, next(tags))
             except StopIteration:
-                # this is needed, otherwise this error is caught in lightning and causes exit code 0...
+                # this is needed, otherwise this error is caught in
+                # lightning and causes exit code 0...
                 logging.error(
-                    f"There is a mismatch in length between the tags and tokenlist. attr: {attr}\n"
-                    f" tokenlist: {tokenlist}"
+                    f"There is a mismatch in length between the tags "
+                    f"and tokenlist. attr: {attr}\n tokenlist: {tokenlist}"
                 )
                 continue
 
