@@ -144,7 +144,9 @@ class Mapper:
             str: decoded symbols.
         """
         for i, idx in enumerate(indices):
-            next_idx = indices[i + 1] if i < len(indices) - 1 else special.PAD_IDX
+            next_idx = (
+                indices[i + 1] if i < len(indices) - 1 else special.PAD_IDX
+            )
             if idx == special.PAD_IDX and next_idx == special.PAD_IDX:
                 # We need some tolerance for misclassifying as padding, otherwise, this causes issues down the line
                 # TODO I think this can cheat metrics accidentally. This return affects _fill_in_tags,

@@ -194,7 +194,11 @@ class TokenList(collections.UserList):
 
     def get_tokens(self) -> List[str]:
         """List of tokens to be fed into tokenizer."""
-        return [self._handle_whitespace_token(token.form) for token in self if not token.is_mwe]
+        return [
+            self._handle_whitespace_token(token.form)
+            for token in self
+            if not token.is_mwe
+        ]
 
 
 # Parsing.
