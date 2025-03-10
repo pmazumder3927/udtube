@@ -113,9 +113,8 @@ class PredictionWriter(callbacks.BasePredictionWriter):
             except StopIteration:
                 # Prevents the error from being caught by Lightning.
                 logging.error(
-                    "Length mismatch between the tags and the "
-                    f"tokenlist for tags ({attr}).\n"
-                    f"Tokenlist sent id: {tokenlist.metadata.get('sent_id')}."
+                    f"Length mismatch for tag ({attr!r}) (sent_id, "
+                    f"if present): {tokenlist.metadata.get('sent_id')}"
                 )
                 continue
 

@@ -145,8 +145,8 @@ class Mapper:
         """
         for idx in indices:
             if idx == special.PAD_IDX:
-                # To avoid sequence length mismatches
-                # _ is yielded for anything classified as a pad
+                # To avoid sequence length mismatches,
+                # _ is yielded for anything classified as a pad.
                 yield "_"
             else:
                 yield vocabulary.get_symbol(idx)

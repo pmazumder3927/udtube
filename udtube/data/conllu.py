@@ -186,7 +186,7 @@ class TokenList(collections.UserList):
     @staticmethod
     def _handle_whitespace_token(token: str) -> str:
         if re.search(r"^\s$", token, flags=re.MULTILINE):
-            # With BERT, white space "words" do not map back to a token index.
+            # Some tokenizers don't map whitespace tokens to a token index.
             # UNK is thus substituted.
             return special.UNK
         return token
