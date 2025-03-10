@@ -144,15 +144,12 @@ class Mapper:
             str: decoded symbols.
         """
         for i, idx in enumerate(indices):
-            next_idx = (
-                indices[i + 1] if i < len(indices) - 1 else special.PAD_IDX
-            )
-            if idx == special.PAD_IDX and next_idx == special.PAD_IDX:
-                # Returning here causes `_fill_in_tags` to use the keep the
-                # default tags.
-                # TODO: This can lead to cheating the metrics.
-                return
-            yield vocabulary.get_symbol(idx)
+            if idx == special.PAD_IDX:
+                # To avoid sequence length mismatches
+                # _ is yielded for anything classified as a pad
+                yield "_"
+            else:
+                yield vocabulary.get_symbol(idx)
 
     def decode_upos(self, indices: torch.Tensor) -> Iterator[str]:
         """Decodes an upos tensor.
