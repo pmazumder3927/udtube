@@ -143,7 +143,7 @@ class Mapper:
         Yields:
             str: decoded symbols.
         """
-        for i, idx in enumerate(indices):
+        for idx in indices:
             if idx == special.PAD_IDX:
                 # To avoid sequence length mismatches
                 # _ is yielded for anything classified as a pad
