@@ -1,5 +1,6 @@
 """Custom callbacks."""
 
+import logging
 import sys
 from typing import Iterator, Optional, Sequence, TextIO
 
@@ -101,13 +102,21 @@ class PredictionWriter(callbacks.BasePredictionWriter):
             attr (str): attribute on tokens where the tags should be inserted.
             tags (Iterator[str]): tags to insert.
         """
-        # Note that in when MWEs are present, the iterators with predicted tags
+        # Note that when MWEs are present, the iterators with predicted tags
         # from the classifier heads are shorter than the tokenlists, so we
         # `continue` without advancing said iterators.
         for token in tokenlist:
             if token.is_mwe:
                 continue
-            setattr(token, attr, next(tags))
+            try:
+                setattr(token, attr, next(tags))
+            except StopIteration:
+                # Prevents the error from being caught by Lightning.
+                logging.error(
+                    f"Length mismatch at tag {attr!r} (sent_id: "
+                    f"{tokenlist.metadata.get('sent_id')})"
+                )
+                continue
 
     def on_predict_end(
         self, trainer: trainer.Trainer, pl_module: lightning.LightningModule

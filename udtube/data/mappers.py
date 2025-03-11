@@ -145,8 +145,11 @@ class Mapper:
         """
         for idx in indices:
             if idx == special.PAD_IDX:
-                return
-            yield vocabulary.get_symbol(idx)
+                # To avoid sequence length mismatches,
+                # _ is yielded for anything classified as a pad.
+                yield "_"
+            else:
+                yield vocabulary.get_symbol(idx)
 
     def decode_upos(self, indices: torch.Tensor) -> Iterator[str]:
         """Decodes an upos tensor.

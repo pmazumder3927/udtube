@@ -10,6 +10,7 @@ import dataclasses
 import re
 
 from typing import Dict, Iterable, Iterator, List, Optional, TextIO, Tuple
+from .. import special
 
 
 class Error(Exception):
@@ -182,9 +183,21 @@ class TokenList(collections.UserList):
             line_buf.append(str(token))
         return "\n".join(line_buf) + "\n"
 
+    @staticmethod
+    def _handle_whitespace_token(token: str) -> str:
+        if re.search(r"^\s$", token, flags=re.MULTILINE):
+            # Some tokenizers don't map whitespace tokens to a token index.
+            # UNK is thus substituted.
+            return special.UNK
+        return token
+
     def get_tokens(self) -> List[str]:
         """List of tokens to be fed into tokenizer."""
-        return [token.form for token in self if not token.is_mwe]
+        return [
+            self._handle_whitespace_token(token.form)
+            for token in self
+            if not token.is_mwe
+        ]
 
 
 # Parsing.
