@@ -123,5 +123,6 @@ class UDTubeTest(unittest.TestCase):
         self.assertNonEmptyFileExists(evaluated_path)
         self.assertFileIdentity(evaluated_path, expected_path)
 
+
 if __name__ == "__main__":
     unittest.main()
