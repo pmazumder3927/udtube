@@ -45,7 +45,6 @@ class UDTubeTest(unittest.TestCase):
             f"{model_dir}/lightning_logs/version_0/checkpoints/last.ckpt"
         )
         self.assertNonEmptyFileExists(checkpoint_path)
-
         predicted_path = os.path.join(
             self.tempdir.name, "badsentence_predicted.conllu"
         )
