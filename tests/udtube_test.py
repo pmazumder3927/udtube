@@ -123,6 +123,48 @@ class UDTubeTest(unittest.TestCase):
         self.assertNonEmptyFileExists(evaluated_path)
         self.assertFileIdentity(evaluated_path, expected_path)
 
+    def test_whitespace_token(self):
+        # Testing an edge case where there's a whitespace token in the sentence
+        pesky_sentence_conllu = "badsentence.conllu"
+        # keeping the test as minimal as possible
+        encoder = "distilbert/distilbert-base-uncased"
+        # train/eval/pred are the same, we are more concerned about the file
+        data_path = os.path.join(TESTDATA_DIR, pesky_sentence_conllu)
+        model_dir = os.path.join(self.tempdir.name, "models")
+        cli.udtube_python_interface(
+            [
+                "fit",
+                f"--config={CONFIG_PATH}",
+                f"--data.model_dir={model_dir}",
+                f"--data.train={data_path}",
+                f"--data.val={data_path}",
+                f"--model.encoder={encoder}"
+            ]
+        )
+        # Confirms a checkpoint was created.
+        checkpoint_path = (
+            f"{model_dir}/lightning_logs/version_0/checkpoints/last.ckpt"
+        )
+        self.assertNonEmptyFileExists(checkpoint_path)
+
+        predicted_path = os.path.join(
+            self.tempdir.name, f"badsentence_predicted.conllu"
+        )
+        # Predicts on "expected" data.
+        cli.udtube_python_interface(
+            [
+                "predict",
+                f"--ckpt_path={checkpoint_path}",
+                f"--config={CONFIG_PATH}",
+                f"--data.model_dir={model_dir}",
+                f"--data.predict={data_path}",
+                f"--prediction.path={predicted_path}",
+                f"--model.encoder={encoder}"
+            ]
+        )
+        # There was a bug where this caused system exit before file writing
+        self.assertNonEmptyFileExists(predicted_path)
+
 
 if __name__ == "__main__":
     unittest.main()

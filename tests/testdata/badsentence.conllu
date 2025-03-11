@@ -1,0 +1,9 @@
+# sent_id = 603797
+# text = Hey Anthony, sure thing.
+1			NOUN	NN	Number=Sing	_	_	_	SpacesAfter=\n
+2	Hey	hey	PROPN	NNP	Number=Sing	_	_	_	_
+3	Anthony	Anthony	PROPN	NNP	Number=Sing	_	_	_	SpaceAfter=No
+4	,	,	PUNCT	,	_	_	_	_	_
+5	sure	sure	ADJ	JJ	Degree=Pos	_	_	_	_
+6	thing	thing	NOUN	NN	Number=Sing	_	_	_	SpaceAfter=No
+7	.	.	PUNCT	.	_	_	_	_	_
