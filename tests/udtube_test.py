@@ -138,7 +138,7 @@ class UDTubeTest(unittest.TestCase):
                 f"--data.model_dir={model_dir}",
                 f"--data.train={data_path}",
                 f"--data.val={data_path}",
-                f"--model.encoder={encoder}"
+                f"--model.encoder={encoder}",
             ]
         )
         # Confirms a checkpoint was created.
@@ -148,7 +148,7 @@ class UDTubeTest(unittest.TestCase):
         self.assertNonEmptyFileExists(checkpoint_path)
 
         predicted_path = os.path.join(
-            self.tempdir.name, f"badsentence_predicted.conllu"
+            self.tempdir.name, "badsentence_predicted.conllu"
         )
         # Predicts on "expected" data.
         cli.udtube_python_interface(
@@ -159,7 +159,7 @@ class UDTubeTest(unittest.TestCase):
                 f"--data.model_dir={model_dir}",
                 f"--data.predict={data_path}",
                 f"--prediction.path={predicted_path}",
-                f"--model.encoder={encoder}"
+                f"--model.encoder={encoder}",
             ]
         )
         # There was a bug where this caused system exit before file writing
