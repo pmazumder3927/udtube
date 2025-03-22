@@ -211,7 +211,7 @@ class UDTubeClassifier(lightning.LightningModule):
         """
         return nn.Sequential(
             nn.Linear(hidden_size, out_size),
-            nn.LeakyReLU(),
+            nn.Softmax(),
         )
 
     # Properties.
