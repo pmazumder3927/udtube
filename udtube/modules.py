@@ -187,31 +187,16 @@ class UDTubeClassifier(lightning.LightningModule):
         if not any([use_upos, use_xpos, use_lemma, use_feats]):
             raise Error("No classification heads enabled")
         self.upos_head = (
-            self._make_head(hidden_size, upos_out_size) if use_upos else None
+            nn.Linear(hidden_size, upos_out_size) if use_upos else None
         )
         self.xpos_head = (
-            self._make_head(hidden_size, xpos_out_size) if use_xpos else None
+            nn.Linear(hidden_size, xpos_out_size) if use_xpos else None
         )
         self.lemma_head = (
-            self._make_head(hidden_size, lemma_out_size) if use_lemma else None
+            nn.Linear(hidden_size, lemma_out_size) if use_lemma else None
         )
         self.feats_head = (
-            self._make_head(hidden_size, feats_out_size) if use_feats else None
-        )
-
-    @staticmethod
-    def _make_head(hidden_size: int, out_size: int) -> nn.Sequential:
-        """Helper for generating heads.
-
-        Args:
-            out_size (int).
-
-        Returns:
-            A sequential linear layer.
-        """
-        return nn.Sequential(
-            nn.Linear(hidden_size, out_size),
-            nn.LogSoftmax(dim=1),
+            nn.Linear(hidden_size, feats_out_size) if use_feats else None
         )
 
     # Properties.
