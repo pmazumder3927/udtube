@@ -23,13 +23,13 @@
 21	руку	рука	NOUN	_	Animacy=Inan|Case=Acc|Gender=Fem|Number=Sing	17	obl	17:obl:за:acc	_
 22	и	и	CCONJ	_	_	25	cc	25:cc	_
 23	иногда	иногда	ADV	_	Degree=Pos	25	advmod	25:advmod	_
-24	даже	даже	ADV	_	_	25	advmod	25:advmod	_
+24	даже	даже	PART	_	_	25	advmod	25:advmod	_
 25	писал	писать	VERB	_	Aspect=Imp|Gender=Masc|Mood=Ind|Number=Sing|Tense=Past|VerbForm=Fin|Voice=Act	8	conj	0:root|8:conj	_
 26	в	в	ADP	_	_	27	case	27:case	_
 27	стенгазету	стенгазета	NOUN	_	Animacy=Inan|Case=Acc|Gender=Fem|Number=Sing	25	obl	25:obl:в:acc	_
 28	заметки	заметка	NOUN	_	Animacy=Inan|Case=Acc|Gender=Fem|Number=Plur	25	obj	25:obj	_
 29	под	под	ADP	_	_	30	case	30:case	_
-30	псевдонимом	псевдонимом	NOUN	_	Animacy=Inan|Case=Ins|Gender=Masc|Number=Sing	25	obl	25:obl:под:ins	_
+30	псевдонимом	псевдоним	NOUN	_	Animacy=Inan|Case=Ins|Gender=Masc|Number=Sing	25	obl	25:obl:под:ins	_
 31	"	"	PUNCT	_	_	32	punct	32:punct	SpaceAfter=No
 32	Муха	муха	NOUN	_	Animacy=Anim|Case=Nom|Gender=Fem|Number=Sing	30	nmod	30:nmod:nom	SpaceAfter=No
 33	"	"	PUNCT	_	_	32	punct	32:punct	SpaceAfter=No
@@ -53,11 +53,11 @@
 14	,	,	PUNCT	_	_	19	punct	19:punct	_
 15	а	а	CCONJ	_	_	19	cc	19:cc	_
 16	кое-кто	кое-кто	PRON	_	Case=Nom|PronType=Ind	19	nsubj	19:nsubj	_
-17	и	и	ADP	_	_	19	advmod	19:advmod	_
+17	и	и	PART	_	_	19	advmod	19:advmod	_
 18	с	с	ADP	_	_	19	case	19:case	_
 19	такими	такой	DET	_	Case=Ins|Number=Plur|PronType=Dem	13	det	13:det|25:obj	SpaceAfter=No
 20	,	,	PUNCT	_	_	23	punct	23:punct	_
-21	которые	которые	PRON	_	Case=Acc|PronType=Int,Rel	25	obj	19:ref	_
+21	которые	который	PRON	_	Case=Acc|PronType=Int,Rel	25	obj	19:ref	_
 22	легко	легко	ADV	_	Degree=Pos	23	advmod	23:advmod	_
 23	можно	можно	ADV	_	Degree=Pos	19	acl:relcl	19:acl:relcl	_
 24	было	быть	AUX	_	Aspect=Imp|Gender=Neut|Mood=Ind|Number=Sing|Tense=Past|VerbForm=Fin|Voice=Act	23	cop	23:cop	_
@@ -119,7 +119,7 @@
 10	пишущая	писать	VERB	_	Aspect=Imp|Case=Nom|Gender=Fem|Number=Sing|Tense=Pres|VerbForm=Part|Voice=Act	11	amod	11:amod	_
 11	машинка	машинка	NOUN	_	Animacy=Inan|Case=Nom|Gender=Fem|Number=Sing	8	nsubj	8:nsubj	_
 12	с	с	ADP	_	_	14	case	14:case	_
-13	широкой	широкой	ADJ	_	Case=Ins|Degree=Pos|Gender=Fem|Number=Sing	14	amod	14:amod	_
+13	широкой	широкий	ADJ	_	Case=Ins|Degree=Pos|Gender=Fem|Number=Sing	14	amod	14:amod	_
 14	кареткой	каретка	NOUN	_	Animacy=Inan|Case=Ins|Gender=Fem|Number=Sing	11	nmod	11:nmod:с:ins	SpaceAfter=No
 15	.	.	PUNCT	_	_	3	punct	3:punct	_
 
@@ -158,7 +158,7 @@
 31	посетителей	посетитель	NOUN	_	Animacy=Anim|Case=Gen|Gender=Masc|Number=Plur	33	obl	33:obl:среди:gen	_
 32	могли	мочь	VERB	_	Aspect=Imp|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act	17	advcl	17:advcl:так_как	_
 33	находиться	находиться	VERB	_	Aspect=Imp|VerbForm=Inf|Voice=Mid	32	xcomp	32:xcomp	_
-34	и	и	CCONJ	_	_	35	advmod	35:advmod	_
+34	и	и	PART	_	_	35	advmod	35:advmod	_
 35	случайные	случайный	ADJ	_	Case=Nom|Degree=Pos|Number=Plur	36	amod	36:amod	_
 36	люди	человек	NOUN	_	Animacy=Anim|Case=Nom|Gender=Masc|Number=Plur	32	nsubj	32:nsubj|33:nsubj	SpaceAfter=No
 37	.	.	PUNCT	_	_	3	punct	3:punct	_
@@ -220,7 +220,7 @@
 1	Семен	семен	PROPN	_	Animacy=Anim|Case=Nom|Gender=Masc|Number=Sing	5	nsubj	5:nsubj	_
 2	Еремеевич	еремеевич	PROPN	_	Animacy=Anim|Case=Nom|Gender=Masc|Number=Sing	1	appos	1:appos	_
 3	очень	очень	ADV	_	Degree=Pos	5	advmod	5:advmod	_
-4	не	не	SCONJ	_	_	5	advmod	5:advmod	_
+4	не	не	PART	_	_	5	advmod	5:advmod	_
 5	любил	любить	VERB	_	Aspect=Imp|Gender=Masc|Mood=Ind|Number=Sing|Tense=Past|VerbForm=Fin|Voice=Act	0	root	0:root	SpaceAfter=No
 6	,	,	PUNCT	_	_	12	punct	12:punct	_
 7	когда	когда	SCONJ	_	_	12	mark	12:mark	_
