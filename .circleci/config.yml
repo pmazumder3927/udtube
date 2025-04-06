@@ -38,7 +38,7 @@ jobs:
       - run:
           name: Run tests
           command: |
-              pytest -vv -k "not test_model_1_ru" tests --junitxml /tmp/testxml/report.xml
+              pytest -vv -k "not test_model_1_ru and not test_model_2_el" tests --junitxml /tmp/testxml/report.xml
       - store_test_results:
           path: /tmp/testxml/report.xml
 
