@@ -10,4 +10,3 @@ torch>=2.4.0
 torchmetrics>=1.4.0.post0
 twine>=4.0.2
 wandb>=0.18.0
-accelerate>=1.6.0
