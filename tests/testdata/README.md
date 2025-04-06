@@ -54,4 +54,27 @@ expected data files:
         --model.encoder=DeepPavlov/rubert-base-cased \
         --model.use_xpos=False \
         > tests/testdata/ru_expected.test 
+    udtube fit \
+        --config=tests/testdata/udtube_config.yaml \
+        --data.model_dir models \
+        --data.train=tests/testdata/el_train.conllu \
+        --data.val=tests/testdata/el_train.conllu \
+        --model.encoder=FacebookAI/xlm-roberta-base \
+        --model.use_xpos=True
+    udtube predict \
+        --ckpt_path=models/lightning_logs/version_0/checkpoints/last.ckpt \
+        --config=tests/testdata/udtube_config.yaml \
+        --data.model_dir=models \
+        --data.predict=tests/testdata/el_train.conllu \
+        --model.encoder=FacebookAI/xlm-roberta-base \
+        --model.use_xpos=True \
+        > tests/testdata/el_expected.conllu 
+    udtube test \
+        --ckpt_path=models/lightning_logs/version_0/checkpoints/last.ckpt \
+        --config=tests/testdata/udtube_config.yaml \
+        --data.model_dir=models \
+        --data.test=tests/testdata/el_train.conllu \
+        --model.encoder=FacebookAI/xlm-roberta-base \
+        --model.use_xpos=True \
+        > tests/testdata/el_expected.test 
     rm -rf models

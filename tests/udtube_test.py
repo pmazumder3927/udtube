@@ -53,6 +53,7 @@ class UDTubeTest(unittest.TestCase):
 
     @parameterized.expand(
         [
+            ("el", "FacebookAI/xlm-roberta-base", True),
             ("en", "google-bert/bert-base-cased", True),
             ("ru", "DeepPavlov/rubert-base-cased", False),
         ]

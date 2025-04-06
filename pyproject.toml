@@ -27,6 +27,7 @@ classifiers = [
     "Topic :: Text Processing :: Linguistic",
 ]
 dependencies = [
+    "accelerate>=1.6.0,<2.0.0",
     "jsonargparse[signatures]>=4.28.0,<5.0.0",
     "lightning>=2.4.0,<3.0.0",
     "pyyaml>=6.0,<7.0",
