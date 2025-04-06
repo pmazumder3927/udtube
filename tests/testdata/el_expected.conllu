@@ -1,10 +1,3 @@
-# newdoc id = gdt-20020204-ep-sessions_044
-# sent_id = gdt-20020204-ep-sessions_044-1
-# text = (ΡΤ)
-1	(	(	PUNCT	PUNCT	_	2	punct	_	SpaceAfter=No
-2	ΡΤ	ρτ	NOUN	NOUN	Abbr=Yes	0	root	_	SpaceAfter=No
-3	)	)	PUNCT	PUNCT	_	2	punct	_	_
-
 # sent_id = gdt-20020204-ep-sessions_044-2
 # text = Κύριε Πρόεδρε, κυρίες και κύριοι βουλευτές, θα ήθελα καταρχάς να συγχαρώ τον εισηγητή κ. Oostlander για την εξαίρετη εργασία που παρουσιάζει και να υπενθυμίσω ότι αυτή η απόφαση πλαίσιο που υποβάλλει η Επιτροπή εντάσσεται σε μια συνολική στρατηγική καταπολέμησης των ναρκωτικών, η οποία βασίζεται στην ισόρροπη προσέγγιση μέτρων για τη μείωση της ζήτησης και της προσφοράς καθώς και δράσεων κατά της παράνομης διακίνησης.
 1	Κύριε	κύριοσ	NOUN	NOUN	Case=Voc|Gender=Masc|Number=Sing	2	nmod	_	_
@@ -13,7 +6,7 @@
 4	κυρίες	κυρία	NOUN	NOUN	Case=Voc|Gender=Fem|Number=Plur	7	nmod	_	_
 5	και	και	CCONJ	CCONJ	_	6	cc	_	_
 6	κύριοι	κύριοσ	NOUN	NOUN	Case=Voc|Gender=Masc|Number=Plur	4	conj	_	_
-7	βουλευτές	βουλευτήσ	NOUN	NOUN	Case=Voc|Gender=Masc|Number=Plur	2	conj	_	SpaceAfter=No
+7	βουλευτές	βουλευτέσ	NOUN	NOUN	Case=Voc|Gender=Masc|Number=Plur	2	conj	_	SpaceAfter=No
 8	,	,	PUNCT	PUNCT	_	2	punct	_	_
 9	θα	θα	AUX	AUX	_	10	aux	_	_
 10	ήθελα	θέλω	VERB	VERB	Aspect=Imp|Mood=Ind|Number=Sing|Person=1|Tense=Past|VerbForm=Fin|Voice=Act	0	root	_	_
@@ -46,7 +39,7 @@
 37	σε	σε	ADP	ADP	_	40	case	_	_
 38	μια	ένασ	DET	DET	Case=Acc|Definite=Ind|Gender=Fem|Number=Sing|PronType=Art	40	det	_	_
 39	συνολική	συνολικόσ	ADJ	ADJ	Case=Acc|Gender=Fem|Number=Sing	40	amod	_	_
-40	στρατηγική	στρατηγική	DET	DET	_	36	obl	_	_
+40	στρατηγική	στρατηγική	NOUN	NOUN	Case=Acc|Gender=Fem|Number=Sing	36	obl	_	_
 41	καταπολέμησης	καταπολέμηση	NOUN	NOUN	Case=Gen|Gender=Fem|Number=Sing	40	nmod	_	_
 42	των	ο	DET	DET	Case=Gen|Definite=Def|Gender=Neut|Number=Plur|PronType=Art	43	det	_	_
 43	ναρκωτικών	ναρκωτικόσ	NOUN	NOUN	Case=Gen|Gender=Neut|Number=Plur	41	nmod	_	SpaceAfter=No
@@ -79,7 +72,7 @@
 
 # sent_id = gdt-20020204-ep-sessions_044-3
 # text = Η πρόταση αυτή δεν είναι ΟΛΗ η ευρωπαϊκή πολιτική για τα ναρκωτικά: η πρόταση αυτή αφορά μόνο μία ειδική συνιστώσα που σχετίζεται με την καταπολέμηση της διακίνησης ναρκωτικών.
-1	Η	η	DET	DET	Case=Nom|Definite=Ind|Gender=Fem|Number=Sing|PronType=Art	2	det	_	_
+1	Η	ο	DET	DET	Case=Nom|Definite=Def|Gender=Fem|Number=Sing|PronType=Art	2	det	_	_
 2	πρόταση	πρόταση	NOUN	NOUN	Case=Nom|Gender=Fem|Number=Sing	9	nsubj	_	_
 3	αυτή	αυτόσ	DET	DET	Case=Nom|Gender=Fem|Number=Sing|Person=3|PronType=Dem	2	det	_	_
 4	δεν	δεν	PART	PART	_	9	advmod	_	_
@@ -112,7 +105,7 @@
 
 # sent_id = gdt-20020204-ep-sessions_044-4
 # text = Αλλά η προσέγγιση του θέματος των ναρκωτικών στην Ευρωπαϊκή Ένωση συμπεριλαμβάνεται στο πρόγραμμα δράσης για το 2000-2004, η ενδιάμεση αξιολόγηση του οποίου θα γίνει στη διάρκεια του τρέχοντος έτους.
-1	Αλλά	αλλά	DET	DET	_	12	cc	_	_
+1	Αλλά	αλλο	DET	DET	Case=Nom|Definite=Def|Gender=Fem|Number=Sing|PronType=Art	12	cc	_	_
 2	η	ο	DET	DET	Case=Nom|Definite=Def|Gender=Fem|Number=Sing|PronType=Art	3	det	_	_
 3	προσέγγιση	προσέγγιση	NOUN	NOUN	Case=Nom|Gender=Fem|Number=Sing	12	nsubj:pass	_	_
 4	του	ο	DET	DET	Case=Gen|Definite=Def|Gender=Neut|Number=Sing|PronType=Art	5	det	_	_
@@ -153,7 +146,7 @@
 # sent_id = gdt-20020204-ep-sessions_044-5
 # text = Στο Λάκεν, οι ηγέτες κρατών και κυβερνήσεων ζήτησαν μέχρι το τέλος Μαΐου του έτους αυτού να εγκρίνουμε την απόφαση πλαίσιο για την εναρμόνιση των ποινικών κυρώσεων σε ευρωπαϊκό επίπεδο σχετικά με τη διακίνηση ναρκωτικών.
 1-2	Στο	_	_	_	_	_	_	_	_
-1	Σ	σ	DET	DET	_	3	case	_	_
+1	Σ	ο	DET	DET	Case=Nom|Definite=Def|Gender=Fem|Number=Sing|PronType=Art	3	case	_	_
 2	το	ο	DET	DET	Case=Acc|Gender=Neut|Number=Sing	3	det	_	_
 3	Λάκεν	λάκεν	X	X	Foreign=Yes	10	obl	_	SpaceAfter=No
 4	,	,	PUNCT	PUNCT	_	3	punct	_	_
@@ -193,7 +186,7 @@
 
 # sent_id = gdt-20020204-ep-sessions_044-6
 # text = Αυτός είναι ο αποκλειστικός στόχος της πρότασης αυτής.
-1	Αυτός	αυτόσ	DET	DET	_	0	root	_	_
+1	Αυτός	αυτόο	DET	DET	Case=Nom|Definite=Def|Gender=Fem|Number=Sing|PronType=Art	0	root	_	_
 2	είναι	είμαι	AUX	AUX	Aspect=Imp|Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin|Voice=Pass	1	cop	_	_
 3	ο	ο	DET	DET	Case=Nom|Definite=Def|Gender=Masc|Number=Sing|PronType=Art	5	det	_	_
 4	αποκλειστικός	αποκλειστικόσ	ADJ	ADJ	Case=Nom|Gender=Masc|Number=Sing	5	amod	_	_
@@ -205,7 +198,7 @@
 
 # sent_id = gdt-20020204-ep-sessions_044-7
 # text = Η Επιτροπή πιστεύει ότι στον αγώνα για την καταπολέμηση των ναρκωτικών χρειάζεται στενός συντονισμός μεταξύ των διαφόρων δικαστικών, αστυνομικών και τελωνειακών αρχών των κρατών μελών, ώστε να ανταποκριθούμε στην πρόκληση της διακίνησης ναρκωτικών σε διεθνές επίπεδο.
-1	Η	η	DET	DET	Case=Nom|Definite=Ind|Gender=Fem|Number=Sing|PronType=Art	2	det	_	_
+1	Η	ο	DET	DET	Case=Nom|Definite=Def|Gender=Fem|Number=Sing|PronType=Art	2	det	_	_
 2	Επιτροπή	επιτροπή	NOUN	NOUN	Case=Nom|Gender=Fem|Number=Sing	3	nsubj	_	_
 3	πιστεύει	πιστεύω	VERB	VERB	Aspect=Imp|Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin|Voice=Act	0	root	_	_
 4	ότι	ότι	SCONJ	SCONJ	_	13	mark	_	_
@@ -234,7 +227,7 @@
 26	κρατών	κράτοσ	NOUN	NOUN	Case=Gen|Gender=Neut|Number=Plur	24	nmod	_	_
 27	μελών	μέλοσ	NOUN	NOUN	Case=Gen|Gender=Neut|Number=Plur	26	nmod	_	SpaceAfter=No
 28	,	,	PUNCT	PUNCT	_	31	punct	_	_
-29	ώστε	ώστε	DET	DET	Case=Nom|Definite=Ind|Gender=Fem|Number=Sing|PronType=Art	31	mark	_	_
+29	ώστε	ώστε	SCONJ	SCONJ	_	31	mark	_	_
 30	να	να	AUX	AUX	_	31	aux	_	_
 31	ανταποκριθούμε	ανταποκρίνομαι	VERB	VERB	Aspect=Perf|Mood=Ind|Number=Plur|Person=1|VerbForm=Fin|Voice=Pass	13	advcl	_	_
 32-33	στην	_	_	_	_	_	_	_	_
@@ -251,7 +244,7 @@
 
 # sent_id = gdt-20020204-ep-sessions_044-8
 # text = Μια παρόμοια συνεργασία, για να καταστεί αποτελεσματική, πρέπει να στηριχθεί στην κοινή προσέγγιση σε επίπεδο Ένωσης, κυρίως όσον αφορά την προσέγγιση των ορισμών των εγκλημάτων και των ποινικών κυρώσεων που εφαρμόζονται για την παράνομη διακίνηση, οι οποίες πρέπει να είναι αποτελεσματικές, ανάλογες και αποτρεπτικές.
-1	Μια	μια	DET	DET	Case=Nom|Definite=Ind|Gender=Fem|Number=Sing|PronType=Art	3	det	_	_
+1	Μια	μιο	DET	DET	Case=Nom|Definite=Def|Gender=Fem|Number=Sing|PronType=Art	3	det	_	_
 2	παρόμοια	παρόμοιοσ	ADJ	ADJ	Case=Nom|Gender=Fem|Number=Sing	3	amod	_	_
 3	συνεργασία	συνεργασία	NOUN	NOUN	Case=Nom|Gender=Fem|Number=Sing	12	nsubj:pass	_	SpaceAfter=No
 4	,	,	PUNCT	PUNCT	_	7	punct	_	_
@@ -280,7 +273,7 @@
 26	των	ο	DET	DET	Case=Gen|Definite=Def|Gender=Masc|Number=Plur|PronType=Art	27	det	_	_
 27	ορισμών	ορισμόσ	NOUN	NOUN	Case=Gen|Gender=Masc|Number=Plur	25	nmod	_	_
 28	των	ο	DET	DET	Case=Gen|Definite=Def|Gender=Neut|Number=Plur|PronType=Art	29	det	_	_
-29	εγκλημάτων	έγκλημα	NOUN	NOUN	Case=Gen|Gender=Neut|Number=Plur	27	nmod	_	_
+29	εγκλημάτων	εγκληάάτησ	NOUN	NOUN	Case=Gen|Gender=Neut|Number=Plur	27	nmod	_	_
 30	και	και	CCONJ	CCONJ	_	33	cc	_	_
 31	των	ο	DET	DET	Case=Gen|Definite=Def|Gender=Fem|Number=Plur|PronType=Art	33	det	_	_
 32	ποινικών	ποινικόσ	ADJ	ADJ	Case=Gen|Gender=Fem|Number=Plur	33	amod	_	_
@@ -322,7 +315,7 @@
 
 # sent_id = gdt-20020204-ep-sessions_044-10
 # text = Είναι σαφές ότι τα κατασταλτικά μέτρα κατά των δραστών της παράνομης διακίνησης πρέπει να συμπληρώνονται και να ολοκληρώνονται με μια πολιτική πρόληψης και κοινωνικής επανένταξης των ατόμων που είναι εξαρτημένα από τα ναρκωτικά.
-1	Είναι	είναι	DET	DET	_	2	cop	_	_
+1	Είναι	είναο	DET	DET	Case=Nom|Definite=Def|Gender=Fem|Number=Sing|PronType=Art	2	cop	_	_
 2	σαφές	σαφήσ	ADJ	ADJ	Case=Nom|Gender=Neut|Number=Sing	0	root	_	_
 3	ότι	ότι	SCONJ	SCONJ	_	15	mark	_	_
 4	τα	ο	DET	DET	Case=Nom|Definite=Def|Gender=Neut|Number=Plur|PronType=Art	6	det	_	_
@@ -356,4 +349,22 @@
 32	τα	ο	DET	DET	Case=Acc|Definite=Def|Gender=Neut|Number=Plur|PronType=Art	33	det	_	_
 33	ναρκωτικά	ναρκωτικόσ	NOUN	NOUN	Case=Acc|Gender=Neut|Number=Plur	30	obl	_	SpaceAfter=No
 34	.	.	PUNCT	PUNCT	_	2	punct	_	_
+
+# sent_id = gdt-20020204-ep-sessions_044-11
+# text = Η φύση του προβλεπόμενου μέσου αφορά μόνο τις κατασταλτικές πτυχές του φαινομένου των ναρκωτικών.
+1	Η	ο	DET	DET	Case=Nom|Definite=Def|Gender=Fem|Number=Sing|PronType=Art	2	det	_	_
+2	φύση	φύση	NOUN	NOUN	Case=Nom|Gender=Fem|Number=Sing	6	nsubj	_	_
+3	του	ο	DET	DET	Case=Gen|Definite=Def|Gender=Neut|Number=Sing|PronType=Art	5	det	_	_
+4	προβλεπόμενου	προβλεπόμενοσ	ADJ	ADJ	Case=Gen|Gender=Neut|Number=Sing	5	amod	_	_
+5	μέσου	μέσο	NOUN	NOUN	Case=Gen|Gender=Neut|Number=Sing	2	nmod	_	_
+6	αφορά	αφορώ	VERB	VERB	Aspect=Imp|Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin|Voice=Act	0	root	_	_
+7	μόνο	μόνο	ADV	ADV	_	6	advmod	_	_
+8	τις	ο	DET	DET	Case=Acc|Definite=Def|Gender=Fem|Number=Plur|PronType=Art	10	det	_	_
+9	κατασταλτικές	κατασταλτικόσ	ADJ	ADJ	Case=Acc|Gender=Fem|Number=Plur	10	amod	_	_
+10	πτυχές	πτυχή	NOUN	NOUN	Case=Acc|Gender=Fem|Number=Plur	6	obj	_	_
+11	του	ο	DET	DET	Case=Gen|Definite=Def|Gender=Neut|Number=Sing|PronType=Art	12	det	_	_
+12	φαινομένου	φαινόμενο	NOUN	NOUN	Case=Gen|Gender=Neut|Number=Sing	10	nmod	_	_
+13	των	ο	DET	DET	Case=Gen|Definite=Def|Gender=Neut|Number=Plur|PronType=Art	14	det	_	_
+14	ναρκωτικών	ναρκωτικόσ	NOUN	NOUN	Case=Gen|Gender=Neut|Number=Plur	12	nmod	_	SpaceAfter=No
+15	.	.	PUNCT	PUNCT	_	6	punct	_	_
 

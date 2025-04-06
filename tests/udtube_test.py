@@ -53,9 +53,9 @@ class UDTubeTest(unittest.TestCase):
 
     @parameterized.expand(
         [
+            ("el", "FacebookAI/xlm-roberta-base", True),
             ("en", "google-bert/bert-base-cased", True),
             ("ru", "DeepPavlov/rubert-base-cased", False),
-            ("el", "FacebookAI/xlm-roberta-base", True),
         ]
     )
     def test_model(self, langcode: str, encoder: str, use_xpos: bool):
