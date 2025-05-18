@@ -26,7 +26,7 @@ class DataModule(lightning.LightningDataModule):
     Args:
         model_dir: Path for checkpoints, indexes, and logs.
         predict: Path to a CoNLL-U file for prediction.
-        test: Path to a test CoNLL-U file for testing.
+        test: Path to a CoNLL-U file for testing.
         train: Path to a CoNLL-U file for training.
         val: Path to a CoNLL-U file for validation.
         encoder: Full name of a Hugging Face encoder.
