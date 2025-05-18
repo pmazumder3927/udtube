@@ -21,7 +21,8 @@ def udtube_python_interface(args: cli.ArgsType = None):
 class UDTubeCLI(cli.LightningCLI):
     """The UDTube CLI interface.
 
-    Use with `--help` to see full set of options."""
+    Use with `--help` to see the full list of options.
+    """
 
     def add_arguments_to_parser(
         self, parser: cli.LightningArgumentParser
