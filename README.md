@@ -310,8 +310,8 @@ epochs or 6 wall-clock hours, whichever comes first.
 In `validation` mode, one runs the validation step over labeled validation data
 (specified as `data: val: path/to/validation.conllu`) using a previously trained
 checkpoint (`--ckpt_path path/to/checkpoint.ckpt` from the command line),
-recording total loss and per-task accuracies. In practice this is mostly usefulf
-or debugging.
+recording total loss and per-task accuracies. In practice this is mostly useful
+for debugging.
 
 This mode is invoked using the `validate` subcommand, like so:
 
