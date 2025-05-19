@@ -1,4 +1,4 @@
-The files in this folder are example YAML configuration files showing UDTube's
+The files in this directory are example YAML configuration files showing UDTube's
 use with English and Russian data sets from [Universal
 Dependencies](https://universaldependencies.org/).
 
