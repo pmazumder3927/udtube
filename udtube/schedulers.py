@@ -14,8 +14,6 @@ class Dummy(optim.lr_scheduler.LRScheduler):
         optimizer: optimizer.
     """
 
-    optimizer: optim.Optimizer
-
     def __init__(self, optimizer):
         super().__init__(optimizer)
 
@@ -44,8 +42,8 @@ class WarmupInverseSquareRoot(optim.lr_scheduler.LambdaLR):
         warmup_epochs: number of warmup epochs.
     """
 
-    optimizer: optim.Optimizer
     warmup_epochs: int
+    decay_factor: float
 
     def __init__(
         self,
