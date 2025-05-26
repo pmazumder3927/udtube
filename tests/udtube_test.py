@@ -3,7 +3,8 @@
 This runs five epochs of training over a small toy data set, attempting to
 overfit, then compares the resubstitution predictions on this set to
 previously computed results. As such this is essentially a change-detector
-test. Currently, English (en) and Russian (ru) are tested."""
+test. Currently, Greek (el), English (en) and Russian (ru) are tested.
+"""
 
 import contextlib
 import difflib
