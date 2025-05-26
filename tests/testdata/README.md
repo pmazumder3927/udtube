@@ -9,7 +9,7 @@ expected data files:
 
     udtube fit \
         --config=tests/testdata/udtube_config.yaml \
-        --data.model_dir models \
+        --data.model_dir=models \
         --data.train=tests/testdata/en_train.conllu \
         --data.val=tests/testdata/en_train.conllu \
         --model.encoder=google-bert/bert-base-cased \
@@ -33,7 +33,7 @@ expected data files:
     rm -rf models
     udtube fit \
         --config=tests/testdata/udtube_config.yaml \
-        --data.model_dir models \
+        --data.model_dir=models \
         --data.train=tests/testdata/ru_train.conllu \
         --data.val=tests/testdata/ru_train.conllu \
         --model.encoder=DeepPavlov/rubert-base-cased \
