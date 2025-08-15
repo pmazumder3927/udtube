@@ -35,6 +35,8 @@ dependencies = [
     "torch>=2.4.0,<3.0.0",
     "torchmetrics>=1.4.0.post0,<2.0.0",
     "wandb>=0.18.0,<1.0.0",
+    "spacy-udpipe>=1.0.0",
+    "flask>=3.1.1",
 ]
 [build-system]
 requires = ["setuptools >= 72.1.0", "wheel"]
