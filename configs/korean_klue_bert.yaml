@@ -1,0 +1,56 @@
+seed_everything: 1995
+trainer:
+  max_epochs: 100
+  max_time: 00:06:00:00
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+      init_args:
+        logging_interval: epoch
+    - class_path: lightning.pytorch.callbacks.EarlyStopping
+      init_args:
+        monitor: val_loss
+        patience: 10
+        verbose: true
+  logger:
+    - class_path: lightning.pytorch.loggers.CSVLogger
+      init_args:
+        save_dir: ./korean_models
+model:
+  dropout: 0.4
+  encoder: klue/bert-base
+  pooling_layers: 4
+  reverse_edits: true
+  use_upos: true
+  use_xpos: true
+  use_lemma: true
+  use_feats: true
+  encoder_optimizer:
+    class_path: torch.optim.Adam
+    init_args:
+      lr: 1e-6
+  encoder_scheduler:
+    class_path: udtube.schedulers.WarmupInverseSquareRoot
+    init_args:
+      warmup_epochs: 5
+  classifier_optimizer:
+    class_path: torch.optim.Adam
+    init_args:
+      lr: 1e-3
+  classifier_scheduler:
+    class_path: lightning.pytorch.cli.ReduceLROnPlateau
+    init_args:
+      monitor: val_loss
+      factor: 0.1
+data:
+  model_dir: ./korean_models
+  train: ./korean_data/ko_train.conllu
+  val: ./korean_data/ko_dev.conllu
+  test: ./korean_data/ko_test.conllu
+  predict: ./korean_data/ko_test.conllu
+  batch_size: 32
+checkpoint:
+  filename: "model-{epoch:03d}-{val_loss:.4f}"
+  monitor: val_loss
+  verbose: true
+prediction:
+  path: ./korean_data/predictions.conllu

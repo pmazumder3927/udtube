@@ -29,6 +29,9 @@ SUPPORTED_ENCODERS = {
     "flaubert/flaubert": {},
     "google-t5/t5": {"hidden_dropout_prob": "dropout_rate"},
     "google-bert/bert": {"dropout": "hidden_dropout_prob"},
+    "klue/bert": {"dropout": "hidden_dropout_prob"},
+    "klue/roberta": {"dropout": "hidden_dropout_prob"},
+    "monologg/kobert": {"dropout": "hidden_dropout_prob"},
     "nlpaueb/bert-base-greek": {"dropout": "hidden_dropout_prob"},
 }
 
